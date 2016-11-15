@@ -18,13 +18,15 @@ class PQueue {
 	_next() {
 		this._pendingCount--;
 
-		if (this.queue.length > 0) {
-			this.queue.shift()();
-		} else {
-			this._resolveEmpty();
-		}
+        for (var p = 0; p < this.queue.length; p++) {
+            if (this.queue[p].length > 0) {
+                this.queue[p].shift()();
+                return;
+            } 
+        }
+        this._resolveEmpty();
 	}
-	add(fn) {
+	add(fn, priority = 0) {
 		return new Promise((resolve, reject) => {
 			const run = () => {
 				this._pendingCount++;
@@ -44,7 +46,8 @@ class PQueue {
 			if (this._pendingCount < this._concurrency) {
 				run();
 			} else {
-				this.queue.push(run);
+                if (typeof this.queue[priority] === "undefined") queue[priority] = [];
+				this.queue[priority].push(run);
 			}
 		});
 	}
@@ -58,7 +61,7 @@ class PQueue {
 		});
 	}
 	get size() {
-		return this.queue.length;
+		return this.queue.reduce((len, arr) => len + arr.length, 0);
 	}
 	get pending() {
 		return this._pendingCount;
