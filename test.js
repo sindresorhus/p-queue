@@ -59,22 +59,14 @@ test('.add() - concurrency: 5', async t => {
 });
 
 test('.add() - priority', async t => {
-	let string = '';
+	const result = [];
 	const queue = new PQueue({concurrency: 1});
-	queue.add(async () => {
-		string += '0';
-	}, {priority: 0});
-	queue.add(async () => {
-		string += '1a';
-	}, {priority: 1});
-	queue.add(async () => {
-		string += '1b';
-	}, {priority: 1});
-	queue.add(async () => {
-		string += '2';
-	}, {priority: 2});
+	queue.add(async () => result.push(0), {priority: 0});
+	queue.add(async () => result.push(1), {priority: 1});
+	queue.add(async () => result.push(2), {priority: 1});
+	queue.add(async () => result.push(3), {priority: 2});
 	await queue.onEmpty();
-	t.is(string, '021a1b');
+	t.deepEqual(result, [0, 3, 1, 2]);
 });
 
 test('.onEmpty()', async t => {

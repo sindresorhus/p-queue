@@ -58,7 +58,7 @@ Concurrency limit.
 
 Type: `Function`
 
-Class with `put`, `pull` method and `size` getter. See [Custom QueueClass](#custom-queueclass) section.
+Class with `enqueue`, `dequeue` method and `size` getter. See [Custom QueueClass](#custom-queueclass) section.
 
 ### queue
 
@@ -81,6 +81,7 @@ Type: `Object`
 ##### priority
 
 Type: `number`
+Default: `0`
 
 Priority of operation. Operations with greater priority will be scheduled first.
 
@@ -166,10 +167,10 @@ class QueueClass {
 	constructor() {
 		this._queue = [];
 	}
-	put(run, options) {
+	enqueue(run, options) {
 		this._queue.push(run);
 	}
-	pull() {
+	dequeue() {
 		return this._queue.shift();
 	}
 	get size() {

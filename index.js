@@ -1,5 +1,7 @@
 'use strict';
 
+// Port of lower_bound from http://en.cppreference.com/w/cpp/algorithm/lower_bound
+// Used to compute insertion index to keep queue sorted after insertion
 function lowerBound(array, value, comp) {
 	let first = 0;
 	let count = array.length;
@@ -21,16 +23,22 @@ class PriorityQueue {
 	constructor() {
 		this._queue = [];
 	}
-	put(run, opts) {
+	enqueue(run, opts) {
 		opts = Object.assign({
 			priority: 0
 		}, opts);
 
 		const element = {priority: opts.priority, run};
+
+		if (this.size && this._queue[this.size - 1].priority === opts.priority) {
+			this._queue.push(element);
+			return;
+		}
+
 		const index = lowerBound(this._queue, element, (a, b) => b.priority - a.priority);
 		this._queue.splice(index, 0, element);
 	}
-	pull() {
+	dequeue() {
 		return this._queue.shift().run;
 	}
 	get size() {
@@ -58,7 +66,7 @@ class PQueue {
 		this._pendingCount--;
 
 		if (this.queue.size > 0) {
-			this.queue.pull()();
+			this.queue.dequeue()();
 		} else {
 			this._resolveEmpty();
 		}
@@ -83,7 +91,7 @@ class PQueue {
 			if (this._pendingCount < this._concurrency) {
 				run();
 			} else {
-				this.queue.put(run, opts);
+				this.queue.enqueue(run, opts);
 			}
 		});
 	}
