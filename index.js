@@ -63,7 +63,7 @@ class PQueue {
 			this._resolveEmpty();
 		}
 	}
-	add(fn, options) {
+	add(fn, opts) {
 		return new Promise((resolve, reject) => {
 			const run = () => {
 				this._pendingCount++;
@@ -83,7 +83,7 @@ class PQueue {
 			if (this._pendingCount < this._concurrency) {
 				run();
 			} else {
-				this.queue.put(run, options);
+				this.queue.put(run, opts);
 			}
 		});
 	}
