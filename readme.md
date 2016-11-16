@@ -54,11 +54,17 @@ Minimum: `1`
 
 Concurrency limit.
 
+##### queueClass
+
+Type: `Function`
+
+Class with `put`, `pull` method and `size` getter. See [Custom QueueClass](#custom-queueclass) section.
+
 ### queue
 
 `PQueue` instance.
 
-#### .add(fn)
+#### .add(fn, [options])
 
 Returns the promise returned by calling `fn`.
 
@@ -67,6 +73,16 @@ Returns the promise returned by calling `fn`.
 Type: `Function`
 
 Promise-returning/async function.
+
+#### options
+
+Type: `Object`
+
+##### priority
+
+Type: `number`
+
+Priority of operation. Operations with greater priority will be scheduled first.
 
 #### .onEmpty()
 
@@ -140,6 +156,29 @@ $ node example.js
 11. Resolved 🐙
 12. Queue is empty again
 ```
+
+## Custom QueueClass
+
+For implementing more complex scheduling policies, you can provide a QueueClass in the options:
+
+```js
+class QueueClass {
+	constructor() {
+		this._queue = [];
+	}
+	put(run, options) {
+		this._queue.push(run);
+	}
+	pull() {
+		return this._queue.shift();
+	}
+	get size() {
+		return this._queue.length;
+	}
+}
+```
+
+`p-queue` will call corresponding methods to put and get operations from this queue.
 
 
 ## Related

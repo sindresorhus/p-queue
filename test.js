@@ -58,6 +58,25 @@ test('.add() - concurrency: 5', async t => {
 	await Promise.all(input);
 });
 
+test('.add() - priority', async t => {
+	let string = '';
+	const queue = new PQueue({concurrency: 1});
+	queue.add(async () => {
+		string += '0';
+	}, {priority: 0});
+	queue.add(async () => {
+		string += '1a';
+	}, {priority: 1});
+	queue.add(async () => {
+		string += '1b';
+	}, {priority: 1});
+	queue.add(async () => {
+		string += '2';
+	}, {priority: 2});
+	await queue.onEmpty();
+	t.is(string, '021a1b');
+});
+
 test('.onEmpty()', async t => {
 	const queue = new PQueue({concurrency: 1});
 
