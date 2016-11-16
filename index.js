@@ -30,7 +30,7 @@ class PriorityQueue {
 
 		const element = {priority: opts.priority, run};
 
-		if (this.size && this._queue[this.size - 1].priority === opts.priority) {
+		if (this.size && this._queue[this.size - 1].priority >= opts.priority) {
 			this._queue.push(element);
 			return;
 		}
