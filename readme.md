@@ -80,7 +80,7 @@ Type: `Object`
 
 ##### priority
 
-Type: `number`
+Type: `number`<br>
 Default: `0`
 
 Priority of operation. Operations with greater priority will be scheduled first.
