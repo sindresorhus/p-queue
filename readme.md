@@ -58,7 +58,7 @@ Concurrency limit.
 
 Type: `Function`
 
-Class with `enqueue`, `dequeue` method and `size` getter. See [Custom QueueClass](#custom-queueclass) section.
+Class with a `enqueue` and `dequeue` method, and a `size` getter. See the [Custom QueueClass](#custom-queueclass) section.
 
 ### queue
 
@@ -157,6 +157,7 @@ $ node example.js
 11. Resolved 🐙
 12. Queue is empty again
 ```
+
 
 ## Custom QueueClass
 
