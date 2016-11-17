@@ -192,6 +192,12 @@ class QueueClass {
 - [More…](https://github.com/sindresorhus/promise-fun)
 
 
+## Created by
+
+- [Sindre Sorhus](https://github.com/sindresorhus)
+- [Vsevolod Strukchinsky](https://github.com/floatdrop)
+
+
 ## License
 
 MIT © [Sindre Sorhus](https://sindresorhus.com)
