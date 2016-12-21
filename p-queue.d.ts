@@ -12,9 +12,9 @@ declare class PQueue {
 	public size: number
 	public pending: number
 
-    constructor(opts?: QueueOpts)
+	constructor(opts?: QueueOpts)
 
-    add(fn: Function, opts?: QueueOpts): Promise<any>
+	add(fn: Function, opts?: QueueOpts): Promise<any>
 	onEmpty(): Promise<any>
 }
 
