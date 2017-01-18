@@ -24,8 +24,10 @@
     "bench": "node bench.js"
   },
   "files": [
-    "index.js"
+    "index.js",
+    "p-queue.d.ts"
   ],
+  "typings": "p-queue.d.ts",
   "keywords": [
     "promise",
     "queue",
