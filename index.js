@@ -99,8 +99,8 @@ class PQueue {
 	}
 
 	clear() {
-    this.queue._queue = [];
-  }
+		this.queue._queue = [];
+	}
 
 	onEmpty() {
 		return new Promise(resolve => {
