@@ -97,6 +97,11 @@ class PQueue {
 			}
 		});
 	}
+
+	clear() {
+    this.queue._queue = [];
+  }
+
 	onEmpty() {
 		return new Promise(resolve => {
 			const existingResolve = this._resolveEmpty;
