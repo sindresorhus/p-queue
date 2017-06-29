@@ -93,7 +93,7 @@ Can be called multiple times. Useful if you for example add additional items at 
 
 #### .clear()
 
-clears the queue.
+clear the queue.
 
 #### .size
 

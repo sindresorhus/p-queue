@@ -60,6 +60,7 @@ class PQueue {
 		}
 
 		this.queue = new opts.queueClass(); // eslint-disable-line new-cap
+		this._queueClass = opts.queueClass;
 		this._pendingCount = 0;
 		this._concurrency = opts.concurrency;
 		this._resolveEmpty = () => {};
@@ -99,7 +100,7 @@ class PQueue {
 	}
 
 	clear() {
-		this.queue._queue = [];
+		this.queue = new this._queueClass(); // eslint-disable-line new-cap
 	}
 
 	onEmpty() {
