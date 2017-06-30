@@ -86,3 +86,17 @@ test('.onEmpty()', async t => {
 	await queue.onEmpty();
 	t.is(queue.size, 0);
 });
+
+test('.clear()', t => {
+	const queue = new PQueue({concurrency: 2});
+	queue.add(() => delay(20000));
+	queue.add(() => delay(20000));
+	queue.add(() => delay(20000));
+	queue.add(() => delay(20000));
+	queue.add(() => delay(20000));
+	queue.add(() => delay(20000));
+	t.is(queue.size, 4);
+	t.is(queue.pending, 2);
+	queue.clear();
+	t.is(queue.size, 0);
+});

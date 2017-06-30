@@ -91,6 +91,10 @@ Returns a promise that settles when the queue becomes empty.
 
 Can be called multiple times. Useful if you for example add additional items at a later time.
 
+#### .clear()
+
+Clear the queue.
+
 #### .size
 
 Size of the queue.
