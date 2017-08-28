@@ -8,7 +8,7 @@ Useful for rate-limiting async operations. For example, when interacting with a 
 ## Install
 
 ```
-$ npm install --save p-queue
+$ npm install p-queue
 ```
 
 
@@ -87,7 +87,7 @@ Priority of operation. Operations with greater priority will be scheduled first.
 
 #### .addAll(fns, [options])
 
-Same as `.add`, but accepts array of async functions and returns promise, that resolves when all async functions are resolved.
+Same as `.add()`, but accepts an array of async functions and returns a promise that resolves when all async functions are resolved.
 
 #### .onEmpty()
 

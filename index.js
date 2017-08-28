@@ -25,6 +25,7 @@ class PriorityQueue {
 	constructor() {
 		this._queue = [];
 	}
+
 	enqueue(run, opts) {
 		opts = Object.assign({
 			priority: 0
@@ -40,9 +41,11 @@ class PriorityQueue {
 		const index = lowerBound(this._queue, element, (a, b) => b.priority - a.priority);
 		this._queue.splice(index, 0, element);
 	}
+
 	dequeue() {
 		return this._queue.shift().run;
 	}
+
 	get size() {
 		return this._queue.length;
 	}
@@ -65,6 +68,7 @@ class PQueue {
 		this._concurrency = opts.concurrency;
 		this._resolveEmpty = () => {};
 	}
+
 	_next() {
 		this._pendingCount--;
 
@@ -74,6 +78,7 @@ class PQueue {
 			this._resolveEmpty();
 		}
 	}
+
 	add(fn, opts) {
 		return new Promise((resolve, reject) => {
 			const run = () => {
@@ -98,12 +103,15 @@ class PQueue {
 			}
 		});
 	}
+
 	addAll(fns, opts) {
 		return Promise.all(fns.map(fn => this.add(fn, opts)));
 	}
+
 	clear() {
 		this.queue = new this._queueClass(); // eslint-disable-line new-cap
 	}
+
 	onEmpty() {
 		return new Promise(resolve => {
 			const existingResolve = this._resolveEmpty;
@@ -113,9 +121,11 @@ class PQueue {
 			};
 		});
 	}
+
 	get size() {
 		return this.queue.size;
 	}
+
 	get pending() {
 		return this._pendingCount;
 	}

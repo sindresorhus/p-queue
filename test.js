@@ -3,7 +3,7 @@ import delay from 'delay';
 import inRange from 'in-range';
 import timeSpan from 'time-span';
 import randomInt from 'random-int';
-import PQueue from './';
+import PQueue from '.';
 
 const fixture = Symbol('fixture');
 

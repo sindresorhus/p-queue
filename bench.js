@@ -1,6 +1,6 @@
 'use strict';
 const Benchmark = require('benchmark');
-const PQueue = require('./');
+const PQueue = require('.');
 
 const suite = new Benchmark.Suite();
 
