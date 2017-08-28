@@ -100,3 +100,13 @@ test('.clear()', t => {
 	queue.clear();
 	t.is(queue.size, 0);
 });
+
+test('.addAll()', async t => {
+	const queue = new PQueue();
+	const fn = async () => fixture;
+	const fns = [fn, fn];
+	const p = queue.addAll(fns);
+	t.is(queue.size, 0);
+	t.is(queue.pending, 2);
+	t.deepEqual(await p, [fixture, fixture]);
+});
