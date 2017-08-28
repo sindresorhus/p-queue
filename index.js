@@ -98,11 +98,12 @@ class PQueue {
 			}
 		});
 	}
-
+	addAll(fns, opts) {
+		return Promise.all(fns.map(fn => this.add(fn, opts)));
+	}
 	clear() {
 		this.queue = new this._queueClass(); // eslint-disable-line new-cap
 	}
-
 	onEmpty() {
 		return new Promise(resolve => {
 			const existingResolve = this._resolveEmpty;
