@@ -128,15 +128,15 @@ delay(200).then(() => {
 	console.log(`8. Pending promises: ${queue.pending}`);
 	//=> '8. Pending promises: 0'
 
-	queue.add(() => Promise.resolve('🐙')).then(console.log.bind(null, '12. Resolved'));
+	queue.add(() => Promise.resolve('🐙')).then(console.log.bind(null, '11. Resolved'));
 
 	console.log('9. Added 🐙');
 
 	console.log(`10. Pending promises: ${queue.pending}`);
 	//=> '10. Pending promises: 1'
 
-	queue.onEmpty().then(() => {
-		console.log('11. Queue is empty again');
+	queue.onIdle().then(() => {
+		console.log('12. All work is done');
 	});
 });
 
