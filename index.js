@@ -113,6 +113,11 @@ class PQueue {
 	}
 
 	onEmpty() {
+		// Instantly resolve if the queue is empty
+		if (this.queue.size === 0) {
+			return Promise.resolve();
+		}
+
 		return new Promise(resolve => {
 			const existingResolve = this._resolveEmpty;
 			this._resolveEmpty = () => {

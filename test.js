@@ -85,6 +85,10 @@ test('.onEmpty()', async t => {
 	t.is(queue.pending, 1);
 	await queue.onEmpty();
 	t.is(queue.size, 0);
+
+	// Test an empty queue
+	await queue.onEmpty();
+	t.is(queue.size, 0);
 });
 
 test('.clear()', t => {
