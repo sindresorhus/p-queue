@@ -77,7 +77,7 @@ class PQueue {
 			this.queue.dequeue()();
 		} else {
 			this._resolveEmpty();
-			
+
 			if (this._pendingCount === 0) {
 				this._resolveIdle();
 			}
@@ -116,13 +116,13 @@ class PQueue {
 	clear() {
 		this.queue = new this._queueClass(); // eslint-disable-line new-cap
 	}
-	
+
 	onEmpty() {
 		// Instantly resolve if the queue is empty
 		if (this.queue.size === 0) {
 			return Promise.resolve();
 		}
-		
+
 		return new Promise(resolve => {
 			const existingResolve = this._resolveEmpty;
 			this._resolveEmpty = () => {
@@ -131,13 +131,13 @@ class PQueue {
 			};
 		});
 	}
-	
+
 	onIdle() {
 		// Instantly resolve if none pending
 		if (this._pendingCount === 0) {
 			return Promise.resolve();
 		}
-		
+
 		return new Promise(resolve => {
 			const existingResolve = this._resolveIdle;
 			this._resolveIdle = () => {
