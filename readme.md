@@ -95,6 +95,12 @@ Returns a promise that settles when the queue becomes empty.
 
 Can be called multiple times. Useful if you for example add additional items at a later time.
 
+#### .onIdle()
+
+Returns a promise that settles when the queue becomes empty, and all promises have completed; `queue.size === 0 && queue.pending === 0`.
+
+The difference with `.onEmpty` is that `.onIdle` guarantees that all work from the queue has finished. `.onEmpty` merely signals that the queue is empty, but it could mean that some promises haven't completed yet.
+
 #### .clear()
 
 Clear the queue.
