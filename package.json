@@ -1,60 +1,60 @@
 {
-	"name": "p-queue",
-	"version": "1.2.0",
-	"description": "Promise queue with concurrency control",
-	"license": "MIT",
-	"repository": "sindresorhus/p-queue",
-	"author": {
-		"name": "Sindre Sorhus",
-		"email": "sindresorhus@gmail.com",
-		"url": "sindresorhus.com"
-	},
-	"maintainers": [
-		{
-			"name": "Vsevolod Strukchinsky",
-			"email": "floatdrop@gmail.com",
-			"url": "github.com/floatdrop"
-		}
-	],
-	"engines": {
-		"node": ">=4"
-	},
-	"scripts": {
-		"test": "xo && ava",
-		"bench": "node bench.js"
-	},
-	"files": [
-		"index.js"
-	],
-	"keywords": [
-		"promise",
-		"queue",
-		"enqueue",
-		"limit",
-		"limited",
-		"concurrency",
-		"throttle",
-		"throat",
-		"rate",
-		"batch",
-		"ratelimit",
-		"priority",
-		"priorityqueue",
-		"fifo",
-		"job",
-		"task",
-		"async",
-		"await",
-		"promises",
-		"bluebird"
-	],
-	"devDependencies": {
-		"ava": "*",
-		"benchmark": "^2.1.2",
-		"delay": "^2.0.0",
-		"in-range": "^1.0.0",
-		"random-int": "^1.0.0",
-		"time-span": "^2.0.0",
-		"xo": "*"
-	}
+  "name": "p-queue",
+  "version": "2.0.0",
+  "description": "Promise queue with concurrency control",
+  "license": "MIT",
+  "repository": "sindresorhus/p-queue",
+  "author": {
+    "name": "Sindre Sorhus",
+    "email": "sindresorhus@gmail.com",
+    "url": "sindresorhus.com"
+  },
+  "maintainers": [
+    {
+      "name": "Vsevolod Strukchinsky",
+      "email": "floatdrop@gmail.com",
+      "url": "github.com/floatdrop"
+    }
+  ],
+  "engines": {
+    "node": ">=4"
+  },
+  "scripts": {
+    "test": "xo && ava",
+    "bench": "node bench.js"
+  },
+  "files": [
+    "index.js"
+  ],
+  "keywords": [
+    "promise",
+    "queue",
+    "enqueue",
+    "limit",
+    "limited",
+    "concurrency",
+    "throttle",
+    "throat",
+    "rate",
+    "batch",
+    "ratelimit",
+    "priority",
+    "priorityqueue",
+    "fifo",
+    "job",
+    "task",
+    "async",
+    "await",
+    "promises",
+    "bluebird"
+  ],
+  "devDependencies": {
+    "ava": "*",
+    "benchmark": "^2.1.2",
+    "delay": "^2.0.0",
+    "in-range": "^1.0.0",
+    "random-int": "^1.0.0",
+    "time-span": "^2.0.0",
+    "xo": "*"
+  }
 }
