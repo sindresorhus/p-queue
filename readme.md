@@ -122,7 +122,7 @@ delay(200).then(() => {
 	console.log(`8. Pending promises: ${queue.pending}`);
 	//=> '8. Pending promises: 0'
 
-	queue.add(() => Promise.resolve('🐙')).then(console.log.bind(null, '11. Resolved'));
+	queue.add(() => Promise.resolve('🐙')).then(console.log.bind(null, '12. Resolved'));
 
 	console.log('9. Added 🐙');
 
@@ -130,7 +130,7 @@ delay(200).then(() => {
 	//=> '10. Pending promises: 1'
 
 	queue.onEmpty().then(() => {
-		console.log('12. Queue is empty again');
+		console.log('11. Queue is empty again');
 	});
 });
 
@@ -162,8 +162,8 @@ $ node example.js
 8. Pending promises: 0
 9. Added 🐙
 10. Pending promises: 1
-11. Resolved 🐙
-12. Queue is empty again
+11. Queue is empty again
+12. Resolved 🐙
 ```
 
 
