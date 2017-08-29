@@ -91,6 +91,28 @@ test('.onEmpty()', async t => {
 	t.is(queue.size, 0);
 });
 
+test('.onIdle()', async t => {
+	const queue = new PQueue({concurrency: 2});
+
+	queue.add(async () => delay(100));
+	queue.add(async () => delay(100));
+	queue.add(async () => delay(100));
+	t.is(queue.size, 1);
+	t.is(queue.pending, 2);
+	await queue.onIdle();
+	t.is(queue.size, 0);
+	t.is(queue.pending, 0);
+
+	queue.add(async () => delay(100));
+	queue.add(async () => delay(100));
+	queue.add(async () => delay(100));
+	t.is(queue.size, 1);
+	t.is(queue.pending, 2);
+	await queue.onIdle();
+	t.is(queue.size, 0);
+	t.is(queue.pending, 0);
+});
+
 test('.clear()', t => {
 	const queue = new PQueue({concurrency: 2});
 	queue.add(() => delay(20000));
