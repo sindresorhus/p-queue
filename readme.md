@@ -168,8 +168,8 @@ $ node example.js
 8. Pending promises: 0
 9. Added 🐙
 10. Pending promises: 1
-11. Queue is empty again
-12. Resolved 🐙
+11. Resolved 🐙
+12. All work is done
 ```
 
 
