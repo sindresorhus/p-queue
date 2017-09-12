@@ -136,3 +136,23 @@ test('.addAll()', async t => {
 	t.is(queue.pending, 2);
 	t.deepEqual(await p, [fixture, fixture]);
 });
+
+test('enforce number in options.concurrency', t => {
+	/* eslint-disable no-new */
+	t.throws(() => {
+		new PQueue({concurrency: 0});
+	}, TypeError);
+	t.throws(() => {
+		new PQueue({concurrency: undefined});
+	}, TypeError);
+	t.notThrows(() => {
+		new PQueue({concurrency: 1});
+	}, TypeError);
+	t.notThrows(() => {
+		new PQueue({concurrency: 10});
+	}, TypeError);
+	t.notThrows(() => {
+		new PQueue({concurrency: Infinity});
+	}, TypeError);
+	/* eslint-enable no-new */
+});

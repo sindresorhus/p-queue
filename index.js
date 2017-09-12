@@ -58,8 +58,8 @@ class PQueue {
 			queueClass: PriorityQueue
 		}, opts);
 
-		if (opts.concurrency < 1) {
-			throw new TypeError('Expected `concurrency` to be a number from 1 and up');
+		if (!(typeof opts.concurrency === 'number' && opts.concurrency >= 1)) {
+			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${opts.concurrency}\` (${typeof opts.concurrency})`);
 		}
 
 		this.queue = new opts.queueClass(); // eslint-disable-line new-cap
