@@ -147,12 +147,12 @@ test('enforce number in options.concurrency', t => {
 	}, TypeError);
 	t.notThrows(() => {
 		new PQueue({concurrency: 1});
-	}, TypeError);
+	});
 	t.notThrows(() => {
 		new PQueue({concurrency: 10});
-	}, TypeError);
+	});
 	t.notThrows(() => {
 		new PQueue({concurrency: Infinity});
-	}, TypeError);
+	});
 	/* eslint-enable no-new */
 });
