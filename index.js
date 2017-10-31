@@ -77,9 +77,11 @@ class PQueue {
 			this.queue.dequeue()();
 		} else {
 			this._resolveEmpty();
+			this._resolveEmpty = () => {};
 
 			if (this._pendingCount === 0) {
 				this._resolveIdle();
+				this._resolveIdle = () => {};
 			}
 		}
 	}
