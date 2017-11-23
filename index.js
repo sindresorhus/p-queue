@@ -171,6 +171,10 @@ class PQueue {
 	get pending() {
 		return this._pendingCount;
 	}
+
+	get isPaused() {
+		return this._isPaused;
+	}
 }
 
 module.exports = PQueue;
