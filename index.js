@@ -67,7 +67,7 @@ class PQueue {
 		this._queueClass = opts.queueClass;
 		this._pendingCount = 0;
 		this._concurrency = opts.concurrency;
-		this._paused = opts.autoStart === false;
+		this._isPaused = opts.autoStart === false;
 		this._resolveEmpty = () => {};
 		this._resolveIdle = () => {};
 	}
@@ -75,7 +75,7 @@ class PQueue {
 	_next() {
 		this._pendingCount--;
 
-		if (!this._paused && this.queue.size > 0) {
+		if (!this._isPaused && this.queue.size > 0) {
 			this.queue.dequeue()();
 		} else {
 			this._resolveEmpty();
@@ -103,7 +103,7 @@ class PQueue {
 				);
 			};
 
-			if (!this._paused && this._pendingCount < this._concurrency) {
+			if (!this._isPaused && this._pendingCount < this._concurrency) {
 				run();
 			} else {
 				this.queue.enqueue(run, opts);
@@ -116,18 +116,18 @@ class PQueue {
 	}
 
 	start() {
-		if (!this._paused) {
+		if (!this._isPaused) {
 			return;
 		}
 
-		this._paused = false;
+		this._isPaused = false;
 		while (this.queue.size > 0 && this._pendingCount < this._concurrency) {
 			this.queue.dequeue()();
 		}
 	}
 
 	pause() {
-		this._paused = true;
+		this._isPaused = true;
 	}
 
 	clear() {
