@@ -54,6 +54,13 @@ Minimum: `1`
 
 Concurrency limit.
 
+##### autoStart
+
+Type: `boolean`<br>
+Default: `true`<br>
+
+Whether queue tasks within concurrency limit, are auto-executed as soon as they're added.
+
 ##### queueClass
 
 Type: `Function`
@@ -89,6 +96,14 @@ Priority of operation. Operations with greater priority will be scheduled first.
 
 Same as `.add()`, but accepts an array of async functions and returns a promise that resolves when all async functions are resolved.
 
+#### .pause()
+
+Put queue execution on hold.
+
+#### .start()
+
+Start (or resume) executing enqueued tasks within concurrency limit. No need to call this if queue is not paused (via `options.autoStart = false` or by `.pause()` method.)
+
 #### .onEmpty()
 
 Returns a promise that settles when the queue becomes empty.
@@ -113,6 +128,9 @@ Size of the queue.
 
 Number of pending promises.
 
+#### .isPaused
+
+Whether the queue is currently paused.
 
 ## Advanced example
 
