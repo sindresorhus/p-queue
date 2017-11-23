@@ -67,7 +67,7 @@ class PQueue {
 		this._queueClass = opts.queueClass;
 		this._pendingCount = 0;
 		this._concurrency = opts.concurrency;
-		this._paused = (opts.autoStart === false);
+		this._paused = opts.autoStart === false;
 		this._resolveEmpty = () => {};
 		this._resolveIdle = () => {};
 	}
