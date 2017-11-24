@@ -57,7 +57,7 @@ Concurrency limit.
 ##### autoStart
 
 Type: `boolean`<br>
-Default: `true`<br>
+Default: `true`
 
 Whether queue tasks within concurrency limit, are auto-executed as soon as they're added.
 
