@@ -55,6 +55,7 @@ class PQueue {
 	constructor(opts) {
 		opts = Object.assign({
 			concurrency: Infinity,
+			autoStart: true,
 			queueClass: PriorityQueue
 		}, opts);
 
@@ -66,6 +67,7 @@ class PQueue {
 		this._queueClass = opts.queueClass;
 		this._pendingCount = 0;
 		this._concurrency = opts.concurrency;
+		this._isPaused = opts.autoStart === false;
 		this._resolveEmpty = () => {};
 		this._resolveIdle = () => {};
 	}
@@ -73,7 +75,7 @@ class PQueue {
 	_next() {
 		this._pendingCount--;
 
-		if (this.queue.size > 0) {
+		if (!this._isPaused && this.queue.size > 0) {
 			this.queue.dequeue()();
 		} else {
 			this._resolveEmpty();
@@ -101,7 +103,7 @@ class PQueue {
 				);
 			};
 
-			if (this._pendingCount < this._concurrency) {
+			if (!this._isPaused && this._pendingCount < this._concurrency) {
 				run();
 			} else {
 				this.queue.enqueue(run, opts);
@@ -111,6 +113,21 @@ class PQueue {
 
 	addAll(fns, opts) {
 		return Promise.all(fns.map(fn => this.add(fn, opts)));
+	}
+
+	start() {
+		if (!this._isPaused) {
+			return;
+		}
+
+		this._isPaused = false;
+		while (this.queue.size > 0 && this._pendingCount < this._concurrency) {
+			this.queue.dequeue()();
+		}
+	}
+
+	pause() {
+		this._isPaused = true;
 	}
 
 	clear() {
@@ -153,6 +170,10 @@ class PQueue {
 
 	get pending() {
 		return this._pendingCount;
+	}
+
+	get isPaused() {
+		return this._isPaused;
 	}
 }
 

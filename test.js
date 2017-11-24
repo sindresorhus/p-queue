@@ -156,3 +156,56 @@ test('enforce number in options.concurrency', t => {
 	});
 	/* eslint-enable no-new */
 });
+
+test('autoStart: false', t => {
+	const queue = new PQueue({concurrency: 2, autoStart: false});
+
+	queue.add(() => delay(20000));
+	queue.add(() => delay(20000));
+	queue.add(() => delay(20000));
+	queue.add(() => delay(20000));
+	t.is(queue.size, 4);
+	t.is(queue.pending, 0);
+	t.is(queue.isPaused, true);
+
+	queue.start();
+	t.is(queue.size, 2);
+	t.is(queue.pending, 2);
+	t.is(queue.isPaused, false);
+
+	queue.clear();
+	t.is(queue.size, 0);
+});
+
+test('.pause()', t => {
+	const queue = new PQueue({concurrency: 2});
+
+	queue.pause();
+	queue.add(() => delay(20000));
+	queue.add(() => delay(20000));
+	queue.add(() => delay(20000));
+	queue.add(() => delay(20000));
+	queue.add(() => delay(20000));
+	t.is(queue.size, 5);
+	t.is(queue.pending, 0);
+	t.is(queue.isPaused, true);
+
+	queue.start();
+	t.is(queue.size, 3);
+	t.is(queue.pending, 2);
+	t.is(queue.isPaused, false);
+
+	queue.add(() => delay(20000));
+	queue.pause();
+	t.is(queue.size, 4);
+	t.is(queue.pending, 2);
+	t.is(queue.isPaused, true);
+
+	queue.start();
+	t.is(queue.size, 4);
+	t.is(queue.pending, 2);
+	t.is(queue.isPaused, false);
+
+	queue.clear();
+	t.is(queue.size, 0);
+});
