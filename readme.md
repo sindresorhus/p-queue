@@ -2,7 +2,7 @@
 
 > Promise queue with concurrency control
 
-Useful for rate-limiting async operations. For example, when interacting with a REST API or when doing CPU/memory intensive tasks.
+Useful for rate-limiting async (or sync) operations. For example, when interacting with a REST API or when doing CPU/memory intensive tasks.
 
 
 ## Install
@@ -73,7 +73,7 @@ Class with a `enqueue` and `dequeue` method, and a `size` getter. See the [Custo
 
 #### .add(fn, [options])
 
-Returns the promise returned by calling `fn`.
+Returns the promise or value returned by calling `fn`. This allows adding both sync and async tasks to the queue.
 
 ##### fn
 
@@ -94,7 +94,7 @@ Priority of operation. Operations with greater priority will be scheduled first.
 
 #### .addAll(fns, [options])
 
-Same as `.add()`, but accepts an array of async functions and returns a promise that resolves when all async functions are resolved.
+Same as `.add()`, but accepts an array of sync or async functions and returns a promise that resolves when all functions are resolved.
 
 #### .pause()
 
