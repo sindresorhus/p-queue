@@ -47,7 +47,7 @@ test('.add() - concurrency: 5', async t => {
 	const queue = new PQueue({concurrency});
 	let running = 0;
 
-	const input = Array(100).fill(0).map(() => queue.add(async () => {
+	const input = new Array(100).fill(0).map(() => queue.add(async () => {
 		running++;
 		t.true(running <= concurrency);
 		t.true(queue.pending <= concurrency);
