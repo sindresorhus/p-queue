@@ -146,6 +146,8 @@ class PQueue {
 			const existingResolve = this._resolveEmpty;
 			this._resolveEmpty = () => {
 				existingResolve();
+				// Empty the stack trace
+				this._resolveEmpty = () => {};
 				resolve();
 			};
 		});
@@ -161,6 +163,8 @@ class PQueue {
 			const existingResolve = this._resolveIdle;
 			this._resolveIdle = () => {
 				existingResolve();
+				// Empty the stack trace
+				this._resolveIdle = () => {};
 				resolve();
 			};
 		});
