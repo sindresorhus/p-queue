@@ -74,6 +74,7 @@ class PQueue {
 
 	_next() {
 		this._pendingCount--;
+		this._inProgress = false;
 
 		if (!this._isPaused && this.queue.size > 0) {
 			this.queue.dequeue()();
@@ -92,6 +93,7 @@ class PQueue {
 		return new Promise((resolve, reject) => {
 			const run = () => {
 				this._pendingCount++;
+				this._inProgress = true;
 
 				fn().then(
 					val => {
@@ -105,7 +107,7 @@ class PQueue {
 				);
 			};
 
-			if (!this._isPaused && this._pendingCount < this._concurrency) {
+			if (!this._isPaused && this._pendingCount < this._concurrency || this._inProgress) {
 				run();
 			} else {
 				this.queue.enqueue(run, opts);
