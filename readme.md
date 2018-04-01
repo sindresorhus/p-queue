@@ -73,7 +73,7 @@ Class with a `enqueue` and `dequeue` method, and a `size` getter. See the [Custo
 
 #### .add(fn, [options])
 
-Returns the promise or value returned by calling `fn`. This allows adding both sync and async tasks to the queue.
+Adds a sync or async task to the queue. Always returns a promise.
 
 ##### fn
 
