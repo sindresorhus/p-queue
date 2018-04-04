@@ -209,3 +209,30 @@ test('.pause()', t => {
 	queue.clear();
 	t.is(queue.size, 0);
 });
+
+test('.add() sync/async mixed tasks', async t => {
+	const queue = new PQueue({concurrency: 1});
+	queue.add(() => 'sync 1');
+	queue.add(() => delay(1000));
+	queue.add(() => 'sync 2');
+	queue.add(() => fixture);
+	t.is(queue.size, 3);
+	t.is(queue.pending, 1);
+	await queue.onIdle();
+	t.is(queue.size, 0);
+	t.is(queue.pending, 0);
+});
+
+test('.addAll() sync/async mixed tasks', async t => {
+	const queue = new PQueue();
+	const fns = [
+		() => 'sync 1',
+		() => delay(2000),
+		() => 'sync 2',
+		async () => fixture
+	];
+	const p = queue.addAll(fns);
+	t.is(queue.size, 0);
+	t.is(queue.pending, 4);
+	t.deepEqual(await p, ['sync 1', undefined, 'sync 2', fixture]);
+});

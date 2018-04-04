@@ -93,7 +93,7 @@ class PQueue {
 			const run = () => {
 				this._pendingCount++;
 
-				fn().then(
+				Promise.resolve(fn()).then(
 					val => {
 						resolve(val);
 						this._next();
