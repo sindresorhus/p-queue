@@ -93,16 +93,21 @@ class PQueue {
 			const run = () => {
 				this._pendingCount++;
 
-				Promise.resolve((async () => fn())()).then(
-					val => {
-						resolve(val);
-						this._next();
-					},
-					err => {
-						reject(err);
-						this._next();
-					}
-				);
+				try {
+					Promise.resolve(fn()).then(
+						val => {
+							resolve(val);
+							this._next();
+						},
+						err => {
+							reject(err);
+							this._next();
+						}
+					);
+				} catch (err) {
+					reject(err);
+					this._next();
+				}
 			};
 
 			if (!this._isPaused && this._pendingCount < this._concurrency) {
