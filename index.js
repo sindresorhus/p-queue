@@ -77,7 +77,7 @@ class PQueue {
 
 		if (!this._isPaused && this.queue.size > 0) {
 			this.queue.dequeue()();
-		} else {
+		} else if (this.queue.size <= 0) {
 			this._resolveEmpty();
 			this._resolveEmpty = () => {};
 
