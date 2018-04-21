@@ -237,7 +237,7 @@ test('.addAll() sync/async mixed tasks', async t => {
 	t.deepEqual(await p, ['sync 1', undefined, 'sync 2', fixture]);
 });
 
-test('should resolve empty when size is zeor', async t => {
+test('should resolve empty when size is zero', async t => {
 	const queue = new PQueue({concurrency: 1, autoStart: false});
 
 	// It should take 1 seconds to resolve all tasks
