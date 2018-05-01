@@ -236,3 +236,28 @@ test('.addAll() sync/async mixed tasks', async t => {
 	t.is(queue.pending, 4);
 	t.deepEqual(await p, ['sync 1', undefined, 'sync 2', fixture]);
 });
+
+test('should resolve empty when size is zero', async t => {
+	const queue = new PQueue({concurrency: 1, autoStart: false});
+
+	// It should take 1 seconds to resolve all tasks
+	for (let index = 0; index < 100; index++) {
+    queue.add(() => delay(10));
+	}
+
+  queue.onEmpty().then(() => {
+    t.is(queue.size, 0);
+  });
+
+  queue.start();
+
+	// Pause at 0.5 second
+  setTimeout(async () => {
+    queue.pause();
+    await delay(10);
+    queue.start();
+  }, 500);
+
+  await queue.onIdle();
+});
+
