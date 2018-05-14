@@ -257,11 +257,6 @@ class QueueClass {
 - [Sindre Sorhus](https://github.com/sindresorhus)
 - [Vsevolod Strukchinsky](https://github.com/floatdrop)
 
-### Contributed
- 
-- [Rafael Dejesus](https://github.com/Rafael09ED)
-
-
 ## License
 
 MIT © [Sindre Sorhus](https://sindresorhus.com)
