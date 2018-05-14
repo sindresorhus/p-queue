@@ -144,7 +144,7 @@ class PQueue {
 			this._intervalId = null;
 		}
 		this._intervalCount = (this._concurrentCountIsNewIntervalCount) ? this._concurrentCount : 0;
-		while (this._tryToStartAnother()) {}
+		while (this._tryToStartAnother()) {} // eslint-disable-line no-empty
 	}
 
 	add(fn, opts) {
@@ -186,7 +186,7 @@ class PQueue {
 			return;
 		}
 		this._isPaused = false;
-		while (this._tryToStartAnother()) {}
+		while (this._tryToStartAnother()) {} // eslint-disable-line no-empty
 	}
 
 	pause() {

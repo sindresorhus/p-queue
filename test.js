@@ -242,22 +242,119 @@ test('should resolve empty when size is zero', async t => {
 
 	// It should take 1 seconds to resolve all tasks
 	for (let index = 0; index < 100; index++) {
-    queue.add(() => delay(10));
+		queue.add(() => delay(10));
 	}
 
-  queue.onEmpty().then(() => {
-    t.is(queue.size, 0);
-  });
+	queue.onEmpty().then(() => {
+		t.is(queue.size, 0);
+	});
 
-  queue.start();
+	queue.start();
 
 	// Pause at 0.5 second
-  setTimeout(async () => {
-    queue.pause();
-    await delay(10);
-    queue.start();
-  }, 500);
+	setTimeout(async () => {
+		queue.pause();
+		await delay(10);
+		queue.start();
+	}, 500);
 
-  await queue.onIdle();
+	await queue.onIdle();
 });
 
+test('.add() - throttled', async t => {
+	const result = [];
+	const queue = new PQueue({
+		intervalCap: 1,
+		intervalLength: 500,
+		autoStart: false
+	});
+	queue.add(() => result.push(1));
+	queue.start();
+	await delay(250);
+	queue.add(() => result.push(2));
+	t.deepEqual(result, [1]);
+	await delay(250);
+	t.deepEqual(result, [1, 2]);
+});
+
+test('.add() - throttled, mustFinishDuringInterval false', async t => {
+	const result = [];
+	const queue = new PQueue({
+		intervalCap: 1,
+		mustFinishDuringInterval: false,
+		intervalLength: 500,
+		autoStart: false
+	});
+	const values = [0, 1];
+	values.forEach(value => queue.add(() => delay(600).then(() => result.push(value))));
+	queue.start();
+	delay(550).then(() => {
+		t.is(queue.pending, 2);
+		t.deepEqual(result, []);
+	});
+	delay(650).then(() => {
+		t.is(queue.pending, 1);
+		t.deepEqual(result, [0]);
+	});
+	await delay(1250);
+	t.deepEqual(result, values);
+});
+
+test('.add() - throttled, mustFinishDuringInterval true', async t => {
+	const result = [];
+	const queue = new PQueue({
+		mustFinishDuringInterval: true,
+		intervalCap: 1,
+		intervalLength: 500,
+		autoStart: false
+	});
+	const values = [0, 1];
+	values.forEach(value => queue.add(() => delay(600).then(() => result.push(value))));
+	queue.start();
+	delay(100).then(() => {
+		t.deepEqual(result, []);
+		t.is(queue.pending, 1);
+	});
+	delay(550).then(() => {
+		t.deepEqual(result, []);
+		t.is(queue.pending, 1);
+	});
+	delay(650).then(() => {
+		t.deepEqual(result, [0]);
+		t.is(queue.pending, 0);
+	});
+	delay(1550).then(() => {
+		t.deepEqual(result, [0]);
+	});
+	await delay(1650);
+	t.deepEqual(result, [0, 1]);
+});
+
+test('.add() - throttled 10, concurrency 5', async t => {
+	const result = [];
+	const queue = new PQueue({
+		concurrency: 5,
+		intervalCap: 10,
+		intervalLength: 1000,
+		autoStart: false
+	});
+	const firstV = [...new Array(5).keys()];
+	const secondV = [...new Array(10).keys()];
+	const thirdV = [...new Array(13).keys()];
+	thirdV.forEach(value => queue.add(() => delay(300).then(() => result.push(value))));
+	queue.start();
+	t.deepEqual(result, []);
+	delay(400).then(() => {
+		t.deepEqual(result, firstV);
+		t.is(queue.pending, 5);
+	});
+	delay(700).then(() => {
+		t.deepEqual(result, secondV);
+	});
+	delay(1200).then(() => {
+		t.is(queue.pending, 3);
+		t.deepEqual(result, secondV);
+	});
+	await delay(1400);
+	t.deepEqual(result, thirdV);
+});
