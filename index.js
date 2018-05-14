@@ -54,7 +54,10 @@ class PriorityQueue {
 class PQueue {
 	constructor(opts) {
 		opts = Object.assign({
+			mustFinishDuringInterval: false,
 			concurrency: Infinity,
+			intervalCap: Infinity,
+			intervalLength: 0,
 			autoStart: true,
 			queueClass: PriorityQueue
 		}, opts);
@@ -62,61 +65,115 @@ class PQueue {
 		if (!(typeof opts.concurrency === 'number' && opts.concurrency >= 1)) {
 			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${opts.concurrency}\` (${typeof opts.concurrency})`);
 		}
+		if (!(typeof opts.intervalCap === 'number' && opts.intervalCap >= 1)) {
+			throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${opts.intervalCap}\` (${typeof opts.intervalCap})`);
+		}
+		if (!(typeof opts.intervalLength === 'number' && Number.isFinite(opts.intervalLength) && opts.intervalLength >= 0)) {
+			throw new TypeError(`Expected \`intervalLength\` to be a finite number >= 0, got \`${opts.intervalLength}\` (${typeof opts.intervalLength})`);
+		}
+
+		this._concurrentCountIsNewIntervalCount = opts.mustFinishDuringInterval;
+		this._isPaused = opts.autoStart === false;
 
 		this.queue = new opts.queueClass(); // eslint-disable-line new-cap
 		this._queueClass = opts.queueClass;
-		this._pendingCount = 0;
-		this._concurrency = opts.concurrency;
-		this._isPaused = opts.autoStart === false;
+
+		this._concurrentCount = 0;
+		this._concurrentCap = opts.concurrency;
+
+		this._isIntervalIgnored = opts.intervalCap === Infinity || opts.intervalLength === 0;
+		this._intervalCount = 0;
+		this._intervalCap = opts.intervalCap;
+		this._intervalTime = opts.intervalLength;
+		this._intervalId = null;
+
 		this._resolveEmpty = () => {};
 		this._resolveIdle = () => {};
 	}
 
-	_next() {
-		this._pendingCount--;
+	get _doesIntervalAllowAnother() {
+		return this._isIntervalIgnored || this._intervalCount < this._intervalCap;
+	}
 
-		if (this.queue.size > 0) {
-			if (!this._isPaused) {
-				this.queue.dequeue()();
-			}
-		} else {
-			this._resolveEmpty();
-			this._resolveEmpty = () => {};
+	get _areAnyQueued() {
+		return this.queue.size > 0;
+	}
 
-			if (this._pendingCount === 0) {
-				this._resolveIdle();
-				this._resolveIdle = () => {};
-			}
+	get _doesConcurrentAllowAnother() {
+		return this._concurrentCount < this._concurrentCap;
+	}
+
+	_onIndividualCompletion() {
+		this._concurrentCount--;
+		this._tryToStartAnother();
+	}
+
+	_tryToStartAnother() {
+		if (!this._areAnyQueued) {
+			this._resolvePromises();
+			return false;
 		}
+		if (!this._isPaused && this._doesIntervalAllowAnother && this._doesConcurrentAllowAnother) {
+			this.queue.dequeue()();
+			this._initializeIntervalIfNeeded();
+			return true;
+		}
+		return false;
+	}
+
+	_initializeIntervalIfNeeded() {
+		if (this._isIntervalIgnored || this._intervalId !== null) {
+			return;
+		}
+		this._intervalId = setInterval(() => this._onInterval(), this._intervalTime);
+	}
+
+	_resolvePromises() {
+		this._resolveEmpty();
+		this._resolveEmpty = () => {};
+
+		if (this._concurrentCount === 0) {
+			this._resolveIdle();
+			this._resolveIdle = () => {};
+		}
+	}
+
+	_onInterval() {
+		if (this._intervalCount === 0 && this._concurrentCount === 0) {
+			clearInterval(this._intervalId);
+			this._intervalId = null;
+		}
+		this._intervalCount = (this._concurrentCountIsNewIntervalCount) ? this._concurrentCount : 0;
+		while (this._tryToStartAnother()) {}
 	}
 
 	add(fn, opts) {
 		return new Promise((resolve, reject) => {
 			const run = () => {
-				this._pendingCount++;
+				this._concurrentCount++;
+				this._intervalCount++;
+				if (this._intervalId === null) {
+					this._intervalId = setInterval(() => this._onInterval(), this._intervalTime);
+				}
 
 				try {
 					Promise.resolve(fn()).then(
 						val => {
 							resolve(val);
-							this._next();
+							this._onIndividualCompletion();
 						},
 						err => {
 							reject(err);
-							this._next();
+							this._onIndividualCompletion();
 						}
 					);
 				} catch (err) {
 					reject(err);
-					this._next();
+					this._onIndividualCompletion();
 				}
 			};
-
-			if (!this._isPaused && this._pendingCount < this._concurrency) {
-				run();
-			} else {
-				this.queue.enqueue(run, opts);
-			}
+			this.queue.enqueue(run, opts);
+			this._tryToStartAnother();
 		});
 	}
 
@@ -128,11 +185,8 @@ class PQueue {
 		if (!this._isPaused) {
 			return;
 		}
-
 		this._isPaused = false;
-		while (this.queue.size > 0 && this._pendingCount < this._concurrency) {
-			this.queue.dequeue()();
-		}
+		while (this._tryToStartAnother()) {}
 	}
 
 	pause() {
@@ -159,8 +213,8 @@ class PQueue {
 	}
 
 	onIdle() {
-		// Instantly resolve if none pending
-		if (this._pendingCount === 0) {
+		// Instantly resolve if none pending & if nothing else is queued
+		if (this._concurrentCount === 0 && this.queue.size === 0) {
 			return Promise.resolve();
 		}
 
@@ -178,11 +232,19 @@ class PQueue {
 	}
 
 	get pending() {
-		return this._pendingCount;
+		return this._concurrentCount;
 	}
 
 	get isPaused() {
 		return this._isPaused;
+	}
+
+	close() {
+		if (this._intervalId === null) {
+			return;
+		}
+		clearInterval(this._intervalId);
+		this._intervalId = null;
 	}
 }
 

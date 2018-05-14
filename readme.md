@@ -67,6 +67,28 @@ Type: `Function`
 
 Class with a `enqueue` and `dequeue` method, and a `size` getter. See the [Custom QueueClass](#custom-queueclass) section.
 
+##### intervalCap
+
+Type: `number`<br>
+Default: `Infinity`<br>
+Minimum: `1`
+
+Interval Limit. The max number of runs in the given interval of time.
+
+##### intervalLength
+
+Type: `number`<br>
+Default: `0`<br>
+Minimum: `0`
+
+The length of time in milliseconds before the interval count resets. Must be finite.
+
+##### mustFinishDuringInterval
+
+Type: `boolean`<br>
+
+Whether the task must finish in the given interval or will be carried over into the next interval count. 
+
 ### queue
 
 `PQueue` instance.
@@ -119,6 +141,12 @@ The difference with `.onEmpty` is that `.onIdle` guarantees that all work from t
 #### .clear()
 
 Clear the queue.
+
+#### .close()
+
+Stops the interval early before it automatically closes. Only relevant if `intervalLength > 0`.
+
+Only to be called when the `queue` is empty.
 
 #### .size
 
@@ -228,6 +256,10 @@ class QueueClass {
 
 - [Sindre Sorhus](https://github.com/sindresorhus)
 - [Vsevolod Strukchinsky](https://github.com/floatdrop)
+
+### Contributed
+ 
+- [Rafael Dejesus](https://github.com/Rafael09ED)
 
 
 ## License
