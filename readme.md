@@ -144,9 +144,7 @@ Clear the queue.
 
 #### .close()
 
-Stops the interval early before it automatically closes. Only relevant if `intervalLength > 0`.
-
-Only to be called when the `queue` is empty.
+Manually clears the interval before it automatically closes. Only relevant if `intervalLength > 0` and only to be called when the `queue` is empty.
 
 #### .size
 
