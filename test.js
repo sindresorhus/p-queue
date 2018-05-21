@@ -242,22 +242,22 @@ test('should resolve empty when size is zero', async t => {
 
 	// It should take 1 seconds to resolve all tasks
 	for (let index = 0; index < 100; index++) {
-    queue.add(() => delay(10));
+		queue.add(() => delay(10));
 	}
 
-  queue.onEmpty().then(() => {
-    t.is(queue.size, 0);
-  });
+	queue.onEmpty().then(() => {
+		t.is(queue.size, 0);
+	});
 
-  queue.start();
+	queue.start();
 
 	// Pause at 0.5 second
-  setTimeout(async () => {
-    queue.pause();
-    await delay(10);
-    queue.start();
-  }, 500);
+	setTimeout(async () => {
+		queue.pause();
+		await delay(10);
+		queue.start();
+	}, 500);
 
-  await queue.onIdle();
+	await queue.onIdle();
 });
 
