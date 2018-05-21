@@ -260,4 +260,3 @@ test('should resolve empty when size is zero', async t => {
 
 	await queue.onIdle();
 });
-
