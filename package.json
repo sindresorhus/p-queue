@@ -1,6 +1,6 @@
 {
 	"name": "p-queue",
-	"version": "2.4.0",
+	"version": "2.4.2",
 	"description": "Promise queue with concurrency control",
 	"license": "MIT",
 	"repository": "sindresorhus/p-queue",
@@ -17,7 +17,7 @@
 		}
 	],
 	"engines": {
-		"node": ">=4"
+		"node": ">=6"
 	},
 	"scripts": {
 		"test": "xo && ava",
