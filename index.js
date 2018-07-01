@@ -123,7 +123,7 @@ class PQueue {
 	}
 
 	_intervalPaused() {
-		let now = Date.now();
+		const now = Date.now();
 		if (this._intervalId === null) {
 			let delay = this._intervalEnd - now;
 			if (delay < 0) {
@@ -153,8 +153,9 @@ class PQueue {
 
 			this._resolvePromises();
 			return false;
-		} if (!this._isPaused) {
-			let canInitalizeInterval = !this._intervalPaused();
+		}
+		if (!this._isPaused) {
+			const canInitalizeInterval = !this._intervalPaused();
 			if (this._doesIntervalAllowAnother && this._doesConcurrentAllowAnother) {
 				this.queue.dequeue()();
 				if (canInitalizeInterval) {
