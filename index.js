@@ -118,7 +118,6 @@ class PQueue {
 	_onResumeInterval() {
 		this._onInterval();
 		this._initializeIntervalIfNeeded();
-		clearTimeout(this._timeoutId);
 		this._timeoutId = null;
 	}
 
