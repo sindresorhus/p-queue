@@ -358,3 +358,26 @@ test('.add() - throttled 10, concurrency 5', async t => {
 	await delay(1400);
 	t.deepEqual(result, thirdV);
 });
+
+test('.add() - throttled finish and resume', async t => {
+	const result = [];
+	const queue = new PQueue({
+		concurrency: 1,
+		intervalCap: 2,
+		intervalLength: 2000,
+		autoStart: false
+	});
+
+	const values = [0, 1];
+	const firstV = [0, 1];
+	const secondV = [0, 1, 2];
+	values.forEach(value => queue.add(() => delay(100).then(() => result.push(value))));
+	queue.start();
+	delay(1000).then(() => {
+		t.deepEqual(result, firstV);
+		queue.add(() => delay(100).then(() => result.push(2)));
+	});
+	delay(1500).then(() => t.deepEqual(result, firstV));
+	await delay(2200);
+	t.deepEqual(result, secondV);
+});

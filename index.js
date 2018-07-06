@@ -95,8 +95,8 @@ class PQueue {
 		return this._isIntervalIgnored || this._intervalCount < this._intervalCap;
 	}
 
-	get _areAnyQueued() {
-		return this.queue.size > 0;
+	get _isEmpty() {
+		return this.queue.size === 0;
 	}
 
 	get _doesConcurrentAllowAnother() {
@@ -109,7 +109,7 @@ class PQueue {
 	}
 
 	_tryToStartAnother() {
-		if (!this._areAnyQueued) {
+		if (this._isEmpty) {
 			this._resolvePromises();
 			return false;
 		}
