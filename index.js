@@ -100,10 +100,20 @@ class PQueue {
 		return this._pendingCount < this._concurrency;
 	}
 
-	_onIndividualCompletion() {
+	_next() {
 		this._pendingCount--;
 		this._tryToStartAnother();
-		this._stopIntervalIfNeeded();
+		this._clearIntervalIfNeeded();
+	}
+
+	_resolvePromises() {
+		this._resolveEmpty();
+		this._resolveEmpty = () => {};
+
+		if (this._pendingCount === 0) {
+			this._resolveIdle();
+			this._resolveIdle = () => {};
+		}
 	}
 
 	_tryToStartAnother() {
@@ -114,7 +124,7 @@ class PQueue {
 		if (this.isPaused) {
 			return false;
 		}
-		this._startIntervalIfNeeded();
+		this._initializeIntervalIfNeeded();
 
 		if (this._doesIntervalAllowAnother && this._doesConcurrentAllowAnother) {
 			this.queue.dequeue()();
@@ -123,7 +133,7 @@ class PQueue {
 		return false;
 	}
 
-	_startIntervalIfNeeded() {
+	_initializeIntervalIfNeeded() {
 		if (this._isIntervalIgnored || this._intervalTimeoutId !== null) {
 			return;
 		}
@@ -134,23 +144,13 @@ class PQueue {
 		this._intervalEnd = new Date(now + timeoutLength).getTime();
 	}
 
-	_stopIntervalIfNeeded() {
+	_clearIntervalIfNeeded() {
 		if (this._isIntervalIgnored || this._intervalTimeoutId === null) {
 			return;
 		}
 		if (this.queue.size === 0) {
 			clearTimeout(this._intervalTimeoutId);
 			this._intervalTimeoutId = null;
-		}
-	}
-
-	_resolvePromises() {
-		this._resolveEmpty();
-		this._resolveEmpty = () => {};
-
-		if (this._pendingCount === 0) {
-			this._resolveIdle();
-			this._resolveIdle = () => {};
 		}
 	}
 
@@ -165,22 +165,22 @@ class PQueue {
 			const run = () => {
 				this._pendingCount++;
 				this._intervalCount++;
-				this._startIntervalIfNeeded();
+				this._initializeIntervalIfNeeded();
 
 				try {
 					Promise.resolve(fn()).then(
 						val => {
 							resolve(val);
-							this._onIndividualCompletion();
+							this._next();
 						},
 						err => {
 							reject(err);
-							this._onIndividualCompletion();
+							this._next();
 						}
 					);
 				} catch (err) {
 					reject(err);
-					this._onIndividualCompletion();
+					this._next();
 				}
 			};
 			this.queue.enqueue(run, opts);
