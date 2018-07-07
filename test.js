@@ -264,8 +264,8 @@ test('should resolve empty when size is zero', async t => {
 test('.add() - throttled', async t => {
 	const result = [];
 	const queue = new PQueue({
-		intervalCap: 1,
-		intervalLength: 500,
+		intervalLimit: 1,
+		interval: 500,
 		autoStart: false
 	});
 	queue.add(() => result.push(1));
@@ -273,16 +273,16 @@ test('.add() - throttled', async t => {
 	await delay(250);
 	queue.add(() => result.push(2));
 	t.deepEqual(result, [1]);
-	await delay(250);
+	await delay(300);
 	t.deepEqual(result, [1, 2]);
 });
 
-test('.add() - throttled, mustFinishDuringInterval false', async t => {
+test('.add() - throttled, carryoverConcurrencyCount false', async t => {
 	const result = [];
 	const queue = new PQueue({
-		intervalCap: 1,
-		mustFinishDuringInterval: false,
-		intervalLength: 500,
+		intervalLimit: 1,
+		carryoverConcurrencyCount: false,
+		interval: 500,
 		autoStart: false
 	});
 	const values = [0, 1];
@@ -300,12 +300,12 @@ test('.add() - throttled, mustFinishDuringInterval false', async t => {
 	t.deepEqual(result, values);
 });
 
-test('.add() - throttled, mustFinishDuringInterval true', async t => {
+test('.add() - throttled, carryoverConcurrencyCount true', async t => {
 	const result = [];
 	const queue = new PQueue({
-		mustFinishDuringInterval: true,
-		intervalCap: 1,
-		intervalLength: 500,
+		carryoverConcurrencyCount: true,
+		intervalLimit: 1,
+		interval: 500,
 		autoStart: false
 	});
 	const values = [0, 1];
@@ -334,8 +334,8 @@ test('.add() - throttled 10, concurrency 5', async t => {
 	const result = [];
 	const queue = new PQueue({
 		concurrency: 5,
-		intervalCap: 10,
-		intervalLength: 1000,
+		intervalLimit: 10,
+		interval: 1000,
 		autoStart: false
 	});
 	const firstV = [...new Array(5).keys()];
@@ -363,8 +363,8 @@ test('.add() - throttled finish and resume', async t => {
 	const result = [];
 	const queue = new PQueue({
 		concurrency: 1,
-		intervalCap: 2,
-		intervalLength: 2000,
+		intervalLimit: 2,
+		interval: 2000,
 		autoStart: false
 	});
 
@@ -380,4 +380,25 @@ test('.add() - throttled finish and resume', async t => {
 	delay(1500).then(() => t.deepEqual(result, firstV));
 	await delay(2200);
 	t.deepEqual(result, secondV);
+});
+
+test('pause should work when throttled', async t => {
+	const result = [];
+	const queue = new PQueue({
+		concurrency: 2,
+		intervalLimit: 2,
+		interval: 1000,
+		autoStart: false
+	});
+	const values = 	[0, 1, 2, 3];
+	const firstV = 	[0, 1];
+	const secondV = [0, 1, 2, 3];
+	values.forEach(value => queue.add(() => delay(100).then(() => result.push(value))));
+	queue.start();
+	delay(300).then(() => t.deepEqual(result, firstV));
+	delay(600).then(() => queue.pause());
+	delay(1400).then(() => t.deepEqual(result, firstV));
+	delay(1500).then(() => queue.start());
+	delay(2200).then(() => t.deepEqual(result, secondV));
+	await delay(2500);
 });
