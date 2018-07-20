@@ -55,7 +55,7 @@ class PQueue {
 	constructor(opts) {
 		opts = Object.assign({
 			carryoverConcurrencyCount: false,
-			intervalLimit: Infinity,
+			intervalCap: Infinity,
 			interval: 0,
 			concurrency: Infinity,
 			autoStart: true,
@@ -66,8 +66,8 @@ class PQueue {
 			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${opts.concurrency}\` (${typeof opts.concurrency})`);
 		}
 
-		if (!(typeof opts.intervalLimit === 'number' && opts.intervalLimit >= 1)) {
-			throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${opts.intervalLimit}\` (${typeof opts.intervalLimit})`);
+		if (!(typeof opts.intervalCap === 'number' && opts.intervalCap >= 1)) {
+			throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${opts.intervalCap}\` (${typeof opts.intervalCap})`);
 		}
 
 		if (!(typeof opts.interval === 'number' && Number.isFinite(opts.interval) && opts.interval >= 0)) {
@@ -75,9 +75,9 @@ class PQueue {
 		}
 
 		this._carryoverConcurrencyCount = opts.carryoverConcurrencyCount;
-		this._isIntervalIgnored = opts.intervalLimit === Infinity || opts.interval === 0;
+		this._isIntervalIgnored = opts.intervalCap === Infinity || opts.interval === 0;
 		this._intervalCount = 0;
-		this._intervalLimit = opts.intervalLimit;
+		this._intervalCap = opts.intervalCap;
 		this._interval = opts.interval;
 		this._intervalId = null;
 		this._intervalEnd = 0;
@@ -93,7 +93,7 @@ class PQueue {
 	}
 
 	get _doesIntervalAllowAnother() {
-		return this._isIntervalIgnored || this._intervalCount < this._intervalLimit;
+		return this._isIntervalIgnored || this._intervalCount < this._intervalCap;
 	}
 
 	get _doesConcurrentAllowAnother() {
@@ -139,7 +139,6 @@ class PQueue {
 				return true;
 			}
 		}
-
 		return false;
 	}
 
@@ -154,10 +153,10 @@ class PQueue {
 			return false;
 		}
 		if (!this._isPaused) {
-			const canInitalizeInterval = !this._intervalPaused();
+			const canInitializeInterval = !this._intervalPaused();
 			if (this._doesIntervalAllowAnother && this._doesConcurrentAllowAnother) {
 				this.queue.dequeue()();
-				if (canInitalizeInterval) {
+				if (canInitializeInterval) {
 					this._initializeIntervalIfNeeded();
 				}
 

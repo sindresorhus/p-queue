@@ -264,7 +264,7 @@ test('should resolve empty when size is zero', async t => {
 test('.add() - throttled', async t => {
 	const result = [];
 	const queue = new PQueue({
-		intervalLimit: 1,
+		intervalCap: 1,
 		interval: 500,
 		autoStart: false
 	});
@@ -280,7 +280,7 @@ test('.add() - throttled', async t => {
 test('.add() - throttled, carryoverConcurrencyCount false', async t => {
 	const result = [];
 	const queue = new PQueue({
-		intervalLimit: 1,
+		intervalCap: 1,
 		carryoverConcurrencyCount: false,
 		interval: 500,
 		autoStart: false
@@ -304,7 +304,7 @@ test('.add() - throttled, carryoverConcurrencyCount true', async t => {
 	const result = [];
 	const queue = new PQueue({
 		carryoverConcurrencyCount: true,
-		intervalLimit: 1,
+		intervalCap: 1,
 		interval: 500,
 		autoStart: false
 	});
@@ -334,7 +334,7 @@ test('.add() - throttled 10, concurrency 5', async t => {
 	const result = [];
 	const queue = new PQueue({
 		concurrency: 5,
-		intervalLimit: 10,
+		intervalCap: 10,
 		interval: 1000,
 		autoStart: false
 	});
@@ -363,7 +363,7 @@ test('.add() - throttled finish and resume', async t => {
 	const result = [];
 	const queue = new PQueue({
 		concurrency: 1,
-		intervalLimit: 2,
+		intervalCap: 2,
 		interval: 2000,
 		autoStart: false
 	});
@@ -386,7 +386,7 @@ test('pause should work when throttled', async t => {
 	const result = [];
 	const queue = new PQueue({
 		concurrency: 2,
-		intervalLimit: 2,
+		intervalCap: 2,
 		interval: 1000,
 		autoStart: false
 	});

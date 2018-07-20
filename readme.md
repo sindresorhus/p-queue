@@ -67,13 +67,13 @@ Type: `Function`
 
 Class with a `enqueue` and `dequeue` method, and a `size` getter. See the [Custom QueueClass](#custom-queueclass) section.
 
-##### intervalLimit
+##### intervalCap
 
 Type: `number`<br>
 Default: `Infinity`<br>
 Minimum: `1`
 
-Interval Limit. The max number of runs in the given interval of time.
+Interval Cap. The max number of runs in the given interval of time.
 
 ##### interval
 
