@@ -71,7 +71,7 @@ class PQueue {
 		}
 
 		if (!(typeof opts.interval === 'number' && Number.isFinite(opts.interval) && opts.interval >= 0)) {
-			throw new TypeError(`Expected \`intervalLength\` to be a finite number >= 0, got \`${opts.interval}\` (${typeof opts.interval})`);
+			throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${opts.interval}\` (${typeof opts.interval})`);
 		}
 
 		this._carryoverConcurrencyCount = opts.carryoverConcurrencyCount;
