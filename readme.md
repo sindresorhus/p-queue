@@ -73,7 +73,7 @@ Type: `number`<br>
 Default: `Infinity`<br>
 Minimum: `1`
 
-Interval Cap. The max number of runs in the given interval of time.
+The max number of runs in the given interval of time.
 
 ##### interval
 
@@ -86,9 +86,9 @@ The length of time in milliseconds before the interval count resets. Must be fin
 ##### carryoverConcurrencyCount
 
 Type: `boolean`<br>
-Default: `false` <br>
+Default: `false`
 
-Whether the task must finish in the given interval or will be carried over into the next interval count. 
+Whether the task must finish in the given interval or will be carried over into the next interval count.
 
 ### queue
 
@@ -247,11 +247,6 @@ class QueueClass {
 - [More…](https://github.com/sindresorhus/promise-fun)
 
 
-## Created by
-
-- [Sindre Sorhus](https://github.com/sindresorhus)
-- [Vsevolod Strukchinsky](https://github.com/floatdrop)
-
 ## License
 
-MIT © [Sindre Sorhus](https://sindresorhus.com)
+MIT

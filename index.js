@@ -26,14 +26,14 @@ class PriorityQueue {
 		this._queue = [];
 	}
 
-	enqueue(run, opts) {
-		opts = Object.assign({
+	enqueue(run, options) {
+		options = Object.assign({
 			priority: 0
-		}, opts);
+		}, options);
 
-		const element = {priority: opts.priority, run};
+		const element = {priority: options.priority, run};
 
-		if (this.size && this._queue[this.size - 1].priority >= opts.priority) {
+		if (this.size && this._queue[this.size - 1].priority >= options.priority) {
 			this._queue.push(element);
 			return;
 		}
@@ -52,42 +52,42 @@ class PriorityQueue {
 }
 
 class PQueue {
-	constructor(opts) {
-		opts = Object.assign({
+	constructor(options) {
+		options = Object.assign({
 			carryoverConcurrencyCount: false,
 			intervalCap: Infinity,
 			interval: 0,
 			concurrency: Infinity,
 			autoStart: true,
 			queueClass: PriorityQueue
-		}, opts);
+		}, options);
 
-		if (!(typeof opts.concurrency === 'number' && opts.concurrency >= 1)) {
-			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${opts.concurrency}\` (${typeof opts.concurrency})`);
+		if (!(typeof options.concurrency === 'number' && options.concurrency >= 1)) {
+			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${options.concurrency}\` (${typeof options.concurrency})`);
 		}
 
-		if (!(typeof opts.intervalCap === 'number' && opts.intervalCap >= 1)) {
-			throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${opts.intervalCap}\` (${typeof opts.intervalCap})`);
+		if (!(typeof options.intervalCap === 'number' && options.intervalCap >= 1)) {
+			throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${options.intervalCap}\` (${typeof options.intervalCap})`);
 		}
 
-		if (!(typeof opts.interval === 'number' && Number.isFinite(opts.interval) && opts.interval >= 0)) {
-			throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${opts.interval}\` (${typeof opts.interval})`);
+		if (!(typeof options.interval === 'number' && Number.isFinite(options.interval) && options.interval >= 0)) {
+			throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${options.interval}\` (${typeof options.interval})`);
 		}
 
-		this._carryoverConcurrencyCount = opts.carryoverConcurrencyCount;
-		this._isIntervalIgnored = opts.intervalCap === Infinity || opts.interval === 0;
+		this._carryoverConcurrencyCount = options.carryoverConcurrencyCount;
+		this._isIntervalIgnored = options.intervalCap === Infinity || options.interval === 0;
 		this._intervalCount = 0;
-		this._intervalCap = opts.intervalCap;
-		this._interval = opts.interval;
+		this._intervalCap = options.intervalCap;
+		this._interval = options.interval;
 		this._intervalId = null;
 		this._intervalEnd = 0;
 		this._timeoutId = null;
 
-		this.queue = new opts.queueClass(); // eslint-disable-line new-cap
-		this._queueClass = opts.queueClass;
+		this.queue = new options.queueClass(); // eslint-disable-line new-cap
+		this._queueClass = options.queueClass;
 		this._pendingCount = 0;
-		this._concurrency = opts.concurrency;
-		this._isPaused = opts.autoStart === false;
+		this._concurrency = options.concurrency;
+		this._isPaused = options.autoStart === false;
 		this._resolveEmpty = () => {};
 		this._resolveIdle = () => {};
 	}
@@ -123,15 +123,16 @@ class PQueue {
 
 	_intervalPaused() {
 		const now = Date.now();
+
 		if (this._intervalId === null) {
 			const delay = this._intervalEnd - now;
 			if (delay < 0) {
-				// Act as the interval was done.
+				// Act as the interval was done
 				// We don't need to resume it here,
-				// because it'll be resumed on line 160.
+				// because it'll be resumed on line 160
 				this._intervalCount = (this._carryoverConcurrencyCount) ? this._pendingCount : 0;
 			} else {
-				// Act as the interval is pending.
+				// Act as the interval is pending
 				if (this._timeoutId === null) {
 					this._timeoutId = setTimeout(() => this._onResumeInterval(), delay);
 				}
@@ -139,6 +140,7 @@ class PQueue {
 				return true;
 			}
 		}
+
 		return false;
 	}
 
@@ -150,8 +152,10 @@ class PQueue {
 			this._intervalId = null;
 
 			this._resolvePromises();
+
 			return false;
 		}
+
 		if (!this._isPaused) {
 			const canInitializeInterval = !this._intervalPaused();
 			if (this._doesIntervalAllowAnother && this._doesConcurrentAllowAnother) {
@@ -186,7 +190,7 @@ class PQueue {
 		while (this._tryToStartAnother()) {} // eslint-disable-line no-empty
 	}
 
-	add(fn, opts) {
+	add(fn, options) {
 		return new Promise((resolve, reject) => {
 			const run = () => {
 				this._pendingCount++;
@@ -209,13 +213,13 @@ class PQueue {
 				}
 			};
 
-			this.queue.enqueue(run, opts);
+			this.queue.enqueue(run, options);
 			this._tryToStartAnother();
 		});
 	}
 
-	addAll(fns, opts) {
-		return Promise.all(fns.map(fn => this.add(fn, opts)));
+	addAll(fns, options) {
+		return Promise.all(fns.map(fn => this.add(fn, options)));
 	}
 
 	start() {
@@ -251,7 +255,7 @@ class PQueue {
 	}
 
 	onIdle() {
-		// Instantly resolve if none pending & if nothing else is queued
+		// Instantly resolve if none pending and if nothing else is queued
 		if (this._pendingCount === 0 && this.queue.size === 0) {
 			return Promise.resolve();
 		}
