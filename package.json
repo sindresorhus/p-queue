@@ -49,12 +49,12 @@
 		"bluebird"
 	],
 	"devDependencies": {
-		"ava": "*",
+		"ava": "^0.25.0",
 		"benchmark": "^2.1.2",
 		"delay": "^2.0.0",
 		"in-range": "^1.0.0",
 		"random-int": "^1.0.0",
 		"time-span": "^2.0.0",
-		"xo": "*"
+		"xo": "^0.20.0"
 	}
 }

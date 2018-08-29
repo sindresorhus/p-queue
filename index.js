@@ -54,6 +54,9 @@ class PriorityQueue {
 class PQueue {
 	constructor(opts) {
 		opts = Object.assign({
+			carryoverConcurrencyCount: false,
+			intervalCap: Infinity,
+			interval: 0,
 			concurrency: Infinity,
 			autoStart: true,
 			queueClass: PriorityQueue
@@ -62,6 +65,23 @@ class PQueue {
 		if (!(typeof opts.concurrency === 'number' && opts.concurrency >= 1)) {
 			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${opts.concurrency}\` (${typeof opts.concurrency})`);
 		}
+
+		if (!(typeof opts.intervalCap === 'number' && opts.intervalCap >= 1)) {
+			throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${opts.intervalCap}\` (${typeof opts.intervalCap})`);
+		}
+
+		if (!(typeof opts.interval === 'number' && Number.isFinite(opts.interval) && opts.interval >= 0)) {
+			throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${opts.interval}\` (${typeof opts.interval})`);
+		}
+
+		this._carryoverConcurrencyCount = opts.carryoverConcurrencyCount;
+		this._isIntervalIgnored = opts.intervalCap === Infinity || opts.interval === 0;
+		this._intervalCount = 0;
+		this._intervalCap = opts.intervalCap;
+		this._interval = opts.interval;
+		this._intervalId = null;
+		this._intervalEnd = 0;
+		this._timeoutId = null;
 
 		this.queue = new opts.queueClass(); // eslint-disable-line new-cap
 		this._queueClass = opts.queueClass;
@@ -72,28 +92,105 @@ class PQueue {
 		this._resolveIdle = () => {};
 	}
 
+	get _doesIntervalAllowAnother() {
+		return this._isIntervalIgnored || this._intervalCount < this._intervalCap;
+	}
+
+	get _doesConcurrentAllowAnother() {
+		return this._pendingCount < this._concurrency;
+	}
+
 	_next() {
 		this._pendingCount--;
+		this._tryToStartAnother();
+	}
 
-		if (this.queue.size > 0) {
-			if (!this._isPaused) {
-				this.queue.dequeue()();
-			}
-		} else {
-			this._resolveEmpty();
-			this._resolveEmpty = () => {};
+	_resolvePromises() {
+		this._resolveEmpty();
+		this._resolveEmpty = () => {};
 
-			if (this._pendingCount === 0) {
-				this._resolveIdle();
-				this._resolveIdle = () => {};
+		if (this._pendingCount === 0) {
+			this._resolveIdle();
+			this._resolveIdle = () => {};
+		}
+	}
+
+	_onResumeInterval() {
+		this._onInterval();
+		this._initializeIntervalIfNeeded();
+		this._timeoutId = null;
+	}
+
+	_intervalPaused() {
+		const now = Date.now();
+		if (this._intervalId === null) {
+			const delay = this._intervalEnd - now;
+			if (delay < 0) {
+				// Act as the interval was done.
+				// We don't need to resume it here,
+				// because it'll be resumed on line 160.
+				this._intervalCount = (this._carryoverConcurrencyCount) ? this._pendingCount : 0;
+			} else {
+				// Act as the interval is pending.
+				if (this._timeoutId === null) {
+					this._timeoutId = setTimeout(() => this._onResumeInterval(), delay);
+				}
+
+				return true;
 			}
 		}
+		return false;
+	}
+
+	_tryToStartAnother() {
+		if (this.queue.size === 0) {
+			// We can clear the interval ("pause")
+			// because we can redo it later ("resume")
+			clearInterval(this._intervalId);
+			this._intervalId = null;
+
+			this._resolvePromises();
+			return false;
+		}
+		if (!this._isPaused) {
+			const canInitializeInterval = !this._intervalPaused();
+			if (this._doesIntervalAllowAnother && this._doesConcurrentAllowAnother) {
+				this.queue.dequeue()();
+				if (canInitializeInterval) {
+					this._initializeIntervalIfNeeded();
+				}
+
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	_initializeIntervalIfNeeded() {
+		if (this._isIntervalIgnored || this._intervalId !== null) {
+			return;
+		}
+
+		this._intervalId = setInterval(() => this._onInterval(), this._interval);
+		this._intervalEnd = Date.now() + this._interval;
+	}
+
+	_onInterval() {
+		if (this._intervalCount === 0 && this._pendingCount === 0) {
+			clearInterval(this._intervalId);
+			this._intervalId = null;
+		}
+
+		this._intervalCount = (this._carryoverConcurrencyCount) ? this._pendingCount : 0;
+		while (this._tryToStartAnother()) {} // eslint-disable-line no-empty
 	}
 
 	add(fn, opts) {
 		return new Promise((resolve, reject) => {
 			const run = () => {
 				this._pendingCount++;
+				this._intervalCount++;
 
 				try {
 					Promise.resolve(fn()).then(
@@ -112,11 +209,8 @@ class PQueue {
 				}
 			};
 
-			if (!this._isPaused && this._pendingCount < this._concurrency) {
-				run();
-			} else {
-				this.queue.enqueue(run, opts);
-			}
+			this.queue.enqueue(run, opts);
+			this._tryToStartAnother();
 		});
 	}
 
@@ -130,9 +224,7 @@ class PQueue {
 		}
 
 		this._isPaused = false;
-		while (this.queue.size > 0 && this._pendingCount < this._concurrency) {
-			this.queue.dequeue()();
-		}
+		while (this._tryToStartAnother()) {} // eslint-disable-line no-empty
 	}
 
 	pause() {
@@ -159,8 +251,8 @@ class PQueue {
 	}
 
 	onIdle() {
-		// Instantly resolve if none pending
-		if (this._pendingCount === 0) {
+		// Instantly resolve if none pending & if nothing else is queued
+		if (this._pendingCount === 0 && this.queue.size === 0) {
 			return Promise.resolve();
 		}
 
