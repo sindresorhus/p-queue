@@ -196,17 +196,30 @@ class PQueue {
 				this._pendingCount++;
 				this._intervalCount++;
 
-				try {
-					Promise.resolve(fn()).then(
-						val => {
-							resolve(val);
-							this._next();
-						},
-						err => {
-							reject(err);
-							this._next();
-						}
-					);
+				try  {
+					if ( fn instanceof Promise ) {
+						fn.then(
+							val => {
+								resolve(val);
+								this._next();
+							},
+							err => {
+								reject(err);
+								this._next();
+							}
+						);	
+					} else {
+						Promise.resolve(fn()).then(
+							val => {
+								resolve(val);
+								this._next();
+							},
+							err => {
+								reject(err);
+								this._next();
+							}
+						);	
+					}
 				} catch (err) {
 					reject(err);
 					this._next();
