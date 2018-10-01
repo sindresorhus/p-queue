@@ -8,7 +8,7 @@
 		"node": ">=6"
 	},
 	"scripts": {
-		"test": "xo && ava",
+		"test": "xo && nyc ava",
 		"bench": "node bench.js"
 	},
 	"files": [
@@ -39,8 +39,10 @@
 	"devDependencies": {
 		"ava": "^0.25.0",
 		"benchmark": "^2.1.2",
+		"codecov": "^3.1.0",
 		"delay": "^3.1.0",
 		"in-range": "^1.0.0",
+		"nyc": "^13.0.1",
 		"random-int": "^1.0.0",
 		"time-span": "^2.0.0",
 		"xo": "^0.22.0"
