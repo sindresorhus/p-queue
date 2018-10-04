@@ -70,7 +70,7 @@ class PQueue {
 			throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${options.intervalCap}\` (${typeof options.intervalCap})`);
 		}
 
-		if (!(typeof options.interval === 'number' && Number.isFinite(options.interval) && options.interval >= 0)) {
+		if (!(Number.isFinite(options.interval) && options.interval >= 0)) {
 			throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${options.interval}\` (${typeof options.interval})`);
 		}
 
