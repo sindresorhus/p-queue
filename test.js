@@ -402,3 +402,23 @@ test('pause should work when throttled', async t => {
 	delay(2200).then(() => t.deepEqual(result, secondV));
 	await delay(2500);
 });
+
+test('should be an event emitter', t => {
+	const events = require('events');
+	const queue = new PQueue();
+	t.true(queue instanceof events);
+});
+
+test('should emit onNext event per item', async t => {
+	const items = [0, 1, 2, 3, 4];
+	let onNextCount = 0;
+	const queue = new PQueue();
+
+	queue.on('onNext', () => onNextCount++);
+
+	items.forEach(item => queue.add(() => item));
+
+	await queue.onIdle();
+
+	t.is(onNextCount, items.length);
+});
