@@ -105,8 +105,8 @@ class PQueue extends events {
 	}
 
 	_next() {
-		this.emit('onNext');
 		this._pendingCount--;
+		this.emit('onNext');
 		this._tryToStartAnother();
 	}
 
