@@ -1,3 +1,4 @@
+import EventEmitter from 'events';
 import test from 'ava';
 import delay from 'delay';
 import inRange from 'in-range';
@@ -404,21 +405,20 @@ test('pause should work when throttled', async t => {
 });
 
 test('should be an event emitter', t => {
-	const events = require('events');
 	const queue = new PQueue();
-	t.true(queue instanceof events);
+	t.true(queue instanceof EventEmitter);
 });
 
-test('should emit onNext event per item', async t => {
+test('should emit next event per item', async t => {
 	const items = [0, 1, 2, 3, 4];
-	let onNextCount = 0;
+	let eventCount = 0;
 	const queue = new PQueue();
 
-	queue.on('onNext', () => onNextCount++);
+	queue.on('next', () => eventCount++);
 
 	items.forEach(item => queue.add(() => item));
 
 	await queue.onIdle();
 
-	t.is(onNextCount, items.length);
+	t.is(eventCount, items.length);
 });

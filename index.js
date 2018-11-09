@@ -1,6 +1,6 @@
 'use strict';
 
-const events = require('events');
+const EventEmitter = require('events');
 
 // Port of lower_bound from http://en.cppreference.com/w/cpp/algorithm/lower_bound
 // Used to compute insertion index to keep queue sorted after insertion
@@ -53,7 +53,7 @@ class PriorityQueue {
 	}
 }
 
-class PQueue extends events {
+class PQueue extends EventEmitter {
 	constructor(options) {
 		super();
 
@@ -106,7 +106,7 @@ class PQueue extends events {
 
 	_next() {
 		this._pendingCount--;
-		this.emit('onNext');
+		this.emit('next');
 		this._tryToStartAnother();
 	}
 

@@ -155,6 +155,11 @@ Number of pending promises.
 
 Whether the queue is currently paused.
 
+## Events
+
+#### next
+Emitted as each item is processed in the queue for the purpose of tracking progress.
+
 ## Advanced example
 
 A more advanced example to help you understand the flow.
