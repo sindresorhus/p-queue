@@ -106,7 +106,7 @@ class PQueue extends EventEmitter {
 
 	_next() {
 		this._pendingCount--;
-		this.emit('next');
+		this.emit('active');
 		this._tryToStartAnother();
 	}
 

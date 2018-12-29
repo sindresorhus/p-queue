@@ -409,14 +409,16 @@ test('should be an event emitter', t => {
 	t.true(queue instanceof EventEmitter);
 });
 
-test('should emit next event per item', async t => {
+test('should emit active event per item', async t => {
 	const items = [0, 1, 2, 3, 4];
 	let eventCount = 0;
 	const queue = new PQueue();
 
-	queue.on('next', () => eventCount++);
+	queue.on('active', () => eventCount++);
 
-	items.forEach(item => queue.add(() => item));
+	for (const item of items) {
+		queue.add(() => item);
+	}
 
 	await queue.onIdle();
 
