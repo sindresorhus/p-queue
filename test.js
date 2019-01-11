@@ -61,12 +61,14 @@ test('.add() - concurrency: 5', async t => {
 test('.add() - priority', async t => {
 	const result = [];
 	const queue = new PQueue({concurrency: 1});
+	queue.add(async () => result.push(1), {priority: 1});
 	queue.add(async () => result.push(0), {priority: 0});
 	queue.add(async () => result.push(1), {priority: 1});
 	queue.add(async () => result.push(2), {priority: 1});
 	queue.add(async () => result.push(3), {priority: 2});
+	queue.add(async () => result.push(0), {priority: -1});
 	await queue.onEmpty();
-	t.deepEqual(result, [0, 3, 1, 2]);
+	t.deepEqual(result, [1, 3, 1, 2, 0, 0]);
 });
 
 test('.onEmpty()', async t => {
@@ -113,6 +115,17 @@ test('.onIdle()', async t => {
 	t.is(queue.pending, 0);
 });
 
+test('.onIdle() - no pending', async t => {
+	const queue = new PQueue();
+
+	t.is(queue.size, 0);
+	t.is(queue.pending, 0);
+
+	const p = await queue.onIdle();
+
+	t.is(p, undefined);
+});
+
 test('.clear()', t => {
 	const queue = new PQueue({concurrency: 2});
 	queue.add(() => delay(20000));
@@ -157,6 +170,49 @@ test('enforce number in options.concurrency', t => {
 	/* eslint-enable no-new */
 });
 
+test('enforce number in options.intervalCap', t => {
+	/* eslint-disable no-new */
+	t.throws(() => {
+		new PQueue({intervalCap: 0});
+	}, TypeError);
+	t.throws(() => {
+		new PQueue({intervalCap: undefined});
+	}, TypeError);
+	t.notThrows(() => {
+		new PQueue({intervalCap: 1});
+	});
+	t.notThrows(() => {
+		new PQueue({intervalCap: 10});
+	});
+	t.notThrows(() => {
+		new PQueue({intervalCap: Infinity});
+	});
+	/* eslint-enable no-new */
+});
+
+test('enforce finite in options.interval', t => {
+	/* eslint-disable no-new */
+	t.throws(() => {
+		new PQueue({interval: -1});
+	}, TypeError);
+	t.throws(() => {
+		new PQueue({interval: undefined});
+	}, TypeError);
+	t.throws(() => {
+		new PQueue({interval: Infinity});
+	});
+	t.notThrows(() => {
+		new PQueue({interval: 0});
+	});
+	t.notThrows(() => {
+		new PQueue({interval: 10});
+	});
+	t.throws(() => {
+		new PQueue({interval: Infinity});
+	});
+	/* eslint-enable no-new */
+});
+
 test('autoStart: false', t => {
 	const queue = new PQueue({concurrency: 2, autoStart: false});
 
@@ -175,6 +231,16 @@ test('autoStart: false', t => {
 
 	queue.clear();
 	t.is(queue.size, 0);
+});
+
+test('.start() - not paused', t => {
+	const queue = new PQueue();
+
+	t.falsy(queue.isPaused);
+
+	queue.start();
+
+	t.falsy(queue.isPaused);
 });
 
 test('.pause()', t => {
@@ -220,6 +286,39 @@ test('.add() sync/async mixed tasks', async t => {
 	t.is(queue.pending, 1);
 	await queue.onIdle();
 	t.is(queue.size, 0);
+	t.is(queue.pending, 0);
+});
+
+test('.add() - handle task throwing error', async t => {
+	const queue = new PQueue({concurrency: 1});
+
+	queue.add(() => 'sync 1');
+	queue.add(() => {
+		throw new Error('broken');
+	}).catch(err => {
+		t.is(err.message, 'broken');
+	});
+	queue.add(() => 'sync 2');
+
+	t.is(queue.size, 2);
+
+	await queue.onIdle();
+});
+
+test('.add() - handle task promise failure', async t => {
+	const queue = new PQueue({concurrency: 1});
+
+	queue.add(() => {
+		return Promise.reject(new Error('broken'));
+	}).catch(err => {
+		t.is(err.message, 'broken');
+	});
+	queue.add(() => 'task #1');
+
+	t.is(queue.pending, 1);
+
+	await queue.onIdle();
+
 	t.is(queue.pending, 0);
 });
 
