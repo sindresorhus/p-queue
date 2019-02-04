@@ -293,11 +293,9 @@ test('.add() - handle task throwing error', async t => {
 	const queue = new PQueue({concurrency: 1});
 
 	queue.add(() => 'sync 1');
-	queue.add(() => {
+	t.throws(queue.add(() => {
 		throw new Error('broken');
-	}).catch(err => {
-		t.is(err.message, 'broken');
-	});
+	}), 'broken');
 	queue.add(() => 'sync 2');
 
 	t.is(queue.size, 2);
@@ -308,8 +306,8 @@ test('.add() - handle task throwing error', async t => {
 test('.add() - handle task promise failure', async t => {
 	const queue = new PQueue({concurrency: 1});
 
-	queue.add(() => {
-		return Promise.reject(new Error('broken'));
+	queue.add(async () => {
+		throw new Error('broken');
 	}).catch(err => {
 		t.is(err.message, 'broken');
 	});
@@ -500,4 +498,20 @@ test('pause should work when throttled', async t => {
 	delay(1500).then(() => queue.start());
 	delay(2200).then(() => t.deepEqual(result, secondV));
 	await delay(2500);
+});
+
+test('clear interval on pause', async t => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 1
+	});
+
+	queue.add(() => {
+		queue.pause();
+	});
+	queue.add(() => 'task #1');
+
+	await delay(300);
+
+	t.is(queue.size, 1);
 });
