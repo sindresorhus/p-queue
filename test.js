@@ -411,10 +411,12 @@ test('should be an event emitter', t => {
 
 test('should emit active event per item', async t => {
 	const items = [0, 1, 2, 3, 4];
-	let eventCount = 0;
 	const queue = new PQueue();
 
-	queue.on('active', () => eventCount++);
+	let eventCount = 0;
+	queue.on('active', () => {
+		eventCount++;
+	});
 
 	for (const item of items) {
 		queue.add(() => item);
