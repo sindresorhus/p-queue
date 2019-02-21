@@ -1,3 +1,4 @@
+import EventEmitter from 'events';
 import test from 'ava';
 import delay from 'delay';
 import inRange from 'in-range';
@@ -401,4 +402,27 @@ test('pause should work when throttled', async t => {
 	delay(1500).then(() => queue.start());
 	delay(2200).then(() => t.deepEqual(result, secondV));
 	await delay(2500);
+});
+
+test('should be an event emitter', t => {
+	const queue = new PQueue();
+	t.true(queue instanceof EventEmitter);
+});
+
+test('should emit active event per item', async t => {
+	const items = [0, 1, 2, 3, 4];
+	const queue = new PQueue();
+
+	let eventCount = 0;
+	queue.on('active', () => {
+		eventCount++;
+	});
+
+	for (const item of items) {
+		queue.add(() => item);
+	}
+
+	await queue.onIdle();
+
+	t.is(eventCount, items.length);
 });

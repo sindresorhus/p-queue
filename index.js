@@ -1,5 +1,7 @@
 'use strict';
 
+const EventEmitter = require('events');
+
 // Port of lower_bound from http://en.cppreference.com/w/cpp/algorithm/lower_bound
 // Used to compute insertion index to keep queue sorted after insertion
 function lowerBound(array, value, comp) {
@@ -51,8 +53,10 @@ class PriorityQueue {
 	}
 }
 
-class PQueue {
+class PQueue extends EventEmitter {
 	constructor(options) {
+		super();
+
 		options = Object.assign({
 			carryoverConcurrencyCount: false,
 			intervalCap: Infinity,
@@ -159,6 +163,7 @@ class PQueue {
 		if (!this._isPaused) {
 			const canInitializeInterval = !this._intervalPaused();
 			if (this._doesIntervalAllowAnother && this._doesConcurrentAllowAnother) {
+				this.emit('active');
 				this.queue.dequeue()();
 				if (canInitializeInterval) {
 					this._initializeIntervalIfNeeded();
