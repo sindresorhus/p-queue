@@ -106,7 +106,6 @@ class PQueue extends EventEmitter {
 
 	_next() {
 		this._pendingCount--;
-		this.emit('active');
 		this._tryToStartAnother();
 	}
 
@@ -164,6 +163,7 @@ class PQueue extends EventEmitter {
 		if (!this._isPaused) {
 			const canInitializeInterval = !this._intervalPaused();
 			if (this._doesIntervalAllowAnother && this._doesConcurrentAllowAnother) {
+				this.emit('active');
 				this.queue.dequeue()();
 				if (canInitializeInterval) {
 					this._initializeIntervalIfNeeded();
