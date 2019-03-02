@@ -1,11 +1,11 @@
 /// <reference types="node"/>
 import {EventEmitter} from 'events';
 
-interface QueueAddOptions {
+export interface QueueAddOptions {
 	[key: string]: unknown;
 }
 
-interface QueueClass<EnqueueOptionsType extends QueueAddOptions> {
+export interface QueueClass<EnqueueOptionsType extends QueueAddOptions> {
 	size: number;
 
 	enqueue(run: () => void, options?: EnqueueOptionsType): void;
@@ -13,11 +13,11 @@ interface QueueClass<EnqueueOptionsType extends QueueAddOptions> {
 	dequeue(): (() => void) | undefined;
 }
 
-interface QueueClassConstructor<EnqueueOptionsType extends QueueAddOptions> {
-	new (): QueueClass<EnqueueOptionsType>;
+export interface QueueClassConstructor<EnqueueOptionsType extends QueueAddOptions> {
+	new(): QueueClass<EnqueueOptionsType>;
 }
 
-interface Options<EnqueueOptionsType extends QueueAddOptions> {
+export interface Options<EnqueueOptionsType extends QueueAddOptions> {
 	/**
 	 * Concurrency limit. Minimum: `1`.
 	 *
@@ -59,7 +59,7 @@ interface Options<EnqueueOptionsType extends QueueAddOptions> {
 	carryoverConcurrencyCount?: boolean;
 }
 
-interface DefaultAddOptions {
+export interface DefaultAddOptions {
 	/**
 	 * Priority of operation. Operations with greater priority will be scheduled first.
 	 *
@@ -68,7 +68,7 @@ interface DefaultAddOptions {
 	priority?: number;
 }
 
-type Task<TaskResultType> =
+export type Task<TaskResultType> =
 	| (() => PromiseLike<TaskResultType>)
 	| (() => TaskResultType);
 
