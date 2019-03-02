@@ -212,8 +212,8 @@ class PQueue extends EventEmitter {
 							this._next();
 						}
 					);
-				} catch (err) {
-					reject(err);
+				} catch (error) {
+					reject(error);
 					this._next();
 				}
 			};
@@ -241,7 +241,7 @@ class PQueue extends EventEmitter {
 	}
 
 	clear() {
-		this.queue = new this._queueClass(); // eslint-disable-line new-cap
+		this.queue = new this._queueClass();
 	}
 
 	onEmpty() {
@@ -288,3 +288,4 @@ class PQueue extends EventEmitter {
 }
 
 module.exports = PQueue;
+module.exports.default = PQueue;

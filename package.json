@@ -8,11 +8,12 @@
 		"node": ">=6"
 	},
 	"scripts": {
-		"test": "xo && nyc ava",
+		"test": "xo && nyc ava && tsd-check",
 		"bench": "node bench.js"
 	},
 	"files": [
-		"index.js"
+		"index.js",
+		"index.d.ts"
 	],
 	"keywords": [
 		"promise",
@@ -37,14 +38,16 @@
 		"bluebird"
 	],
 	"devDependencies": {
-		"ava": "^0.25.0",
+		"@types/node": "^11.9.6",
+		"ava": "^1.2.1",
 		"benchmark": "^2.1.2",
 		"codecov": "^3.1.0",
-		"delay": "^3.1.0",
+		"delay": "^4.1.0",
 		"in-range": "^1.0.0",
 		"nyc": "^13.0.1",
 		"random-int": "^1.0.0",
 		"time-span": "^2.0.0",
-		"xo": "^0.22.0"
+		"tsd-check": "^0.3.0",
+		"xo": "^0.24.0"
 	}
 }
