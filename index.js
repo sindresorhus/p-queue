@@ -1,6 +1,6 @@
 'use strict';
 
-const EventEmitter = require('events');
+const EventEmitter = require('eventemitter3');
 
 // Port of lower_bound from http://en.cppreference.com/w/cpp/algorithm/lower_bound
 // Used to compute insertion index to keep queue sorted after insertion

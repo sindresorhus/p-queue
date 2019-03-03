@@ -49,5 +49,8 @@
 		"time-span": "^2.0.0",
 		"tsd-check": "^0.3.0",
 		"xo": "^0.24.0"
+	},
+	"dependencies": {
+		"eventemitter3": "^3.1.0"
 	}
 }

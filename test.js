@@ -1,4 +1,4 @@
-import EventEmitter from 'events';
+import EventEmitter from 'eventemitter3';
 import test from 'ava';
 import delay from 'delay';
 import inRange from 'in-range';
