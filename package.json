@@ -37,6 +37,9 @@
 		"promises",
 		"bluebird"
 	],
+	"dependencies": {
+		"eventemitter3": "^3.1.0"
+	},
 	"devDependencies": {
 		"@types/node": "^11.9.6",
 		"ava": "^1.2.1",
@@ -49,8 +52,5 @@
 		"time-span": "^2.0.0",
 		"tsd-check": "^0.3.0",
 		"xo": "^0.24.0"
-	},
-	"dependencies": {
-		"eventemitter3": "^3.1.0"
 	}
 }
