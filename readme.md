@@ -40,7 +40,7 @@ getUnicornTask().then(task => queue.add(task)).then(() => {
 
 ### PQueue([options])
 
-Returns a new `queue` instance, which is an [`EventEmitter`](https://nodejs.org/api/events.html) subclass. 
+Returns a new `queue` instance, which is an [`EventEmitter3`](https://github.com/primus/eventemitter3) subclass.
 
 #### options
 
