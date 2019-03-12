@@ -294,7 +294,7 @@ test('.add() - handle task throwing error', async t => {
 	const queue = new PQueue({concurrency: 1});
 
 	queue.add(() => 'sync 1');
-	t.throws(queue.add(() => {
+	t.throwsAsync(queue.add(() => {
 		throw new Error('broken');
 	}), 'broken');
 	queue.add(() => 'sync 2');
@@ -307,11 +307,10 @@ test('.add() - handle task throwing error', async t => {
 test('.add() - handle task promise failure', async t => {
 	const queue = new PQueue({concurrency: 1});
 
-	queue.add(async () => {
+	t.throwsAsync(queue.add(async () => {
 		throw new Error('broken');
-	}).catch(err => {
-		t.is(err.message, 'broken');
-	});
+	}), 'broken');
+
 	queue.add(() => 'task #1');
 
 	t.is(queue.pending, 1);
