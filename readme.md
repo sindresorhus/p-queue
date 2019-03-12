@@ -40,7 +40,7 @@ getUnicornTask().then(task => queue.add(task)).then(() => {
 
 ### PQueue([options])
 
-Returns a new `queue` instance.
+Returns a new `queue` instance, which is an [`EventEmitter3`](https://github.com/primus/eventemitter3) subclass.
 
 #### options
 
@@ -154,6 +154,32 @@ Number of pending promises.
 #### .isPaused
 
 Whether the queue is currently paused.
+
+
+## Events
+
+#### active
+
+Emitted as each item is processed in the queue for the purpose of tracking progress.
+
+```js
+const delay = require('delay');
+const PQueue = require('p-queue');
+
+const queue = new PQueue({concurrency: 2});
+
+let count = 0;
+queue.on('active', () => {
+	console.log(`Working on item #${++count}.  Size: ${queue.size}  Pending: ${queue.pending}`);
+});
+
+queue.add(() => Promise.resolve());
+queue.add(() => delay(2000));
+queue.add(() => Promise.resolve());
+queue.add(() => Promise.resolve());
+queue.add(() => delay(500));
+```
+
 
 ## Advanced example
 

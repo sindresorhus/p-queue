@@ -1,3 +1,4 @@
+import EventEmitter from 'eventemitter3';
 import test from 'ava';
 import delay from 'delay';
 import inRange from 'in-range';
@@ -514,4 +515,27 @@ test('clear interval on pause', async t => {
 	await delay(300);
 
 	t.is(queue.size, 1);
+});
+
+test('should be an event emitter', t => {
+	const queue = new PQueue();
+	t.true(queue instanceof EventEmitter);
+});
+
+test('should emit active event per item', async t => {
+	const items = [0, 1, 2, 3, 4];
+	const queue = new PQueue();
+
+	let eventCount = 0;
+	queue.on('active', () => {
+		eventCount++;
+	});
+
+	for (const item of items) {
+		queue.add(() => item);
+	}
+
+	await queue.onIdle();
+
+	t.is(eventCount, items.length);
 });
