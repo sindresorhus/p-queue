@@ -53,7 +53,7 @@ class PriorityQueue {
 	}
 }
 
-class PQueue extends EventEmitter {
+module.exports = class PQueue extends EventEmitter {
 	constructor(options) {
 		super();
 
@@ -285,7 +285,4 @@ class PQueue extends EventEmitter {
 	get isPaused() {
 		return this._isPaused;
 	}
-}
-
-module.exports = PQueue;
-module.exports.default = PQueue;
+};
