@@ -8,7 +8,7 @@
 		"node": ">=6"
 	},
 	"scripts": {
-		"test": "xo && nyc ava && tsd-check",
+		"test": "xo && nyc ava && tsd",
 		"bench": "node bench.js"
 	},
 	"files": [
@@ -41,16 +41,16 @@
 		"eventemitter3": "^3.1.0"
 	},
 	"devDependencies": {
-		"@types/node": "^11.9.6",
-		"ava": "^1.2.1",
-		"benchmark": "^2.1.2",
-		"codecov": "^3.1.0",
+		"@types/node": "^11.13.0",
+		"ava": "^1.4.1",
+		"benchmark": "^2.1.4",
+		"codecov": "^3.3.0",
 		"delay": "^4.1.0",
 		"in-range": "^1.0.0",
-		"nyc": "^13.0.1",
+		"nyc": "^13.3.0",
 		"random-int": "^1.0.0",
 		"time-span": "^2.0.0",
-		"tsd-check": "^0.3.0",
+		"tsd": "^0.7.2",
 		"xo": "^0.24.0"
 	}
 }

@@ -1,5 +1,6 @@
-import {expectType} from 'tsd-check';
-import PQueue, {QueueClass} from '.';
+import {expectType} from 'tsd';
+import PQueue = require('.');
+import {QueueClass} from '.';
 
 const queue = new PQueue({concurrency: 1});
 new PQueue({autoStart: false});
