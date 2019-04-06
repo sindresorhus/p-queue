@@ -1,5 +1,4 @@
 'use strict';
-
 const EventEmitter = require('eventemitter3');
 
 // Port of lower_bound from http://en.cppreference.com/w/cpp/algorithm/lower_bound
@@ -29,11 +28,15 @@ class PriorityQueue {
 	}
 
 	enqueue(run, options) {
-		options = Object.assign({
-			priority: 0
-		}, options);
+		options = {
+			priority: 0,
+			...options
+		};
 
-		const element = {priority: options.priority, run};
+		const element = {
+			priority: options.priority,
+			run
+		};
 
 		if (this.size && this._queue[this.size - 1].priority >= options.priority) {
 			this._queue.push(element);
@@ -57,14 +60,15 @@ module.exports = class PQueue extends EventEmitter {
 	constructor(options) {
 		super();
 
-		options = Object.assign({
+		options = {
 			carryoverConcurrencyCount: false,
 			intervalCap: Infinity,
 			interval: 0,
 			concurrency: Infinity,
 			autoStart: true,
-			queueClass: PriorityQueue
-		}, options);
+			queueClass: PriorityQueue,
+			...options
+		};
 
 		if (!(typeof options.concurrency === 'number' && options.concurrency >= 1)) {
 			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${options.concurrency}\` (${typeof options.concurrency})`);
@@ -138,7 +142,9 @@ module.exports = class PQueue extends EventEmitter {
 			} else {
 				// Act as the interval is pending
 				if (this._timeoutId === null) {
-					this._timeoutId = setTimeout(() => this._onResumeInterval(), delay);
+					this._timeoutId = setTimeout(() => {
+						this._onResumeInterval();
+					}, delay);
 				}
 
 				return true;
@@ -195,27 +201,19 @@ module.exports = class PQueue extends EventEmitter {
 		while (this._tryToStartAnother()) {} // eslint-disable-line no-empty
 	}
 
-	add(fn, options) {
+	async add(fn, options) {
 		return new Promise((resolve, reject) => {
-			const run = () => {
+			const run = async () => {
 				this._pendingCount++;
 				this._intervalCount++;
 
 				try {
-					Promise.resolve(fn()).then(
-						val => {
-							resolve(val);
-							this._next();
-						},
-						err => {
-							reject(err);
-							this._next();
-						}
-					);
+					resolve(await fn());
 				} catch (error) {
 					reject(error);
-					this._next();
 				}
+
+				this._next();
 			};
 
 			this.queue.enqueue(run, options);
@@ -223,7 +221,7 @@ module.exports = class PQueue extends EventEmitter {
 		});
 	}
 
-	addAll(fns, options) {
+	async addAll(fns, options) {
 		return Promise.all(fns.map(fn => this.add(fn, options)));
 	}
 
@@ -244,10 +242,10 @@ module.exports = class PQueue extends EventEmitter {
 		this.queue = new this._queueClass();
 	}
 
-	onEmpty() {
+	async onEmpty() {
 		// Instantly resolve if the queue is empty
 		if (this.queue.size === 0) {
-			return Promise.resolve();
+			return;
 		}
 
 		return new Promise(resolve => {
@@ -259,10 +257,10 @@ module.exports = class PQueue extends EventEmitter {
 		});
 	}
 
-	onIdle() {
+	async onIdle() {
 		// Instantly resolve if none pending and if nothing else is queued
 		if (this._pendingCount === 0 && this.queue.size === 0) {
-			return Promise.resolve();
+			return;
 		}
 
 		return new Promise(resolve => {

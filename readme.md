@@ -22,17 +22,21 @@ const got = require('got');
 
 const queue = new PQueue({concurrency: 1});
 
-queue.add(() => got('sindresorhus.com')).then(() => {
+(async () => {
+	await queue.add(() => got('sindresorhus.com'));
 	console.log('Done: sindresorhus.com');
-});
+})();
 
-queue.add(() => got('ava.li')).then(() => {
+(async () => {
+	await queue.add(() => got('ava.li'));
 	console.log('Done: ava.li');
-});
+})();
 
-getUnicornTask().then(task => queue.add(task)).then(() => {
+(async () => {
+	const task = await getUnicornTask();
+	await queue.add(task);
 	console.log('Done: Unicorn task');
-});
+})();
 ```
 
 
@@ -191,34 +195,46 @@ const PQueue = require('p-queue');
 
 const queue = new PQueue({concurrency: 1});
 
-delay(200).then(() => {
+(async () => {
+	await delay(200);
+
 	console.log(`8. Pending promises: ${queue.pending}`);
 	//=> '8. Pending promises: 0'
 
-	queue.add(() => Promise.resolve('🐙')).then(console.log.bind(null, '11. Resolved'));
+	(async () => {
+		await queue.add(async () => '🐙');
+		console.log('11. Resolved')
+	})();
 
 	console.log('9. Added 🐙');
 
 	console.log(`10. Pending promises: ${queue.pending}`);
 	//=> '10. Pending promises: 1'
 
-	queue.onIdle().then(() => {
-		console.log('12. All work is done');
-	});
-});
+	await queue.onIdle();
+	console.log('12. All work is done');
+})();
 
-queue.add(() => Promise.resolve('🦄')).then(console.log.bind(null, '5. Resolved'));
+(async () => {
+	await queue.add(async () => '🦄');
+	console.log('5. Resolved')
+})();
 console.log('1. Added 🦄');
 
-queue.add(() => Promise.resolve('🐴')).then(console.log.bind(null, '6. Resolved'));
+(async () => {
+	await queue.add(async () => '🐴');
+	console.log('6. Resolved')
+})();
 console.log('2. Added 🐴');
 
-queue.onEmpty().then(() => {
+(async () => {
+	await queue.onEmpty();
 	console.log('7. Queue is empty');
-});
+})();
 
 console.log(`3. Queue size: ${queue.size}`);
 //=> '3. Queue size: 1`
+
 console.log(`4. Pending promises: ${queue.pending}`);
 //=> '4. Pending promises: 1'
 ```

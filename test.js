@@ -19,7 +19,10 @@ test('.add()', async t => {
 test('.add() - limited concurrency', async t => {
 	const queue = new PQueue({concurrency: 2});
 	const p = queue.add(async () => fixture);
-	const p2 = queue.add(async () => delay(100).then(() => fixture));
+	const p2 = queue.add(async () => {
+		await delay(100);
+		return fixture;
+	});
 	const p3 = queue.add(async () => fixture);
 	t.is(queue.size, 1);
 	t.is(queue.pending, 2);
@@ -37,7 +40,10 @@ test('.add() - concurrency: 1', async t => {
 
 	const end = timeSpan();
 	const queue = new PQueue({concurrency: 1});
-	const mapper = ([val, ms]) => queue.add(() => delay(ms).then(() => val));
+	const mapper = ([value, ms]) => queue.add(async () => {
+		await delay(ms);
+		return value;
+	});
 
 	t.deepEqual(await Promise.all(input.map(mapper)), [10, 20, 30]);
 	t.true(inRange(end(), 590, 650));
@@ -342,9 +348,10 @@ test('should resolve empty when size is zero', async t => {
 		queue.add(() => delay(10));
 	}
 
-	queue.onEmpty().then(() => {
+	(async () => {
+		await queue.onEmpty();
 		t.is(queue.size, 0);
-	});
+	})();
 
 	queue.start();
 
@@ -376,88 +383,129 @@ test('.add() - throttled', async t => {
 
 test('.add() - throttled, carryoverConcurrencyCount false', async t => {
 	const result = [];
+
 	const queue = new PQueue({
 		intervalCap: 1,
 		carryoverConcurrencyCount: false,
 		interval: 500,
 		autoStart: false
 	});
+
 	const values = [0, 1];
-	values.forEach(value => queue.add(() => delay(600).then(() => result.push(value))));
+	values.forEach(value => queue.add(async () => {
+		await delay(600);
+		result.push(value);
+	}));
+
 	queue.start();
-	delay(550).then(() => {
+
+	(async () => {
+		await delay(550);
 		t.is(queue.pending, 2);
 		t.deepEqual(result, []);
-	});
-	delay(650).then(() => {
+	})();
+
+	(async () => {
+		await delay(650);
 		t.is(queue.pending, 1);
 		t.deepEqual(result, [0]);
-	});
+	})();
+
 	await delay(1250);
 	t.deepEqual(result, values);
 });
 
 test('.add() - throttled, carryoverConcurrencyCount true', async t => {
 	const result = [];
+
 	const queue = new PQueue({
 		carryoverConcurrencyCount: true,
 		intervalCap: 1,
 		interval: 500,
 		autoStart: false
 	});
+
 	const values = [0, 1];
-	values.forEach(value => queue.add(() => delay(600).then(() => result.push(value))));
+	values.forEach(value => queue.add(async () => {
+		await delay(600);
+		result.push(value);
+	}));
+
 	queue.start();
-	delay(100).then(() => {
+
+	(async () => {
+		await delay(100);
 		t.deepEqual(result, []);
 		t.is(queue.pending, 1);
-	});
-	delay(550).then(() => {
+	})();
+
+	(async () => {
+		await delay(550);
 		t.deepEqual(result, []);
 		t.is(queue.pending, 1);
-	});
-	delay(650).then(() => {
+	})();
+
+	(async () => {
+		await delay(650);
 		t.deepEqual(result, [0]);
 		t.is(queue.pending, 0);
-	});
-	delay(1550).then(() => {
+	})();
+
+	(async () => {
+		await delay(1550);
 		t.deepEqual(result, [0]);
-	});
+	})();
+
 	await delay(1650);
 	t.deepEqual(result, [0, 1]);
 });
 
 test('.add() - throttled 10, concurrency 5', async t => {
 	const result = [];
+
 	const queue = new PQueue({
 		concurrency: 5,
 		intervalCap: 10,
 		interval: 1000,
 		autoStart: false
 	});
-	const firstV = [...new Array(5).keys()];
-	const secondV = [...new Array(10).keys()];
-	const thirdV = [...new Array(13).keys()];
-	thirdV.forEach(value => queue.add(() => delay(300).then(() => result.push(value))));
+
+	const firstValue = [...new Array(5).keys()];
+	const secondValue = [...new Array(10).keys()];
+	const thirdValue = [...new Array(13).keys()];
+	thirdValue.forEach(value => queue.add(async () => {
+		await delay(300);
+		result.push(value);
+	}));
+
 	queue.start();
+
 	t.deepEqual(result, []);
-	delay(400).then(() => {
-		t.deepEqual(result, firstV);
+
+	(async () => {
+		await delay(400);
+		t.deepEqual(result, firstValue);
 		t.is(queue.pending, 5);
-	});
-	delay(700).then(() => {
-		t.deepEqual(result, secondV);
-	});
-	delay(1200).then(() => {
+	})();
+
+	(async () => {
+		await delay(700);
+		t.deepEqual(result, secondValue);
+	})();
+
+	(async () => {
+		await delay(1200);
 		t.is(queue.pending, 3);
-		t.deepEqual(result, secondV);
-	});
+		t.deepEqual(result, secondValue);
+	})();
+
 	await delay(1400);
-	t.deepEqual(result, thirdV);
+	t.deepEqual(result, thirdValue);
 });
 
 test('.add() - throttled finish and resume', async t => {
 	const result = [];
+
 	const queue = new PQueue({
 		concurrency: 1,
 		intervalCap: 2,
@@ -466,37 +514,79 @@ test('.add() - throttled finish and resume', async t => {
 	});
 
 	const values = [0, 1];
-	const firstV = [0, 1];
-	const secondV = [0, 1, 2];
-	values.forEach(value => queue.add(() => delay(100).then(() => result.push(value))));
+	const firstValue = [0, 1];
+	const secondValue = [0, 1, 2];
+	values.forEach(value => queue.add(async () => {
+		await delay(100);
+		result.push(value);
+	}));
+
 	queue.start();
-	delay(1000).then(() => {
-		t.deepEqual(result, firstV);
-		queue.add(() => delay(100).then(() => result.push(2)));
-	});
-	delay(1500).then(() => t.deepEqual(result, firstV));
+
+	(async () => {
+		await delay(1000);
+		t.deepEqual(result, firstValue);
+
+		queue.add(async () => {
+			await delay(100);
+			result.push(2);
+		});
+	})();
+
+	(async () => {
+		await delay(1500);
+		t.deepEqual(result, firstValue);
+	})();
+
 	await delay(2200);
-	t.deepEqual(result, secondV);
+	t.deepEqual(result, secondValue);
 });
 
 test('pause should work when throttled', async t => {
 	const result = [];
+
 	const queue = new PQueue({
 		concurrency: 2,
 		intervalCap: 2,
 		interval: 1000,
 		autoStart: false
 	});
+
 	const values = 	[0, 1, 2, 3];
-	const firstV = 	[0, 1];
-	const secondV = [0, 1, 2, 3];
-	values.forEach(value => queue.add(() => delay(100).then(() => result.push(value))));
+	const firstValue = 	[0, 1];
+	const secondValue = [0, 1, 2, 3];
+	values.forEach(value => queue.add(async () => {
+		await delay(100);
+		result.push(value);
+	}));
+
 	queue.start();
-	delay(300).then(() => t.deepEqual(result, firstV));
-	delay(600).then(() => queue.pause());
-	delay(1400).then(() => t.deepEqual(result, firstV));
-	delay(1500).then(() => queue.start());
-	delay(2200).then(() => t.deepEqual(result, secondV));
+
+	(async () => {
+		await delay(300);
+		t.deepEqual(result, firstValue);
+	})();
+
+	(async () => {
+		await delay(600);
+		queue.pause();
+	})();
+
+	(async () => {
+		await delay(1400);
+		t.deepEqual(result, firstValue);
+	})();
+
+	(async () => {
+		await delay(1500);
+		queue.start();
+	})();
+
+	(async () => {
+		await delay(2200);
+		t.deepEqual(result, secondValue);
+	})();
+
 	await delay(2500);
 });
 
@@ -509,6 +599,7 @@ test('clear interval on pause', async t => {
 	queue.add(() => {
 		queue.pause();
 	});
+
 	queue.add(() => 'task #1');
 
 	await delay(300);
