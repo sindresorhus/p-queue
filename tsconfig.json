@@ -1,0 +1,14 @@
+{
+	"extends": "@sindresorhus/tsconfig",
+	"compilerOptions": {
+		"outDir": "dist",
+		"target": "es2017",
+		"lib": [
+			"es2017",
+			"esnext.asynciterable"
+		]
+	},
+	"include": [
+		"source"
+	]
+}
