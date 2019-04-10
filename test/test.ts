@@ -4,7 +4,7 @@ import delay from 'delay';
 import inRange from 'in-range';
 import timeSpan from 'time-span';
 import randomInt from 'random-int';
-import PQueue from '.';
+import PQueue from '../source';
 
 const fixture = Symbol('fixture');
 
@@ -161,12 +161,18 @@ test('.addAll()', async t => {
 });
 
 test('enforce number in options.concurrency', t => {
-	t.throws(() => {
-		new PQueue({concurrency: 0});
-	}, TypeError);
-	t.throws(() => {
-		new PQueue({concurrency: undefined});
-	}, TypeError);
+	t.throws(
+		() => {
+			new PQueue({concurrency: 0});
+		},
+		TypeError
+	);
+	t.throws(
+		() => {
+			new PQueue({concurrency: undefined});
+		},
+		TypeError
+	);
 	t.notThrows(() => {
 		new PQueue({concurrency: 1});
 	});
@@ -179,12 +185,18 @@ test('enforce number in options.concurrency', t => {
 });
 
 test('enforce number in options.intervalCap', t => {
-	t.throws(() => {
-		new PQueue({intervalCap: 0});
-	}, TypeError);
-	t.throws(() => {
-		new PQueue({intervalCap: undefined});
-	}, TypeError);
+	t.throws(
+		() => {
+			new PQueue({intervalCap: 0});
+		},
+		TypeError
+	);
+	t.throws(
+		() => {
+			new PQueue({intervalCap: undefined});
+		},
+		TypeError
+	);
 	t.notThrows(() => {
 		new PQueue({intervalCap: 1});
 	});
@@ -197,12 +209,18 @@ test('enforce number in options.intervalCap', t => {
 });
 
 test('enforce finite in options.interval', t => {
-	t.throws(() => {
-		new PQueue({interval: -1});
-	}, TypeError);
-	t.throws(() => {
-		new PQueue({interval: undefined});
-	}, TypeError);
+	t.throws(
+		() => {
+			new PQueue({interval: -1});
+		},
+		TypeError
+	);
+	t.throws(
+		() => {
+			new PQueue({interval: undefined});
+		},
+		TypeError
+	);
 	t.throws(() => {
 		new PQueue({interval: Infinity});
 	});
@@ -297,12 +315,14 @@ test('.add() - handle task throwing error', async t => {
 	const queue = new PQueue({concurrency: 1});
 
 	queue.add(() => 'sync 1');
-	t.throwsAsync(queue.add(
+	t.throwsAsync(
+		queue.add(
 			() => {
 				throw new Error('broken');
-			}),
-			'broken'
-		);
+			}
+		),
+		'broken'
+	);
 	queue.add(() => 'sync 2');
 
 	t.is(queue.size, 2);
@@ -313,9 +333,12 @@ test('.add() - handle task throwing error', async t => {
 test('.add() - handle task promise failure', async t => {
 	const queue = new PQueue({concurrency: 1});
 
-	t.throwsAsync(queue.add(async () => {
-			throw new Error('broken');
-		}),
+	t.throwsAsync(
+		queue.add(
+			async () => {
+				throw new Error('broken');
+			}
+		),
 		'broken'
 	);
 
