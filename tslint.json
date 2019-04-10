@@ -1,3 +1,11 @@
 {
-	"extends": "tslint-xo"
+	"extends": "tslint-xo",
+	"rules": {
+		"typedef": [
+			true,
+			"call-signature",
+			"property-declaration",
+			"member-variable-declaration"
+		]
+	}
 }

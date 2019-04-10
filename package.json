@@ -9,13 +9,13 @@
 	},
 	"scripts": {
 		"build": "del dist && tsc",
-		"test": "tslint --format stylish --project . && nyc ava",
+		"test": "tslint --format stylish --project . && npm run build && nyc ava",
 		"bench": "node bench.js"
 	},
 	"files": [
-		"index.js",
-		"index.d.ts"
+		"dist"
 	],
+	"types": "dist",
 	"keywords": [
 		"promise",
 		"queue",
@@ -49,11 +49,13 @@
 		"ava": "^1.4.1",
 		"benchmark": "^2.1.4",
 		"codecov": "^3.3.0",
+		"del-cli": "^1.1.0",
 		"delay": "^4.1.0",
 		"in-range": "^1.0.0",
 		"nyc": "^13.3.0",
 		"random-int": "^1.0.0",
 		"time-span": "^3.1.0",
+		"ts-node": "^8.0.3",
 		"tslint": "^5.15.0",
 		"tslint-xo": "^0.16.0",
 		"typescript": "^3.4.2",
@@ -64,17 +66,15 @@
 		"compileEnhancements": false,
 		"extensions": [
 			"ts"
+		],
+		"require": [
+			"ts-node/register"
 		]
 	},
 	"xo": {
 		"extends": "xo-typescript",
 		"extensions": [
 			"ts"
-		]
-	},
-	"nyc": {
-		"exclude": [
-			"dist/test"
 		]
 	}
 }
