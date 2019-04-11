@@ -1,4 +1,5 @@
 import EventEmitter from 'eventemitter3';
+import pTimeout from 'p-timeout';
 import {Queue} from './queue';
 import PriorityQueue from './priority-queue';
 import {QueueAddOptions, DefaultAddOptions, Options} from './options';
@@ -10,6 +11,8 @@ type Task<TaskResultType> =
 		| (() => TaskResultType);
 
 const empty = (): void => {};
+
+const timeoutError = new pTimeout.TimeoutError();
 
 /**
 Promise queue with concurrency control.
@@ -45,6 +48,10 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 	private _resolveIdle: ResolveFunction = empty;
 
+	private _timeout?: number
+
+	private readonly _throwOnTimeout: boolean
+
 	constructor(options?: Options<QueueType, EnqueueOptionsType>) {
 		super();
 
@@ -79,6 +86,8 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 		this._queue = new options.queueClass!();
 		this._queueClass = options.queueClass!;
 		this._concurrency = options.concurrency;
+		this._timeout = options.timeout;
+		this._throwOnTimeout = options.throwOnTimeout !== false;
 		this._paused = options.autoStart === false;
 	}
 
@@ -206,8 +215,13 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 				this._intervalCount++;
 
 				try {
-					resolve(await fn());
+					const operation = this._timeout === undefined ? fn() : pTimeout(Promise.resolve(fn()), this._timeout, timeoutError);
+					resolve(await operation);
 				} catch (error) {
+					if (!this._throwOnTimeout && error instanceof pTimeout.TimeoutError) {
+						resolve();
+					}
+
 					reject(error);
 				}
 
@@ -317,5 +331,16 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	*/
 	get isPaused(): boolean {
 		return this._paused;
+	}
+
+	/**
+	Setting the timeout for future operations.
+	 */
+	set timeout(value: number | undefined) {
+		this._timeout = value;
+	}
+
+	get timeout(): number | undefined {
+		return this._timeout;
 	}
 }

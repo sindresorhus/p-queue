@@ -50,6 +50,20 @@ export interface Options<QueueType extends Queue<QueueOptions>, QueueOptions ext
 	@default false
 	*/
 	readonly carryoverConcurrencyCount?: boolean;
+
+	/**
+	Per-operation timeout in ms. Operations fulfil once `timeout` elapses if they haven't already.
+
+	@default undefined
+	*/
+	timeout?: number;
+
+	/**
+	Whether or not a timeout is considered an exception.
+
+	@default true
+	*/
+	throwOnTimeout?: boolean;
 }
 
 export interface DefaultAddOptions {
