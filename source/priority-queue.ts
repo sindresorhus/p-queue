@@ -3,7 +3,7 @@ import lowerBound from './lower-bound';
 import {QueueAddOptions} from './options';
 
 export interface PriorityQueueOptions extends QueueAddOptions {
-	priority: number;
+	priority?: number;
 }
 
 export default class PriorityQueue implements Queue<PriorityQueueOptions> {
@@ -24,12 +24,12 @@ export default class PriorityQueue implements Queue<PriorityQueueOptions> {
 			run
 		};
 
-		if (this.size && this._queue[this.size - 1].priority >= options.priority) {
+		if (this.size && this._queue[this.size - 1].priority! >= options.priority) {
 			this._queue.push(element);
 			return;
 		}
 
-		const index = lowerBound(this._queue, element, (a, b) => b.priority - a.priority);
+		const index = lowerBound(this._queue, element, (a, b) => b.priority! - a.priority!);
 		this._queue.splice(index, 0, element);
 	}
 

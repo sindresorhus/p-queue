@@ -14,7 +14,7 @@ const empty = () => {};
 /**
  * Promise queue with concurrency control.
  */
-export default class PQueue<QueueType extends Queue<EnqueueOptionsType>, EnqueueOptionsType extends QueueAddOptions = DefaultAddOptions> extends EventEmitter<'active'> {
+export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = DefaultAddOptions> extends EventEmitter<'active'> {
 	private readonly _carryoverConcurrencyCount: boolean;
 
 	private readonly _isIntervalIgnored: boolean;
