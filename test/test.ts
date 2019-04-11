@@ -1,3 +1,4 @@
+/* eslint-disable no-new */
 import EventEmitter from 'eventemitter3';
 import test from 'ava';
 import delay from 'delay';
@@ -7,8 +8,6 @@ import randomInt from 'random-int';
 import PQueue from '../source';
 
 const fixture = Symbol('fixture');
-
-// tslint:disable:no-floating-promises typedef no-unused-expression
 
 test('.add()', async t => {
 	const queue = new PQueue();
@@ -130,7 +129,6 @@ test('.onIdle() - no pending', async t => {
 	t.is(queue.size, 0);
 	t.is(queue.pending, 0);
 
-	// tslint:disable-next-line:no-void-expression
 	const p = await queue.onIdle();
 
 	t.is(p, undefined);

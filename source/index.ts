@@ -9,36 +9,46 @@ type Task<TaskResultType> =
 		| (() => PromiseLike<TaskResultType>)
 		| (() => TaskResultType);
 
-// tslint:disable-next-line:no-empty
 const empty = () => {};
 
 /**
  * Promise queue with concurrency control.
  */
-export default class PQueue<Q extends Queue<EnqueueOptionsType>, EnqueueOptionsType extends QueueAddOptions = DefaultAddOptions> extends EventEmitter<'active'> {
-	private readonly carryoverConcurrencyCount: boolean;
-	private readonly isIntervalIgnored: boolean;
-	private intervalCount: number;
-	private readonly intervalCap: number;
-	private readonly interval: number;
-	private intervalEnd: number;
-	private intervalId?: NodeJS.Timeout;
-	private timeoutId?: NodeJS.Timeout;
+export default class PQueue<QueueType extends Queue<EnqueueOptionsType>, EnqueueOptionsType extends QueueAddOptions = DefaultAddOptions> extends EventEmitter<'active'> {
+	private readonly _carryoverConcurrencyCount: boolean;
 
-	private queue: Q;
-	private readonly queueClass: new () => Q;
+	private readonly _isIntervalIgnored: boolean;
 
-	private pendingCount: number;
-	private readonly concurrency: number;
-	private paused: boolean;
+	private _intervalCount: number;
 
-	private resolveEmpty: ResolveFunction;
-	private resolveIdle: ResolveFunction;
+	private readonly _intervalCap: number;
 
-	constructor(opt?: Options<Q, EnqueueOptionsType>) {
+	private readonly _interval: number;
+
+	private _intervalEnd: number;
+
+	private _intervalId?: NodeJS.Timeout;
+
+	private _timeoutId?: NodeJS.Timeout;
+
+	private _queue: QueueType;
+
+	private readonly _queueClass: new () => QueueType;
+
+	private _pendingCount: number;
+
+	private readonly _concurrency: number;
+
+	private _paused: boolean;
+
+	private _resolveEmpty: ResolveFunction;
+
+	private _resolveIdle: ResolveFunction;
+
+	constructor(opt?: Options<QueueType, EnqueueOptionsType>) {
 		super();
 
-		const options: Options<Q, EnqueueOptionsType> = {
+		const options: Options<QueueType, EnqueueOptionsType> = {
 			carryoverConcurrencyCount: false,
 			intervalCap: Infinity,
 			interval: 0,
@@ -61,71 +71,68 @@ export default class PQueue<Q extends Queue<EnqueueOptionsType>, EnqueueOptionsT
 			throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${options.interval}\` (${typeof options.interval})`);
 		}
 
-		// tslint:disable-next-line:no-non-null-assertion
-		this.carryoverConcurrencyCount = options.carryoverConcurrencyCount!;
-		this.isIntervalIgnored = options.intervalCap === Infinity || options.interval === 0;
-		this.intervalCount = 0;
-		this.intervalCap = options.intervalCap;
-		this.interval = options.interval;
-		this.intervalId = undefined;
-		this.intervalEnd = 0;
-		this.timeoutId = undefined;
+		this._carryoverConcurrencyCount = options.carryoverConcurrencyCount!;
+		this._isIntervalIgnored = options.intervalCap === Infinity || options.interval === 0;
+		this._intervalCount = 0;
+		this._intervalCap = options.intervalCap;
+		this._interval = options.interval;
+		this._intervalId = undefined;
+		this._intervalEnd = 0;
+		this._timeoutId = undefined;
 
-		// tslint:disable-next-line:no-non-null-assertion
-		this.queue = new options.queueClass!();
-		// tslint:disable-next-line:no-non-null-assertion
-		this.queueClass = options.queueClass!;
-		this.pendingCount = 0;
-		this.concurrency = options.concurrency;
-		this.paused = options.autoStart === false;
+		this._queue = new options.queueClass!();
+		this._queueClass = options.queueClass!;
+		this._pendingCount = 0;
+		this._concurrency = options.concurrency;
+		this._paused = options.autoStart === false;
 
-		this.resolveEmpty = empty;
-		this.resolveIdle = empty;
+		this._resolveEmpty = empty;
+		this._resolveIdle = empty;
 	}
 
 	get doesIntervalAllowAnother(): boolean {
-		return this.isIntervalIgnored || this.intervalCount < this.intervalCap;
+		return this._isIntervalIgnored || this._intervalCount < this._intervalCap;
 	}
 
 	get doesConcurrentAllowAnother(): boolean {
-		return this.pendingCount < this.concurrency;
+		return this._pendingCount < this._concurrency;
 	}
 
 	next(): void {
-		this.pendingCount--;
+		this._pendingCount--;
 		this.tryToStartAnother();
 	}
 
 	resolvePromises(): void {
-		this.resolveEmpty();
-		this.resolveEmpty = empty;
+		this._resolveEmpty();
+		this._resolveEmpty = empty;
 
-		if (this.pendingCount === 0) {
-			this.resolveIdle();
-			this.resolveIdle = empty;
+		if (this._pendingCount === 0) {
+			this._resolveIdle();
+			this._resolveIdle = empty;
 		}
 	}
 
 	onResumeInterval(): void {
 		this.onInterval();
 		this.initializeIntervalIfNeeded();
-		this.timeoutId = undefined;
+		this._timeoutId = undefined;
 	}
 
 	intervalPaused(): boolean {
 		const now = Date.now();
 
-		if (this.intervalId === undefined) {
-			const delay = this.intervalEnd - now;
+		if (this._intervalId === undefined) {
+			const delay = this._intervalEnd - now;
 			if (delay < 0) {
 				// Act as the interval was done
 				// We don't need to resume it here,
 				// Because it'll be resumed on line 160
-				this.intervalCount = (this.carryoverConcurrencyCount) ? this.pendingCount : 0;
+				this._intervalCount = (this._carryoverConcurrencyCount) ? this._pendingCount : 0;
 			} else {
 				// Act as the interval is pending
-				if (this.timeoutId === undefined) {
-					this.timeoutId = setTimeout(
+				if (this._timeoutId === undefined) {
+					this._timeoutId = setTimeout(
 						() => {
 							this.onResumeInterval();
 						},
@@ -141,26 +148,26 @@ export default class PQueue<Q extends Queue<EnqueueOptionsType>, EnqueueOptionsT
 	}
 
 	tryToStartAnother(): boolean {
-		if (this.queue.size === 0) {
+		if (this._queue.size === 0) {
 			// We can clear the interval ("pause")
 			// Because we can redo it later ("resume")
-			if (this.intervalId) {
-				clearInterval(this.intervalId);
+			if (this._intervalId) {
+				clearInterval(this._intervalId);
 			}
-			this.intervalId = undefined;
+
+			this._intervalId = undefined;
 
 			this.resolvePromises();
 
 			return false;
 		}
 
-		if (!this.paused) {
+		if (!this._paused) {
 			const canInitializeInterval = !this.intervalPaused();
 			if (this.doesIntervalAllowAnother && this.doesConcurrentAllowAnother) {
 				this.emit('active');
 
-				// tslint:disable-next-line:no-non-null-assertion no-floating-promises
-				this.queue.dequeue()!();
+				this._queue.dequeue()!();
 				if (canInitializeInterval) {
 					this.initializeIntervalIfNeeded();
 				}
@@ -173,27 +180,27 @@ export default class PQueue<Q extends Queue<EnqueueOptionsType>, EnqueueOptionsT
 	}
 
 	initializeIntervalIfNeeded(): void {
-		if (this.isIntervalIgnored || this.intervalId !== undefined) {
+		if (this._isIntervalIgnored || this._intervalId !== undefined) {
 			return;
 		}
 
-		this.intervalId = setInterval(
+		this._intervalId = setInterval(
 			() => {
 				this.onInterval();
 			},
-			this.interval
+			this._interval
 		);
-		this.intervalEnd = Date.now() + this.interval;
+		this._intervalEnd = Date.now() + this._interval;
 	}
 
 	onInterval(): void {
-		if (this.intervalCount === 0 && this.pendingCount === 0 && this.intervalId) {
-			clearInterval(this.intervalId);
-			this.intervalId = undefined;
+		if (this._intervalCount === 0 && this._pendingCount === 0 && this._intervalId) {
+			clearInterval(this._intervalId);
+			this._intervalId = undefined;
 		}
 
-		this.intervalCount = (this.carryoverConcurrencyCount) ? this.pendingCount : 0;
-		// tslint:disable-next-line:no-empty
+		this._intervalCount = this._carryoverConcurrencyCount ? this._pendingCount : 0;
+		// eslint-disable-next-line no-empty
 		while (this.tryToStartAnother()) {}
 	}
 
@@ -203,11 +210,10 @@ export default class PQueue<Q extends Queue<EnqueueOptionsType>, EnqueueOptionsT
 	async add<TaskResultType>(fn: Task<TaskResultType>, options?: EnqueueOptionsType): Promise<TaskResultType> {
 		return new Promise<TaskResultType>((resolve, reject) => {
 			const run = async () => {
-				this.pendingCount++;
-				this.intervalCount++;
+				this._pendingCount++;
+				this._intervalCount++;
 
 				try {
-					// tslint:disable-next-line:await-promise
 					resolve(await fn());
 				} catch (error) {
 					reject(error);
@@ -216,7 +222,7 @@ export default class PQueue<Q extends Queue<EnqueueOptionsType>, EnqueueOptionsT
 				this.next();
 			};
 
-			this.queue.enqueue(run, options);
+			this._queue.enqueue(run, options);
 			this.tryToStartAnother();
 		});
 	}
@@ -233,12 +239,12 @@ export default class PQueue<Q extends Queue<EnqueueOptionsType>, EnqueueOptionsT
 	 * Start (or resume) executing enqueued tasks within concurrency limit. No need to call this if queue is not paused (via `options.autoStart = false` or by `.pause()` method.)
 	 */
 	start(): void {
-		if (!this.paused) {
+		if (!this._paused) {
 			return;
 		}
 
-		this.paused = false;
-		// tslint:disable-next-line:no-empty
+		this._paused = false;
+		// eslint-disable-next-line no-empty
 		while (this.tryToStartAnother()) {}
 	}
 
@@ -246,14 +252,14 @@ export default class PQueue<Q extends Queue<EnqueueOptionsType>, EnqueueOptionsT
 	 * Put queue execution on hold.
 	 */
 	pause(): void {
-		this.paused = true;
+		this._paused = true;
 	}
 
 	/**
 	 * Clear the queue.
 	 */
 	clear(): void {
-		this.queue = new this.queueClass();
+		this._queue = new this._queueClass();
 	}
 
 	/**
@@ -262,13 +268,13 @@ export default class PQueue<Q extends Queue<EnqueueOptionsType>, EnqueueOptionsT
 	 */
 	async onEmpty(): Promise<void> {
 		// Instantly resolve if the queue is empty
-		if (this.queue.size === 0) {
+		if (this._queue.size === 0) {
 			return;
 		}
 
 		return new Promise<void>(resolve => {
-			const existingResolve = this.resolveEmpty;
-			this.resolveEmpty = () => {
+			const existingResolve = this._resolveEmpty;
+			this._resolveEmpty = () => {
 				existingResolve();
 				resolve();
 			};
@@ -281,13 +287,13 @@ export default class PQueue<Q extends Queue<EnqueueOptionsType>, EnqueueOptionsT
 	 */
 	async onIdle(): Promise<void> {
 		// Instantly resolve if none pending and if nothing else is queued
-		if (this.pendingCount === 0 && this.queue.size === 0) {
+		if (this._pendingCount === 0 && this._queue.size === 0) {
 			return;
 		}
 
 		return new Promise<void>(resolve => {
-			const existingResolve = this.resolveIdle;
-			this.resolveIdle = () => {
+			const existingResolve = this._resolveIdle;
+			this._resolveIdle = () => {
 				existingResolve();
 				resolve();
 			};
@@ -298,20 +304,20 @@ export default class PQueue<Q extends Queue<EnqueueOptionsType>, EnqueueOptionsT
 	 * Size of the queue.
 	 */
 	get size(): number {
-		return this.queue.size;
+		return this._queue.size;
 	}
 
 	/**
 	 * Number of pending promises.
 	 */
 	get pending(): number {
-		return this.pendingCount;
+		return this._pendingCount;
 	}
 
 	/**
 	 * Whether the queue is currently paused.
 	 */
 	get isPaused(): boolean {
-		return this.paused;
+		return this._paused;
 	}
 }

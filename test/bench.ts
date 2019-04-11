@@ -1,6 +1,5 @@
-'use strict';
-const Benchmark = require('benchmark');
-const PQueue = require('.');
+import Benchmark from 'benchmark';
+import PQueue from '../source';
 
 const suite = new Benchmark.Suite();
 

@@ -1,12 +1,10 @@
 import {Queue} from './queue';
 
-// tslint:disable:no-redundant-jsdoc
-
 export interface QueueAddOptions {
 	[key: string]: unknown;
 }
 
-export interface Options<Q extends Queue<O>, O extends QueueAddOptions> {
+export interface Options<QueueType extends Queue<QueueOptions>, QueueOptions extends QueueAddOptions> {
 	/**
 	 * Concurrency limit. Minimum: `1`.
 	 * @default Infinity
@@ -22,7 +20,7 @@ export interface Options<Q extends Queue<O>, O extends QueueAddOptions> {
 	/**
 	 * Class with a `enqueue` and `dequeue` method, and a `size` getter. See the [Custom QueueClass](https://github.com/sindresorhus/p-queue#custom-queueclass) section.
 	 */
-	queueClass?: new () => Q;
+	queueClass?: new () => QueueType;
 
 	/**
 	 * The max number of runs in the given interval of time. Minimum: `1`.
