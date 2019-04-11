@@ -7,16 +7,12 @@ export interface PriorityQueueOptions extends QueueAddOptions {
 }
 
 export default class PriorityQueue implements Queue<PriorityQueueOptions> {
-	private readonly _queue: (PriorityQueueOptions & { run: RunFunction })[];
+	private readonly _queue: (PriorityQueueOptions & { run: RunFunction })[] = [];
 
-	constructor() {
-		this._queue = [];
-	}
-
-	enqueue(run: RunFunction, opt?: PriorityQueueOptions): void {
-		const options = {
+	enqueue(run: RunFunction, options?: PriorityQueueOptions): void {
+		options = {
 			priority: 0,
-			...opt
+			...options
 		};
 
 		const element = {
@@ -24,7 +20,7 @@ export default class PriorityQueue implements Queue<PriorityQueueOptions> {
 			run
 		};
 
-		if (this.size && this._queue[this.size - 1].priority! >= options.priority) {
+		if (this.size && this._queue[this.size - 1].priority! >= options.priority!) {
 			this._queue.push(element);
 			return;
 		}

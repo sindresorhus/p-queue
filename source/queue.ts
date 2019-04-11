@@ -1,4 +1,4 @@
-export type RunFunction = () => Promise<any>;
+export type RunFunction = () => Promise<unknown>;
 
 export interface Queue<Options> {
 	size: number;

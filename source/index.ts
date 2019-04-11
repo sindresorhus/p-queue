@@ -19,13 +19,13 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 	private readonly _isIntervalIgnored: boolean;
 
-	private _intervalCount: number;
+	private _intervalCount = 0;
 
 	private readonly _intervalCap: number;
 
 	private readonly _interval: number;
 
-	private _intervalEnd: number;
+	private _intervalEnd = 0;
 
 	private _intervalId?: NodeJS.Timeout;
 
@@ -35,15 +35,15 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 	private readonly _queueClass: new () => QueueType;
 
-	private _pendingCount: number;
+	private _pendingCount = 0;
 
 	private readonly _concurrency: number;
 
 	private _paused: boolean;
 
-	private _resolveEmpty: ResolveFunction;
+	private _resolveEmpty: ResolveFunction = empty;
 
-	private _resolveIdle: ResolveFunction;
+	private _resolveIdle: ResolveFunction = empty;
 
 	constructor(opt?: Options<QueueType, EnqueueOptionsType>) {
 		super();
@@ -73,21 +73,13 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 		this._carryoverConcurrencyCount = options.carryoverConcurrencyCount!;
 		this._isIntervalIgnored = options.intervalCap === Infinity || options.interval === 0;
-		this._intervalCount = 0;
 		this._intervalCap = options.intervalCap;
 		this._interval = options.interval;
-		this._intervalId = undefined;
-		this._intervalEnd = 0;
-		this._timeoutId = undefined;
 
 		this._queue = new options.queueClass!();
 		this._queueClass = options.queueClass!;
-		this._pendingCount = 0;
 		this._concurrency = options.concurrency;
 		this._paused = options.autoStart === false;
-
-		this._resolveEmpty = empty;
-		this._resolveIdle = empty;
 	}
 
 	get doesIntervalAllowAnother(): boolean {
