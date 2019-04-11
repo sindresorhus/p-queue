@@ -9,8 +9,9 @@
 	},
 	"scripts": {
 		"build": "del dist && tsc",
-		"test": "tslint --format stylish --project . && npm run build && nyc ava",
-		"bench": "node bench.js"
+		"test": "xo && npm run build && nyc ava",
+		"bench": "ts-node test/bench.ts",
+		"prepublishOnly": "npm run build"
 	},
 	"files": [
 		"dist"
@@ -46,19 +47,19 @@
 		"@types/in-range": "^1.0.0",
 		"@types/node": "^11.13.2",
 		"@types/random-int": "^1.0.0",
+		"@typescript-eslint/eslint-plugin": "^1.6.0",
 		"ava": "^1.4.1",
 		"benchmark": "^2.1.4",
 		"codecov": "^3.3.0",
 		"del-cli": "^1.1.0",
 		"delay": "^4.1.0",
+		"eslint-config-xo-typescript": "^0.9.0",
 		"in-range": "^1.0.0",
 		"nyc": "^13.3.0",
 		"random-int": "^1.0.0",
 		"time-span": "^3.1.0",
 		"ts-node": "^8.0.3",
-		"tslint": "^5.15.0",
-		"tslint-xo": "^0.16.0",
-		"typescript": "^3.4.2",
+		"typescript": "^3.4.3",
 		"xo": "^0.24.0"
 	},
 	"ava": {
@@ -75,6 +76,15 @@
 		"extends": "xo-typescript",
 		"extensions": [
 			"ts"
-		]
+		],
+		"rules": {
+			"@typescript-eslint/explicit-function-return-type": "off",
+			"typedef": [
+				true,
+				"call-signature",
+				"property-declaration",
+				"member-variable-declaration"
+			]
+		}
 	}
 }
