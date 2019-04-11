@@ -12,8 +12,8 @@ type Task<TaskResultType> =
 const empty = () => {};
 
 /**
- * Promise queue with concurrency control.
- */
+Promise queue with concurrency control.
+*/
 export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = DefaultAddOptions> extends EventEmitter<'active'> {
 	private readonly _carryoverConcurrencyCount: boolean;
 
@@ -205,8 +205,8 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	}
 
 	/**
-	 * Adds a sync or async task to the queue. Always returns a promise.
-	 */
+	Adds a sync or async task to the queue. Always returns a promise.
+	*/
 	async add<TaskResultType>(fn: Task<TaskResultType>, options?: EnqueueOptionsType): Promise<TaskResultType> {
 		return new Promise<TaskResultType>((resolve, reject) => {
 			const run = async () => {
@@ -228,16 +228,16 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	}
 
 	/**
-	 * Same as `.add()`, but accepts an array of sync or async functions.
-	 * @returns A promise that resolves when all functions are resolved.
-	 */
+	Same as `.add()`, but accepts an array of sync or async functions.
+	@returns A promise that resolves when all functions are resolved.
+	*/
 	async addAll<TaskResultsType>(fns: Task<TaskResultsType>[], options?: EnqueueOptionsType): Promise<TaskResultsType[]> {
 		return Promise.all(fns.map(fn => this.add(fn, options)));
 	}
 
 	/**
-	 * Start (or resume) executing enqueued tasks within concurrency limit. No need to call this if queue is not paused (via `options.autoStart = false` or by `.pause()` method.)
-	 */
+	Start (or resume) executing enqueued tasks within concurrency limit. No need to call this if queue is not paused (via `options.autoStart = false` or by `.pause()` method.)
+	*/
 	start(): void {
 		if (!this._paused) {
 			return;
@@ -249,23 +249,23 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	}
 
 	/**
-	 * Put queue execution on hold.
-	 */
+	Put queue execution on hold.
+	*/
 	pause(): void {
 		this._paused = true;
 	}
 
 	/**
-	 * Clear the queue.
-	 */
+	Clear the queue.
+	*/
 	clear(): void {
 		this._queue = new this._queueClass();
 	}
 
 	/**
-	 * Can be called multiple times. Useful if you for example add additional items at a later time.
-	 * @returns A promise that settles when the queue becomes empty.
-	 */
+	Can be called multiple times. Useful if you for example add additional items at a later time.
+	@returns A promise that settles when the queue becomes empty.
+	*/
 	async onEmpty(): Promise<void> {
 		// Instantly resolve if the queue is empty
 		if (this._queue.size === 0) {
@@ -282,9 +282,9 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	}
 
 	/**
-	 * The difference with `.onEmpty` is that `.onIdle` guarantees that all work from the queue has finished. `.onEmpty` merely signals that the queue is empty, but it could mean that some promises haven't completed yet.
-	 * @returns A promise that settles when the queue becomes empty, and all promises have completed; `queue.size === 0 && queue.pending === 0`.
-	 */
+	The difference with `.onEmpty` is that `.onIdle` guarantees that all work from the queue has finished. `.onEmpty` merely signals that the queue is empty, but it could mean that some promises haven't completed yet.
+	@returns A promise that settles when the queue becomes empty, and all promises have completed; `queue.size === 0 && queue.pending === 0`.
+	*/
 	async onIdle(): Promise<void> {
 		// Instantly resolve if none pending and if nothing else is queued
 		if (this._pendingCount === 0 && this._queue.size === 0) {
@@ -301,22 +301,22 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	}
 
 	/**
-	 * Size of the queue.
-	 */
+	Size of the queue.
+	*/
 	get size(): number {
 		return this._queue.size;
 	}
 
 	/**
-	 * Number of pending promises.
-	 */
+	Number of pending promises.
+	*/
 	get pending(): number {
 		return this._pendingCount;
 	}
 
 	/**
-	 * Whether the queue is currently paused.
-	 */
+	Whether the queue is currently paused.
+	*/
 	get isPaused(): boolean {
 		return this._paused;
 	}
