@@ -81,6 +81,47 @@ test('.add() - priority', async t => {
 	t.deepEqual(result, [1, 3, 1, 2, 0, 0]);
 });
 
+test('.add() - timeout without throwing', async t => {
+	const result: string[] = [];
+	const queue = new PQueue({timeout: 300, throwOnTimeout: false});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐌');
+	});
+	queue.add(async () => {
+		await delay(250);
+		result.push('🦆');
+	});
+	queue.add(async () => {
+		await delay(301);
+		result.push('🐢');
+	});
+	queue.add(async () => {
+		await delay(100);
+		result.push('🐅');
+	});
+	queue.add(async () => {
+		result.push('⚡️');
+	});
+	await queue.onIdle();
+	t.deepEqual(result, ['⚡️', '🐅', '🦆']);
+});
+
+test('.add() - timeout with throwing', async t => {
+	const result: string[] = [];
+	const queue = new PQueue({timeout: 300, throwOnTimeout: true});
+	t.throwsAsync(queue.add(async () => {
+		await delay(400);
+		result.push('🐌');
+	}));
+	queue.add(async () => {
+		await delay(295);
+		result.push('🦆');
+	});
+	await queue.onIdle();
+	t.deepEqual(result, ['🦆']);
+});
+
 test('.onEmpty()', async t => {
 	const queue = new PQueue({concurrency: 1});
 
