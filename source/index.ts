@@ -45,19 +45,19 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 	private _resolveIdle: ResolveFunction = empty;
 
-	constructor(opt?: Options<QueueType, EnqueueOptionsType>) {
+	constructor(options?: Options<QueueType, EnqueueOptionsType>) {
 		super();
 
-		const options: Options<QueueType, EnqueueOptionsType> = {
+		// eslint-disable-next-line @typescript-eslint/no-object-literal-type-assertion
+		options = {
 			carryoverConcurrencyCount: false,
 			intervalCap: Infinity,
 			interval: 0,
 			concurrency: Infinity,
 			autoStart: true,
-			// @ts-ignore This default is a little nasty!
 			queueClass: PriorityQueue,
-			...opt
-		};
+			...options
+		} as Options<QueueType, EnqueueOptionsType>;
 
 		if (!(typeof options.concurrency === 'number' && options.concurrency >= 1)) {
 			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${options.concurrency}\` (${typeof options.concurrency})`);

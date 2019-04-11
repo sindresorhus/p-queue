@@ -77,13 +77,7 @@
 			"ts"
 		],
 		"rules": {
-			"@typescript-eslint/explicit-function-return-type": "off",
-			"typedef": [
-				true,
-				"call-signature",
-				"property-declaration",
-				"member-variable-declaration"
-			]
+			"@typescript-eslint/explicit-function-return-type": "off"
 		}
 	}
 }
