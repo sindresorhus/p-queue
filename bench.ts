@@ -1,13 +1,16 @@
-import Benchmark from 'benchmark';
-import PQueue from '../source';
+import Benchmark, {Deferred, Event} from 'benchmark';
+import PQueue from './source';
 
 const suite = new Benchmark.Suite();
+
+// Benchmark typings aren't up to date, let's help out manually
+type Resolvable = Deferred & { resolve(): void }
 
 suite
 	.add('baseline', {
 		defer: true,
 
-		fn: async deferred => {
+		fn: async (deferred: Resolvable) => {
 			const queue = new PQueue();
 
 			for (let i = 0; i < 100; i++) {
@@ -21,7 +24,7 @@ suite
 	.add('operation with random priority', {
 		defer: true,
 
-		fn: async deferred => {
+		fn: async (deferred: Resolvable) => {
 			const queue = new PQueue();
 
 			for (let i = 0; i < 100; i++) {
@@ -37,7 +40,7 @@ suite
 	.add('operation with increasing priority', {
 		defer: true,
 
-		fn: async deferred => {
+		fn: async (deferred: Resolvable) => {
 			const queue = new PQueue();
 
 			for (let i = 0; i < 100; i++) {
@@ -47,14 +50,16 @@ suite
 			}
 
 			await queue.onEmpty();
+			// @ts-ignore benchmark typings incorrect
 			deferred.resolve();
 		}
 	})
-	.on('cycle', event => {
+	.on('cycle', (event: Event) => {
 		console.log(String(event.target));
 	})
 	.on('complete', function () {
-		console.log(`Fastest is ${this.filter('fastest').map('name')}`);
+		// @ts-ignore benchmark typings incorrect
+		console.log(`Fastest is ${(this as Benchmark.Suite).filter('fastest').map('name')}`);
 	})
 	.run({
 		async: true

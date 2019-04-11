@@ -10,7 +10,7 @@
 	"scripts": {
 		"build": "del dist && tsc",
 		"test": "xo && npm run build && nyc ava",
-		"bench": "ts-node test/bench.ts",
+		"bench": "ts-node bench.ts",
 		"prepublishOnly": "npm run build"
 	},
 	"files": [
@@ -44,6 +44,7 @@
 	},
 	"devDependencies": {
 		"@sindresorhus/tsconfig": "^0.3.0",
+		"@types/benchmark": "^1.0.31",
 		"@types/in-range": "^1.0.0",
 		"@types/node": "^11.13.2",
 		"@types/random-int": "^1.0.0",
