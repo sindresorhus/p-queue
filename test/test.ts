@@ -48,7 +48,7 @@ test('.add() - concurrency: 1', async t => {
 	});
 
 	t.deepEqual(await Promise.all(input.map(mapper)), [10, 20, 30]);
-	t.true(inRange(end(), 590, 650));
+	t.true(inRange(end(), {start: 590, end: 650}));
 });
 
 test('.add() - concurrency: 5', async t => {
