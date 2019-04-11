@@ -1,4 +1,5 @@
 /* eslint-disable no-new */
+/* eslint-disable ava/no-ignored-test-files */
 import EventEmitter from 'eventemitter3';
 import test from 'ava';
 import delay from 'delay';

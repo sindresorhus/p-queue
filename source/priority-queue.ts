@@ -1,3 +1,4 @@
+// eslint-disable-next-line import/named
 import {Queue, RunFunction} from './queue';
 import lowerBound from './lower-bound';
 import {QueueAddOptions} from './options';
