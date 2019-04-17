@@ -9,7 +9,7 @@ type Task<TaskResultType> =
 		| (() => PromiseLike<TaskResultType>)
 		| (() => TaskResultType);
 
-const empty = () => {};
+const empty = (): void => {};
 
 /**
 Promise queue with concurrency control.
@@ -118,8 +118,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 			const delay = this._intervalEnd - now;
 			if (delay < 0) {
 				// Act as the interval was done
-				// We don't need to resume it here,
-				// Because it'll be resumed on line 160
+				// We don't need to resume it here because it will be resumed on line 160
 				this._intervalCount = (this._carryoverConcurrencyCount) ? this._pendingCount : 0;
 			} else {
 				// Act as the interval is pending
@@ -182,6 +181,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 			},
 			this._interval
 		);
+
 		this._intervalEnd = Date.now() + this._interval;
 	}
 
@@ -201,7 +201,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	*/
 	async add<TaskResultType>(fn: Task<TaskResultType>, options?: EnqueueOptionsType): Promise<TaskResultType> {
 		return new Promise<TaskResultType>((resolve, reject) => {
-			const run = async () => {
+			const run = async (): Promise<void> => {
 				this._pendingCount++;
 				this._intervalCount++;
 
@@ -221,10 +221,14 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 	/**
 	Same as `.add()`, but accepts an array of sync or async functions.
+
 	@returns A promise that resolves when all functions are resolved.
 	*/
-	async addAll<TaskResultsType>(fns: Task<TaskResultsType>[], options?: EnqueueOptionsType): Promise<TaskResultsType[]> {
-		return Promise.all(fns.map(fn => this.add(fn, options)));
+	async addAll<TaskResultsType>(
+		functions: readonly Task<TaskResultsType>[],
+		options?: EnqueueOptionsType
+	): Promise<readonly TaskResultsType[]> {
+		return Promise.all(functions.map(function_ => this.add(function_, options)));
 	}
 
 	/**
@@ -256,6 +260,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 	/**
 	Can be called multiple times. Useful if you for example add additional items at a later time.
+
 	@returns A promise that settles when the queue becomes empty.
 	*/
 	async onEmpty(): Promise<void> {
@@ -275,6 +280,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 	/**
 	The difference with `.onEmpty` is that `.onIdle` guarantees that all work from the queue has finished. `.onEmpty` merely signals that the queue is empty, but it could mean that some promises haven't completed yet.
+
 	@returns A promise that settles when the queue becomes empty, and all promises have completed; `queue.size === 0 && queue.pending === 0`.
 	*/
 	async onIdle(): Promise<void> {

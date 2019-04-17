@@ -51,10 +51,10 @@
 		"benchmark": "^2.1.4",
 		"codecov": "^3.3.0",
 		"del-cli": "^1.1.0",
-		"delay": "^4.1.0",
+		"delay": "^4.2.0",
 		"eslint-config-xo-typescript": "^0.9.0",
 		"in-range": "^2.0.0",
-		"nyc": "^13.3.0",
+		"nyc": "^14.0.0",
 		"random-int": "^2.0.0",
 		"time-span": "^3.1.0",
 		"ts-node": "^8.0.3",
@@ -75,9 +75,11 @@
 		"extends": "xo-typescript",
 		"extensions": [
 			"ts"
-		],
-		"rules": {
-			"@typescript-eslint/explicit-function-return-type": "off"
-		}
+		]
+	},
+	"nyc": {
+		"extension": [
+			".ts"
+		]
 	}
 }

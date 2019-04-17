@@ -12,25 +12,25 @@ const fixture = Symbol('fixture');
 
 test('.add()', async t => {
 	const queue = new PQueue();
-	const p = queue.add(async () => fixture);
+	const promise = queue.add(async () => fixture);
 	t.is(queue.size, 0);
 	t.is(queue.pending, 1);
-	t.is(await p, fixture);
+	t.is(await promise, fixture);
 });
 
 test('.add() - limited concurrency', async t => {
 	const queue = new PQueue({concurrency: 2});
-	const p = queue.add(async () => fixture);
-	const p2 = queue.add(async () => {
+	const promise = queue.add(async () => fixture);
+	const promise2 = queue.add(async () => {
 		await delay(100);
 		return fixture;
 	});
-	const p3 = queue.add(async () => fixture);
+	const promise3 = queue.add(async () => fixture);
 	t.is(queue.size, 1);
 	t.is(queue.pending, 2);
-	t.is(await p, fixture);
-	t.is(await p2, fixture);
-	t.is(await p3, fixture);
+	t.is(await promise, fixture);
+	t.is(await promise2, fixture);
+	t.is(await promise3, fixture);
 });
 
 test('.add() - concurrency: 1', async t => {
@@ -42,7 +42,8 @@ test('.add() - concurrency: 1', async t => {
 
 	const end = timeSpan();
 	const queue = new PQueue({concurrency: 1});
-	const mapper = ([value, ms]: number[]) => queue.add(async () => {
+	// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+	const mapper = ([value, ms]: readonly number[]) => queue.add(async () => {
 		await delay(ms);
 		return value;
 	});
@@ -130,9 +131,8 @@ test('.onIdle() - no pending', async t => {
 	t.is(queue.size, 0);
 	t.is(queue.pending, 0);
 
-	const p = await queue.onIdle();
-
-	t.is(p, undefined);
+	const promise = await queue.onIdle();
+	t.is(promise, undefined);
 });
 
 test('.clear()', t => {
@@ -151,12 +151,12 @@ test('.clear()', t => {
 
 test('.addAll()', async t => {
 	const queue = new PQueue();
-	const fn = async () => fixture;
-	const fns = [fn, fn];
-	const p = queue.addAll(fns);
+	const fn = async (): Promise<symbol> => fixture;
+	const functions = [fn, fn];
+	const promise = queue.addAll(functions);
 	t.is(queue.size, 0);
 	t.is(queue.pending, 2);
-	t.deepEqual(await p, [fixture, fixture]);
+	t.deepEqual(await promise, [fixture, fixture]);
 });
 
 test('enforce number in options.concurrency', t => {
@@ -166,18 +166,22 @@ test('enforce number in options.concurrency', t => {
 		},
 		TypeError
 	);
+
 	t.throws(
 		() => {
 			new PQueue({concurrency: undefined});
 		},
 		TypeError
 	);
+
 	t.notThrows(() => {
 		new PQueue({concurrency: 1});
 	});
+
 	t.notThrows(() => {
 		new PQueue({concurrency: 10});
 	});
+
 	t.notThrows(() => {
 		new PQueue({concurrency: Infinity});
 	});
@@ -190,18 +194,22 @@ test('enforce number in options.intervalCap', t => {
 		},
 		TypeError
 	);
+
 	t.throws(
 		() => {
 			new PQueue({intervalCap: undefined});
 		},
 		TypeError
 	);
+
 	t.notThrows(() => {
 		new PQueue({intervalCap: 1});
 	});
+
 	t.notThrows(() => {
 		new PQueue({intervalCap: 10});
 	});
+
 	t.notThrows(() => {
 		new PQueue({intervalCap: Infinity});
 	});
@@ -214,21 +222,26 @@ test('enforce finite in options.interval', t => {
 		},
 		TypeError
 	);
+
 	t.throws(
 		() => {
 			new PQueue({interval: undefined});
 		},
 		TypeError
 	);
+
 	t.throws(() => {
 		new PQueue({interval: Infinity});
 	});
+
 	t.notThrows(() => {
 		new PQueue({interval: 0});
 	});
+
 	t.notThrows(() => {
 		new PQueue({interval: 10});
 	});
+
 	t.throws(() => {
 		new PQueue({interval: Infinity});
 	});
@@ -352,16 +365,17 @@ test('.add() - handle task promise failure', async t => {
 
 test('.addAll() sync/async mixed tasks', async t => {
 	const queue = new PQueue();
-	const fns: (() => (string | Promise<void> | Promise<any>))[] = [
+	// eslint-disable-next-line @typescript-eslint/array-type
+	const functions: Array<() => (string | Promise<void> | Promise<unknown>)> = [
 		() => 'sync 1',
 		() => delay(2000),
 		() => 'sync 2',
 		async () => fixture
 	];
-	const p = queue.addAll(fns);
+	const promise = queue.addAll(functions);
 	t.is(queue.size, 0);
 	t.is(queue.pending, 4);
-	t.deepEqual(await p, ['sync 1', undefined, 'sync 2', fixture]);
+	t.deepEqual(await promise, ['sync 1', undefined, 'sync 2', fixture]);
 });
 
 test('should resolve empty when size is zero', async t => {

@@ -1,4 +1,3 @@
-// eslint-disable-next-line import/named
 import {Queue, RunFunction} from './queue';
 import lowerBound from './lower-bound';
 import {QueueAddOptions} from './options';
@@ -8,7 +7,8 @@ export interface PriorityQueueOptions extends QueueAddOptions {
 }
 
 export default class PriorityQueue implements Queue<PriorityQueueOptions> {
-	private readonly _queue: (PriorityQueueOptions & { run: RunFunction })[] = [];
+	// eslint-disable-next-line @typescript-eslint/array-type
+	private readonly _queue: Array<PriorityQueueOptions & {run: RunFunction}> = [];
 
 	enqueue(run: RunFunction, options?: PriorityQueueOptions): void {
 		options = {
