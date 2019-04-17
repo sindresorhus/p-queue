@@ -227,7 +227,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	async addAll<TaskResultsType>(
 		functions: readonly Task<TaskResultsType>[],
 		options?: EnqueueOptionsType
-	): Promise<readonly TaskResultsType[]> {
+	): Promise<TaskResultsType[]> {
 		return Promise.all(functions.map(function_ => this.add(function_, options)));
 	}
 
