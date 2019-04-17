@@ -1,10 +1,12 @@
+/* eslint-disable no-new */
+/* eslint-disable ava/no-ignored-test-files */
 import EventEmitter from 'eventemitter3';
 import test from 'ava';
 import delay from 'delay';
 import inRange from 'in-range';
 import timeSpan from 'time-span';
 import randomInt from 'random-int';
-import PQueue from '.';
+import PQueue from '../source';
 
 const fixture = Symbol('fixture');
 
@@ -40,13 +42,13 @@ test('.add() - concurrency: 1', async t => {
 
 	const end = timeSpan();
 	const queue = new PQueue({concurrency: 1});
-	const mapper = ([value, ms]) => queue.add(async () => {
+	const mapper = ([value, ms]: number[]) => queue.add(async () => {
 		await delay(ms);
 		return value;
 	});
 
 	t.deepEqual(await Promise.all(input.map(mapper)), [10, 20, 30]);
-	t.true(inRange(end(), 590, 650));
+	t.true(inRange(end(), {start: 590, end: 650}));
 });
 
 test('.add() - concurrency: 5', async t => {
@@ -66,7 +68,7 @@ test('.add() - concurrency: 5', async t => {
 });
 
 test('.add() - priority', async t => {
-	const result = [];
+	const result: number[] = [];
 	const queue = new PQueue({concurrency: 1});
 	queue.add(async () => result.push(1), {priority: 1});
 	queue.add(async () => result.push(0), {priority: 0});
@@ -158,13 +160,18 @@ test('.addAll()', async t => {
 });
 
 test('enforce number in options.concurrency', t => {
-	/* eslint-disable no-new */
-	t.throws(() => {
-		new PQueue({concurrency: 0});
-	}, TypeError);
-	t.throws(() => {
-		new PQueue({concurrency: undefined});
-	}, TypeError);
+	t.throws(
+		() => {
+			new PQueue({concurrency: 0});
+		},
+		TypeError
+	);
+	t.throws(
+		() => {
+			new PQueue({concurrency: undefined});
+		},
+		TypeError
+	);
 	t.notThrows(() => {
 		new PQueue({concurrency: 1});
 	});
@@ -174,17 +181,21 @@ test('enforce number in options.concurrency', t => {
 	t.notThrows(() => {
 		new PQueue({concurrency: Infinity});
 	});
-	/* eslint-enable no-new */
 });
 
 test('enforce number in options.intervalCap', t => {
-	/* eslint-disable no-new */
-	t.throws(() => {
-		new PQueue({intervalCap: 0});
-	}, TypeError);
-	t.throws(() => {
-		new PQueue({intervalCap: undefined});
-	}, TypeError);
+	t.throws(
+		() => {
+			new PQueue({intervalCap: 0});
+		},
+		TypeError
+	);
+	t.throws(
+		() => {
+			new PQueue({intervalCap: undefined});
+		},
+		TypeError
+	);
 	t.notThrows(() => {
 		new PQueue({intervalCap: 1});
 	});
@@ -194,17 +205,21 @@ test('enforce number in options.intervalCap', t => {
 	t.notThrows(() => {
 		new PQueue({intervalCap: Infinity});
 	});
-	/* eslint-enable no-new */
 });
 
 test('enforce finite in options.interval', t => {
-	/* eslint-disable no-new */
-	t.throws(() => {
-		new PQueue({interval: -1});
-	}, TypeError);
-	t.throws(() => {
-		new PQueue({interval: undefined});
-	}, TypeError);
+	t.throws(
+		() => {
+			new PQueue({interval: -1});
+		},
+		TypeError
+	);
+	t.throws(
+		() => {
+			new PQueue({interval: undefined});
+		},
+		TypeError
+	);
 	t.throws(() => {
 		new PQueue({interval: Infinity});
 	});
@@ -217,7 +232,6 @@ test('enforce finite in options.interval', t => {
 	t.throws(() => {
 		new PQueue({interval: Infinity});
 	});
-	/* eslint-enable no-new */
 });
 
 test('autoStart: false', t => {
@@ -300,9 +314,14 @@ test('.add() - handle task throwing error', async t => {
 	const queue = new PQueue({concurrency: 1});
 
 	queue.add(() => 'sync 1');
-	t.throwsAsync(queue.add(() => {
-		throw new Error('broken');
-	}), 'broken');
+	t.throwsAsync(
+		queue.add(
+			() => {
+				throw new Error('broken');
+			}
+		),
+		'broken'
+	);
 	queue.add(() => 'sync 2');
 
 	t.is(queue.size, 2);
@@ -313,9 +332,14 @@ test('.add() - handle task throwing error', async t => {
 test('.add() - handle task promise failure', async t => {
 	const queue = new PQueue({concurrency: 1});
 
-	t.throwsAsync(queue.add(async () => {
-		throw new Error('broken');
-	}), 'broken');
+	t.throwsAsync(
+		queue.add(
+			async () => {
+				throw new Error('broken');
+			}
+		),
+		'broken'
+	);
 
 	queue.add(() => 'task #1');
 
@@ -328,7 +352,7 @@ test('.add() - handle task promise failure', async t => {
 
 test('.addAll() sync/async mixed tasks', async t => {
 	const queue = new PQueue();
-	const fns = [
+	const fns: (() => (string | Promise<void> | Promise<any>))[] = [
 		() => 'sync 1',
 		() => delay(2000),
 		() => 'sync 2',
@@ -356,17 +380,20 @@ test('should resolve empty when size is zero', async t => {
 	queue.start();
 
 	// Pause at 0.5 second
-	setTimeout(async () => {
-		queue.pause();
-		await delay(10);
-		queue.start();
-	}, 500);
+	setTimeout(
+		async () => {
+			queue.pause();
+			await delay(10);
+			queue.start();
+		},
+		500
+	);
 
 	await queue.onIdle();
 });
 
 test('.add() - throttled', async t => {
-	const result = [];
+	const result: number[] = [];
 	const queue = new PQueue({
 		intervalCap: 1,
 		interval: 500,
@@ -382,7 +409,7 @@ test('.add() - throttled', async t => {
 });
 
 test('.add() - throttled, carryoverConcurrencyCount false', async t => {
-	const result = [];
+	const result: number[] = [];
 
 	const queue = new PQueue({
 		intervalCap: 1,
@@ -416,7 +443,7 @@ test('.add() - throttled, carryoverConcurrencyCount false', async t => {
 });
 
 test('.add() - throttled, carryoverConcurrencyCount true', async t => {
-	const result = [];
+	const result: number[] = [];
 
 	const queue = new PQueue({
 		carryoverConcurrencyCount: true,
@@ -461,7 +488,7 @@ test('.add() - throttled, carryoverConcurrencyCount true', async t => {
 });
 
 test('.add() - throttled 10, concurrency 5', async t => {
-	const result = [];
+	const result: number[] = [];
 
 	const queue = new PQueue({
 		concurrency: 5,
@@ -504,7 +531,7 @@ test('.add() - throttled 10, concurrency 5', async t => {
 });
 
 test('.add() - throttled finish and resume', async t => {
-	const result = [];
+	const result: number[] = [];
 
 	const queue = new PQueue({
 		concurrency: 1,
@@ -543,7 +570,7 @@ test('.add() - throttled finish and resume', async t => {
 });
 
 test('pause should work when throttled', async t => {
-	const result = [];
+	const result: number[] = [];
 
 	const queue = new PQueue({
 		concurrency: 2,
