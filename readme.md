@@ -168,6 +168,10 @@ Size of the queue.
 
 Number of pending promises.
 
+#### .timeout
+
+Get most recent timeout time in millis or set the timeout for future operations.
+
 #### .isPaused
 
 Whether the queue is currently paused.
