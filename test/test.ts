@@ -122,6 +122,24 @@ test('.add() - timeout with throwing', async t => {
 	t.deepEqual(result, ['🦆']);
 });
 
+test('.add() - change timeout in between', async t => {
+	const result: (number | undefined)[] = [];
+	const queue = new PQueue({timeout: 300, throwOnTimeout: false});
+	queue.add(async () => {
+		const {timeout} = queue;
+		await delay(250);
+		result.push(timeout);
+	});
+	queue.timeout = 200;
+	queue.add(async () => {
+		const {timeout} = queue;
+		await delay(250);
+		result.push(timeout);
+	});
+	await queue.onIdle();
+	t.deepEqual(result, [300]);
+});
+
 test('.onEmpty()', async t => {
 	const queue = new PQueue({concurrency: 1});
 
