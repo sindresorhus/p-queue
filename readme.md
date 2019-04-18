@@ -58,6 +58,20 @@ Minimum: `1`
 
 Concurrency limit.
 
+##### timeout
+
+Type: `number`<br>
+Default: `undefined`<br>
+
+Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
+
+##### throwOnTimeout
+
+Type: `boolean`<br>
+Default: `true`<br>
+
+Whether or not a timeout is considered an exception.
+
 ##### autoStart
 
 Type: `boolean`<br>
