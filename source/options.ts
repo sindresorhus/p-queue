@@ -52,9 +52,7 @@ export interface Options<QueueType extends Queue<QueueOptions>, QueueOptions ext
 	readonly carryoverConcurrencyCount?: boolean;
 
 	/**
-	Per-operation timeout in ms. Operations fulfil once `timeout` elapses if they haven't already.
-
-	@default undefined
+	Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
 	*/
 	timeout?: number;
 
