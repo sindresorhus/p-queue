@@ -336,8 +336,8 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	/**
 	Set the timeout for future operations.
 	*/
-	set timeout(milliseconds?: number) {
-		this._timeout = value;
+	set timeout(milliseconds: number | undefined) {
+		this._timeout = milliseconds;
 	}
 
 	get timeout(): number | undefined {
