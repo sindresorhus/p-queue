@@ -60,15 +60,14 @@ Concurrency limit.
 
 ##### timeout
 
-Type: `number`<br>
-Default: `undefined`<br>
+Type: `number`
 
 Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
 
 ##### throwOnTimeout
 
 Type: `boolean`<br>
-Default: `true`<br>
+Default: `true`
 
 Whether or not a timeout is considered an exception.
 
