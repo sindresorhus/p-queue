@@ -115,7 +115,7 @@ test('.add() - timeout with throwing', async t => {
 		result.push('🐌');
 	}));
 	queue.add(async () => {
-		await delay(295);
+		await delay(200);
 		result.push('🦆');
 	});
 	await queue.onIdle();
@@ -123,21 +123,25 @@ test('.add() - timeout with throwing', async t => {
 });
 
 test('.add() - change timeout in between', async t => {
-	const result: (number | undefined)[] = [];
-	const queue = new PQueue({timeout: 300, throwOnTimeout: false});
+	const result: string[] = [];
+	const initialTimeout = 50;
+	const newTimeout = 200;
+	const queue = new PQueue({timeout: initialTimeout, throwOnTimeout: false, concurrency: 2});
 	queue.add(async () => {
 		const {timeout} = queue;
-		await delay(250);
-		result.push(timeout);
+		t.deepEqual(timeout, initialTimeout);
+		await delay(300);
+		result.push('🐌');
 	});
-	queue.timeout = 200;
+	queue.timeout = newTimeout;
 	queue.add(async () => {
 		const {timeout} = queue;
-		await delay(250);
-		result.push(timeout);
+		t.deepEqual(timeout, newTimeout);
+		await delay(100);
+		result.push('🐅');
 	});
 	await queue.onIdle();
-	t.deepEqual(result, [300]);
+	t.deepEqual(result, ['🐅']);
 });
 
 test('.onEmpty()', async t => {
