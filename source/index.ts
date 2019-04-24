@@ -215,13 +215,19 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 				this._intervalCount++;
 
 				try {
-					const operation = this._timeout === undefined ? fn() : pTimeout(Promise.resolve(fn()), this._timeout, timeoutError);
+					const operation = this._timeout === undefined ? fn() : pTimeout(
+						Promise.resolve(fn()),
+						this._timeout,
+						() => {
+							if (this._throwOnTimeout) {
+								reject(timeoutError);
+							}
+
+							return undefined;
+						}
+					);
 					resolve(await operation);
 				} catch (error) {
-					if (!this._throwOnTimeout && error instanceof pTimeout.TimeoutError) {
-						resolve();
-					}
-
 					reject(error);
 				}
 
