@@ -234,14 +234,15 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	/**
 	Start (or resume) executing enqueued tasks within concurrency limit. No need to call this if queue is not paused (via `options.autoStart = false` or by `.pause()` method.)
 	*/
-	start(): void {
+	start(): Promise<void> {
 		if (!this._paused) {
-			return;
+			return this.onIdle();
 		}
 
 		this._paused = false;
 		// eslint-disable-next-line no-empty
 		while (this.tryToStartAnother()) {}
+		return this.onIdle();
 	}
 
 	/**

@@ -267,6 +267,19 @@ test('autoStart: false', t => {
 	t.is(queue.size, 0);
 });
 
+test('.start() - return .onIdle()', async t => {
+	const queue = new PQueue({concurrency: 2, autoStart: false});
+
+	queue.add(async () => delay(100));
+	queue.add(async () => delay(100));
+	queue.add(async () => delay(100));
+	t.is(queue.size, 3);
+	t.is(queue.pending, 0);
+	await queue.start();
+	t.is(queue.size, 0);
+	t.is(queue.pending, 0);
+});
+
 test('.start() - not paused', t => {
 	const queue = new PQueue();
 

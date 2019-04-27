@@ -130,6 +130,7 @@ Put queue execution on hold.
 #### .start()
 
 Start (or resume) executing enqueued tasks within concurrency limit. No need to call this if queue is not paused (via `options.autoStart = false` or by `.pause()` method.)
+Returns `.onIdle()`
 
 #### .onEmpty()
 
