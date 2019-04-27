@@ -87,7 +87,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 		this._queueClass = options.queueClass!;
 		this._concurrency = options.concurrency;
 		this._timeout = options.timeout;
-		this._throwOnTimeout = options.throwOnTimeout !== false;
+		this._throwOnTimeout = options.throwOnTimeout === true;
 		this._paused = options.autoStart === false;
 	}
 
