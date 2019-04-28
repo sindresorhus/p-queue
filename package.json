@@ -40,7 +40,8 @@
 		"bluebird"
 	],
 	"dependencies": {
-		"eventemitter3": "^3.1.0"
+		"eventemitter3": "^3.1.0",
+		"p-timeout": "^3.1.0"
 	},
 	"devDependencies": {
 		"@sindresorhus/tsconfig": "^0.3.0",
