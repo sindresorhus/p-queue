@@ -40,7 +40,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 	private _pendingCount = 0;
 
-	private readonly _concurrency: number;
+	private _concurrency: number;
 
 	private _paused: boolean;
 
@@ -97,6 +97,20 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 	get doesConcurrentAllowAnother(): boolean {
 		return this._pendingCount < this._concurrency;
+	}
+
+	get concurrency(): number {
+		return this._concurrency;
+	}
+
+	set concurrency(newConcurrency: number) {
+		if (!(typeof newConcurrency === 'number' && newConcurrency >= 1)) {
+			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${newConcurrency}\` (${typeof newConcurrency})`);
+		}
+
+		this._concurrency = newConcurrency;
+
+		while (this.tryToStartAnother()) {} // eslint-disable-line no-empty
 	}
 
 	next(): void {
