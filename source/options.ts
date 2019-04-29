@@ -62,6 +62,13 @@ export interface Options<QueueType extends Queue<QueueOptions>, QueueOptions ext
 	@default true
 	*/
 	throwOnTimeout?: boolean;
+
+	/**
+	Whether to pause or not to pause on task rejection.
+
+	@default false
+	*/
+	pauseOnError?: boolean;
 }
 
 export interface DefaultAddOptions {

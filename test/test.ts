@@ -733,3 +733,16 @@ test('should emit active event per item', async t => {
 
 	t.is(eventCount, items.length);
 });
+
+test('`pauseOnError` option', async t => {
+	const queue = new PQueue({
+		concurrency: 1,
+		pauseOnError: true
+	});
+
+	await t.throwsAsync(queue.add(() => {
+		throw new Error('You shall not pass.');
+	}));
+
+	t.true(queue.isPaused);
+});

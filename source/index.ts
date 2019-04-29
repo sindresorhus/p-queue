@@ -48,9 +48,11 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 	private _resolveIdle: ResolveFunction = empty;
 
-	private _timeout?: number
+	private _timeout?: number;
 
-	private readonly _throwOnTimeout: boolean
+	private readonly _throwOnTimeout: boolean;
+
+	private readonly _pauseOnError: boolean;
 
 	constructor(options?: Options<QueueType, EnqueueOptionsType>) {
 		super();
@@ -63,6 +65,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 			concurrency: Infinity,
 			autoStart: true,
 			queueClass: PriorityQueue,
+			pauseOnError: false,
 			...options
 		} as Options<QueueType, EnqueueOptionsType>;
 
@@ -89,6 +92,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 		this._timeout = options.timeout;
 		this._throwOnTimeout = options.throwOnTimeout === true;
 		this._paused = options.autoStart === false;
+		this._pauseOnError = options.pauseOnError === true;
 	}
 
 	get doesIntervalAllowAnother(): boolean {
@@ -210,6 +214,14 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	*/
 	async add<TaskResultType>(fn: Task<TaskResultType>, options?: EnqueueOptionsType): Promise<TaskResultType> {
 		return new Promise<TaskResultType>((resolve, reject) => {
+			const abort = (error: Error): void => {
+				if (this._pauseOnError) {
+					this.pause();
+				}
+
+				reject(error);
+			};
+
 			const run = async (): Promise<void> => {
 				this._pendingCount++;
 				this._intervalCount++;
@@ -220,7 +232,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 						this._timeout,
 						() => {
 							if (this._throwOnTimeout) {
-								reject(timeoutError);
+								abort(timeoutError);
 							}
 
 							return undefined;
@@ -228,7 +240,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 					);
 					resolve(await operation);
 				} catch (error) {
-					reject(error);
+					abort(error);
 				}
 
 				this.next();
