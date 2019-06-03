@@ -58,6 +58,19 @@ Minimum: `1`
 
 Concurrency limit.
 
+##### timeout
+
+Type: `number`
+
+Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
+
+##### throwOnTimeout
+
+Type: `boolean`<br>
+Default: `true`
+
+Whether or not a timeout is considered an exception.
+
 ##### autoStart
 
 Type: `boolean`<br>
@@ -155,6 +168,8 @@ Size of the queue.
 #### .pending
 
 Number of pending promises.
+
+#### [.timeout](#timeout)
 
 #### .isPaused
 
