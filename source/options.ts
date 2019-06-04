@@ -64,13 +64,11 @@ export interface Options<QueueType extends Queue<QueueOptions>, QueueOptions ext
 	throwOnTimeout?: boolean;
 }
 
-export interface DefaultAddOptions {
+export interface DefaultAddOptions extends QueueAddOptions {
 	/**
 	Priority of operation. Operations with greater priority will be scheduled first.
 
 	@default 0
 	*/
 	readonly priority?: number;
-
-	readonly [key: string]: unknown;
 }
