@@ -71,4 +71,6 @@ export interface DefaultAddOptions {
 	@default 0
 	*/
 	readonly priority?: number;
+
+	readonly [key: string]: unknown;
 }
