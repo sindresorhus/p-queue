@@ -17,7 +17,7 @@ $ npm install p-queue
 Here we run only one promise at the time. For example, set `concurrency` to 4 to run four promises at the same time.
 
 ```js
-const PQueue = require('p-queue');
+const {default: PQueue} = require('p-queue');
 const got = require('got');
 
 const queue = new PQueue({concurrency: 1});
@@ -42,13 +42,13 @@ const queue = new PQueue({concurrency: 1});
 
 ## API
 
-### PQueue([options])
+### PQueue(options?)
 
 Returns a new `queue` instance, which is an [`EventEmitter3`](https://github.com/primus/eventemitter3) subclass.
 
 #### options
 
-Type: `Object`
+Type: `object`
 
 ##### concurrency
 
@@ -183,7 +183,7 @@ Emitted as each item is processed in the queue for the purpose of tracking progr
 
 ```js
 const delay = require('delay');
-const PQueue = require('p-queue');
+const {default: PQueue} = require('p-queue');
 
 const queue = new PQueue({concurrency: 2});
 
@@ -206,7 +206,7 @@ A more advanced example to help you understand the flow.
 
 ```js
 const delay = require('delay');
-const PQueue = require('p-queue');
+const {default: PQueue} = require('p-queue');
 
 const queue = new PQueue({concurrency: 1});
 
@@ -302,8 +302,3 @@ class QueueClass {
 - [p-debounce](https://github.com/sindresorhus/p-debounce) - Debounce promise-returning & async functions
 - [p-all](https://github.com/sindresorhus/p-all) - Run promise-returning & async functions concurrently with optional limited concurrency
 - [More…](https://github.com/sindresorhus/promise-fun)
-
-
-## License
-
-MIT
