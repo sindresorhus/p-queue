@@ -4,7 +4,7 @@ import PQueue from './source';
 const suite = new Benchmark.Suite();
 
 // Benchmark typings aren't up to date, let's help out manually
-type Resolvable = Deferred & {resolve(): void}
+type Resolvable = Deferred & {resolve(): void};
 
 suite
 	.add('baseline', {

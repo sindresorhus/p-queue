@@ -428,14 +428,16 @@ test('.add() - handle task promise failure', async t => {
 
 test('.addAll() sync/async mixed tasks', async t => {
 	const queue = new PQueue();
-	// eslint-disable-next-line @typescript-eslint/array-type
+
 	const functions: Array<() => (string | Promise<void> | Promise<unknown>)> = [
 		() => 'sync 1',
 		() => delay(2000),
 		() => 'sync 2',
 		async () => fixture
 	];
+
 	const promise = queue.addAll(functions);
+
 	t.is(queue.size, 0);
 	t.is(queue.pending, 4);
 	t.deepEqual(await promise, ['sync 1', undefined, 'sync 2', fixture]);

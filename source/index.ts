@@ -48,9 +48,9 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 	private _resolveIdle: ResolveFunction = empty;
 
-	private _timeout?: number
+	private _timeout?: number;
 
-	private readonly _throwOnTimeout: boolean
+	private readonly _throwOnTimeout: boolean;
 
 	constructor(options?: Options<QueueType, EnqueueOptionsType>) {
 		super();
@@ -245,7 +245,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	@returns A promise that resolves when all functions are resolved.
 	*/
 	async addAll<TaskResultsType>(
-		functions: readonly Task<TaskResultsType>[],
+		functions: ReadonlyArray<Task<TaskResultsType>>,
 		options?: EnqueueOptionsType
 	): Promise<TaskResultsType[]> {
 		return Promise.all(functions.map(function_ => this.add(function_, options)));
