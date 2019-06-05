@@ -4,6 +4,7 @@
 	"description": "Promise queue with concurrency control",
 	"license": "MIT",
 	"repository": "sindresorhus/p-queue",
+	"main": "dist/index.js",
 	"engines": {
 		"node": ">=8"
 	},
@@ -16,7 +17,6 @@
 	"files": [
 		"dist"
 	],
-	"main": "dist/index.js",
 	"types": "dist",
 	"keywords": [
 		"promise",
