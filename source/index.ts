@@ -351,4 +351,4 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	}
 }
 
-export { Queue, QueueAddOptions, DefaultAddOptions, Options };
+export {Queue, QueueAddOptions, DefaultAddOptions, Options};
