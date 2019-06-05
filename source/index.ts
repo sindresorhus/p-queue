@@ -1,8 +1,9 @@
-import EventEmitter from 'eventemitter3';
 import pTimeout from 'p-timeout';
 import {Queue} from './queue';
 import PriorityQueue from './priority-queue';
 import {QueueAddOptions, DefaultAddOptions, Options} from './options';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import EventEmitter = require('eventemitter3');
 
 type ResolveFunction<T = void> = (value?: T | PromiseLike<T>) => void;
 
