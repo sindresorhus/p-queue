@@ -13,6 +13,7 @@
 		"bench": "ts-node bench.ts",
 		"prepublishOnly": "npm run build"
 	},
+	"main": "dist/index.js",
 	"files": [
 		"dist"
 	],
