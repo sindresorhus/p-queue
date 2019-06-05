@@ -16,6 +16,7 @@
 	"files": [
 		"dist"
 	],
+	"main": "dist/index.js",
 	"types": "dist",
 	"keywords": [
 		"promise",
