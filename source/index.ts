@@ -351,3 +351,5 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 		return this._timeout;
 	}
 }
+
+export {Queue, QueueAddOptions, DefaultAddOptions, Options};
