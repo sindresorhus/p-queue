@@ -1,6 +1,6 @@
 {
 	"name": "p-queue",
-	"version": "6.0.1",
+	"version": "6.0.2",
 	"description": "Promise queue with concurrency control",
 	"license": "MIT",
 	"repository": "sindresorhus/p-queue",
