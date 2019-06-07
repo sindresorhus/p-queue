@@ -1,11 +1,11 @@
 /* eslint-disable no-new */
 /* eslint-disable ava/no-ignored-test-files */
-import EventEmitter from 'eventemitter3';
+import EventEmitter = require('eventemitter3');
 import test from 'ava';
 import delay from 'delay';
-import inRange from 'in-range';
+import inRange = require('in-range');
 import timeSpan from 'time-span';
-import randomInt from 'random-int';
+import randomInt = require('random-int');
 import PQueue from '../source';
 
 const fixture = Symbol('fixture');
