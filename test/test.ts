@@ -735,3 +735,29 @@ test('should emit active event per item', async t => {
 
 	t.is(eventCount, items.length);
 });
+
+test('should verify timeout overrides passed to add', async t => {
+	const queue = new PQueue({timeout: 200, throwOnTimeout: true});
+
+	t.throwsAsync(queue.add(async () => {
+		await delay(400);
+	}));
+
+	t.notThrowsAsync(queue.add(async () => {
+		await delay(400);
+	}, {throwOnTimeout: false}));
+
+	t.notThrowsAsync(queue.add(async () => {
+		await delay(400);
+	}, {timeout: 600}));
+
+	t.notThrowsAsync(queue.add(async () => {
+		await delay(100);
+	}));
+
+	t.throwsAsync(queue.add(async () => {
+		await delay(100);
+	}, {timeout: 50}));
+
+	await queue.onIdle();
+});

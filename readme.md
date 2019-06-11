@@ -67,7 +67,7 @@ Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses
 ##### throwOnTimeout
 
 Type: `boolean`<br>
-Default: `true`
+Default: `false`
 
 Whether or not a timeout is considered an exception.
 

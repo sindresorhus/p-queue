@@ -59,7 +59,7 @@ export interface Options<QueueType extends Queue<QueueOptions>, QueueOptions ext
 	/**
 	Whether or not a timeout is considered an exception.
 
-	@default true
+	@default false
 	*/
 	throwOnTimeout?: boolean;
 }
