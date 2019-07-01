@@ -9,7 +9,7 @@ export interface PriorityQueueOptions extends QueueAddOptions {
 export default class PriorityQueue implements Queue<PriorityQueueOptions> {
 	private readonly _queue: Array<PriorityQueueOptions & {run: RunFunction}> = [];
 
-	enqueue(run: RunFunction, options?: PriorityQueueOptions): void {
+	enqueue(run: RunFunction, options?: Partial<PriorityQueueOptions>): void {
 		options = {
 			priority: 0,
 			...options
