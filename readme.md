@@ -144,6 +144,8 @@ Put queue execution on hold.
 
 Start (or resume) executing enqueued tasks within concurrency limit. No need to call this if queue is not paused (via `options.autoStart = false` or by `.pause()` method.)
 
+Returns `this` (the instance).
+
 #### .onEmpty()
 
 Returns a promise that settles when the queue becomes empty.
