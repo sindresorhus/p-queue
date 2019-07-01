@@ -172,6 +172,8 @@ Number of pending promises.
 
 #### [.timeout](#timeout)
 
+#### [.concurrency](#concurrency)
+
 #### .isPaused
 
 Whether the queue is currently paused.

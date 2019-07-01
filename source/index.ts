@@ -40,7 +40,8 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 	private _pendingCount = 0;
 
-	private readonly _concurrency: number;
+	// The `!` is needed because of https://github.com/microsoft/TypeScript/issues/32194
+	private _concurrency!: number;
 
 	private _paused: boolean;
 
@@ -66,10 +67,6 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 			...options
 		} as Options<QueueType, EnqueueOptionsType>;
 
-		if (!(typeof options.concurrency === 'number' && options.concurrency >= 1)) {
-			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${options.concurrency}\` (${typeof options.concurrency})`);
-		}
-
 		if (!(typeof options.intervalCap === 'number' && options.intervalCap >= 1)) {
 			throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${options.intervalCap}\` (${typeof options.intervalCap})`);
 		}
@@ -85,7 +82,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 		this._queue = new options.queueClass!();
 		this._queueClass = options.queueClass!;
-		this._concurrency = options.concurrency;
+		this.concurrency = options.concurrency!;
 		this._timeout = options.timeout;
 		this._throwOnTimeout = options.throwOnTimeout === true;
 		this._paused = options.autoStart === false;
@@ -97,6 +94,20 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 	get doesConcurrentAllowAnother(): boolean {
 		return this._pendingCount < this._concurrency;
+	}
+
+	get concurrency(): number {
+		return this._concurrency;
+	}
+
+	set concurrency(newConcurrency: number) {
+		if (!(typeof newConcurrency === 'number' && newConcurrency >= 1)) {
+			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${newConcurrency}\` (${typeof newConcurrency})`);
+		}
+
+		this._concurrency = newConcurrency;
+
+		this.processQueue();
 	}
 
 	next(): void {
@@ -201,8 +212,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 		}
 
 		this._intervalCount = this._carryoverConcurrencyCount ? this._pendingCount : 0;
-		// eslint-disable-next-line no-empty
-		while (this.tryToStartAnother()) {}
+		this.processQueue();
 	}
 
 	/**
@@ -260,9 +270,8 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 		}
 
 		this._paused = false;
-		// eslint-disable-next-line no-empty
-		while (this.tryToStartAnother()) {}
 
+		this.processQueue();
 		return this;
 	}
 
@@ -271,6 +280,14 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	*/
 	pause(): void {
 		this._paused = true;
+	}
+
+	/**
+	Executes all queued functions until it reaches the limit.
+	*/
+	processQueue(): void {
+		// eslint-disable-next-line no-empty
+		while (this.tryToStartAnother()) {}
 	}
 
 	/**

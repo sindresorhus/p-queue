@@ -68,6 +68,29 @@ test('.add() - concurrency: 5', async t => {
 	await Promise.all(input);
 });
 
+test('.add() - update concurrency', async t => {
+	let concurrency = 5;
+	const queue = new PQueue({concurrency});
+	let running = 0;
+
+	const input = new Array(100).fill(0).map((_value, index) => queue.add(async () => {
+		running++;
+
+		t.true(running <= concurrency);
+		t.true(queue.pending <= concurrency);
+
+		await delay(randomInt(30, 200));
+		running--;
+
+		if (index % 30 === 0) {
+			queue.concurrency = --concurrency;
+			t.is(queue.concurrency, concurrency);
+		}
+	}));
+
+	await Promise.all(input);
+});
+
 test('.add() - priority', async t => {
 	const result: number[] = [];
 	const queue = new PQueue({concurrency: 1});
@@ -247,6 +270,35 @@ test('enforce number in options.concurrency', t => {
 
 	t.notThrows(() => {
 		new PQueue({concurrency: Infinity});
+	});
+});
+
+test('enforce number in queue.concurrency', t => {
+	t.throws(
+		() => {
+			(new PQueue()).concurrency = 0;
+		},
+		TypeError
+	);
+
+	t.throws(
+		() => {
+			// @ts-ignore
+			(new PQueue()).concurrency = undefined;
+		},
+		TypeError
+	);
+
+	t.notThrows(() => {
+		(new PQueue()).concurrency = 1;
+	});
+
+	t.notThrows(() => {
+		(new PQueue()).concurrency = 10;
+	});
+
+	t.notThrows(() => {
+		(new PQueue()).concurrency = Infinity;
 	});
 });
 
