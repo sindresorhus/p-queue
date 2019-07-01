@@ -271,7 +271,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 		this._paused = false;
 
-		this.processQueue();		
+		this.processQueue();
 		return this;
 	}
 
