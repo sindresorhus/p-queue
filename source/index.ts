@@ -262,6 +262,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 		this._paused = false;
 		// eslint-disable-next-line no-empty
 		while (this.tryToStartAnother()) {}
+
 		return this;
 	}
 
