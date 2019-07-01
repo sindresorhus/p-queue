@@ -43,7 +43,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	// The `!` is needed because of https://github.com/microsoft/TypeScript/issues/32194
 	private _concurrency!: number;
 
-	private _paused: boolean;
+	private _isPaused: boolean;
 
 	private _resolveEmpty: ResolveFunction = empty;
 
@@ -79,43 +79,28 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 		this._isIntervalIgnored = options.intervalCap === Infinity || options.interval === 0;
 		this._intervalCap = options.intervalCap;
 		this._interval = options.interval;
-
 		this._queue = new options.queueClass!();
 		this._queueClass = options.queueClass!;
 		this.concurrency = options.concurrency!;
 		this._timeout = options.timeout;
 		this._throwOnTimeout = options.throwOnTimeout === true;
-		this._paused = options.autoStart === false;
+		this._isPaused = options.autoStart === false;
 	}
 
-	get doesIntervalAllowAnother(): boolean {
+	private get _doesIntervalAllowAnother(): boolean {
 		return this._isIntervalIgnored || this._intervalCount < this._intervalCap;
 	}
 
-	get doesConcurrentAllowAnother(): boolean {
+	private get _doesConcurrentAllowAnother(): boolean {
 		return this._pendingCount < this._concurrency;
 	}
 
-	get concurrency(): number {
-		return this._concurrency;
-	}
-
-	set concurrency(newConcurrency: number) {
-		if (!(typeof newConcurrency === 'number' && newConcurrency >= 1)) {
-			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${newConcurrency}\` (${typeof newConcurrency})`);
-		}
-
-		this._concurrency = newConcurrency;
-
-		this.processQueue();
-	}
-
-	next(): void {
+	private _next(): void {
 		this._pendingCount--;
-		this.tryToStartAnother();
+		this._tryToStartAnother();
 	}
 
-	resolvePromises(): void {
+	private _resolvePromises(): void {
 		this._resolveEmpty();
 		this._resolveEmpty = empty;
 
@@ -125,13 +110,13 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 		}
 	}
 
-	onResumeInterval(): void {
-		this.onInterval();
-		this.initializeIntervalIfNeeded();
+	private _onResumeInterval(): void {
+		this._onInterval();
+		this._initializeIntervalIfNeeded();
 		this._timeoutId = undefined;
 	}
 
-	intervalPaused(): boolean {
+	private _isIntervalPaused(): boolean {
 		const now = Date.now();
 
 		if (this._intervalId === undefined) {
@@ -145,7 +130,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 				if (this._timeoutId === undefined) {
 					this._timeoutId = setTimeout(
 						() => {
-							this.onResumeInterval();
+							this._onResumeInterval();
 						},
 						delay
 					);
@@ -158,7 +143,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 		return false;
 	}
 
-	tryToStartAnother(): boolean {
+	private _tryToStartAnother(): boolean {
 		if (this._queue.size === 0) {
 			// We can clear the interval ("pause")
 			// Because we can redo it later ("resume")
@@ -168,19 +153,19 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 			this._intervalId = undefined;
 
-			this.resolvePromises();
+			this._resolvePromises();
 
 			return false;
 		}
 
-		if (!this._paused) {
-			const canInitializeInterval = !this.intervalPaused();
-			if (this.doesIntervalAllowAnother && this.doesConcurrentAllowAnother) {
+		if (!this._isPaused) {
+			const canInitializeInterval = !this._isIntervalPaused();
+			if (this._doesIntervalAllowAnother && this._doesConcurrentAllowAnother) {
 				this.emit('active');
 
 				this._queue.dequeue()!();
 				if (canInitializeInterval) {
-					this.initializeIntervalIfNeeded();
+					this._initializeIntervalIfNeeded();
 				}
 
 				return true;
@@ -190,14 +175,14 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 		return false;
 	}
 
-	initializeIntervalIfNeeded(): void {
+	private _initializeIntervalIfNeeded(): void {
 		if (this._isIntervalIgnored || this._intervalId !== undefined) {
 			return;
 		}
 
 		this._intervalId = setInterval(
 			() => {
-				this.onInterval();
+				this._onInterval();
 			},
 			this._interval
 		);
@@ -205,14 +190,36 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 		this._intervalEnd = Date.now() + this._interval;
 	}
 
-	onInterval(): void {
+	private _onInterval(): void {
 		if (this._intervalCount === 0 && this._pendingCount === 0 && this._intervalId) {
 			clearInterval(this._intervalId);
 			this._intervalId = undefined;
 		}
 
 		this._intervalCount = this._carryoverConcurrencyCount ? this._pendingCount : 0;
-		this.processQueue();
+		this._processQueue();
+	}
+
+	/**
+	Executes all queued functions until it reaches the limit.
+	*/
+	private _processQueue(): void {
+		// eslint-disable-next-line no-empty
+		while (this._tryToStartAnother()) {}
+	}
+
+	get concurrency(): number {
+		return this._concurrency;
+	}
+
+	set concurrency(newConcurrency: number) {
+		if (!(typeof newConcurrency === 'number' && newConcurrency >= 1)) {
+			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${newConcurrency}\` (${typeof newConcurrency})`);
+		}
+
+		this._concurrency = newConcurrency;
+
+		this._processQueue();
 	}
 
 	/**
@@ -241,11 +248,11 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 					reject(error);
 				}
 
-				this.next();
+				this._next();
 			};
 
 			this._queue.enqueue(run, options);
-			this.tryToStartAnother();
+			this._tryToStartAnother();
 		});
 	}
 
@@ -258,20 +265,20 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 		functions: ReadonlyArray<Task<TaskResultsType>>,
 		options?: EnqueueOptionsType
 	): Promise<TaskResultsType[]> {
-		return Promise.all(functions.map(function_ => this.add(function_, options)));
+		return Promise.all(functions.map(async function_ => this.add(function_, options)));
 	}
 
 	/**
 	Start (or resume) executing enqueued tasks within concurrency limit. No need to call this if queue is not paused (via `options.autoStart = false` or by `.pause()` method.)
 	*/
 	start(): this {
-		if (!this._paused) {
+		if (!this._isPaused) {
 			return this;
 		}
 
-		this._paused = false;
+		this._isPaused = false;
 
-		this.processQueue();
+		this._processQueue();
 		return this;
 	}
 
@@ -279,15 +286,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	Put queue execution on hold.
 	*/
 	pause(): void {
-		this._paused = true;
-	}
-
-	/**
-	Executes all queued functions until it reaches the limit.
-	*/
-	processQueue(): void {
-		// eslint-disable-next-line no-empty
-		while (this.tryToStartAnother()) {}
+		this._isPaused = true;
 	}
 
 	/**
@@ -355,7 +354,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	Whether the queue is currently paused.
 	*/
 	get isPaused(): boolean {
-		return this._paused;
+		return this._isPaused;
 	}
 
 	/**

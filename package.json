@@ -41,26 +41,26 @@
 		"bluebird"
 	],
 	"dependencies": {
-		"eventemitter3": "^3.1.0",
+		"eventemitter3": "^4.0.0",
 		"p-timeout": "^3.1.0"
 	},
 	"devDependencies": {
 		"@sindresorhus/tsconfig": "^0.4.0",
 		"@types/benchmark": "^1.0.31",
-		"@types/node": "^12.0.7",
-		"@typescript-eslint/eslint-plugin": "^1.9.0",
-		"@typescript-eslint/parser": "^1.10.2",
+		"@types/node": "^12.0.10",
+		"@typescript-eslint/eslint-plugin": "^1.11.0",
+		"@typescript-eslint/parser": "^1.11.0",
 		"ava": "^2.0.0",
 		"benchmark": "^2.1.4",
 		"codecov": "^3.3.0",
 		"del-cli": "^2.0.0",
 		"delay": "^4.2.0",
-		"eslint-config-xo-typescript": "^0.14.0",
+		"eslint-config-xo-typescript": "^0.15.0",
 		"in-range": "^2.0.0",
 		"nyc": "^14.0.0",
 		"random-int": "^2.0.0",
 		"time-span": "^3.1.0",
-		"ts-node": "^8.0.3",
+		"ts-node": "^8.3.0",
 		"typescript": "~3.5.1",
 		"xo": "^0.24.0"
 	},
@@ -81,7 +81,8 @@
 		],
 		"rules": {
 			"import/first": "off",
-			"import/newline-after-import": "off"
+			"import/newline-after-import": "off",
+			"@typescript-eslint/member-ordering": "off"
 		}
 	},
 	"nyc": {
