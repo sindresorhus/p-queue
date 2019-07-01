@@ -40,8 +40,8 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 	private _pendingCount = 0;
 
-	// @ts-ignore TS lies it isn't set up. How it's done: constructor -> .concurrency setter -> ._concurrency
-	private _concurrency: number;
+	// The `!` is needed because of https://github.com/microsoft/TypeScript/issues/32194
+	private _concurrency!: number;
 
 	private _paused: boolean;
 
