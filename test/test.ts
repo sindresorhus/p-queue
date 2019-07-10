@@ -43,7 +43,7 @@ test('.add() - concurrency: 1', async t => {
 	const end = timeSpan();
 	const queue = new PQueue({concurrency: 1});
 	// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-	const mapper = ([value, ms]: readonly number[]) => queue.add(async () => {
+	const mapper = async ([value, ms]: readonly number[]) => queue.add(async () => {
 		await delay(ms);
 		return value;
 	});
@@ -57,12 +57,35 @@ test('.add() - concurrency: 5', async t => {
 	const queue = new PQueue({concurrency});
 	let running = 0;
 
-	const input = new Array(100).fill(0).map(() => queue.add(async () => {
+	const input = new Array(100).fill(0).map(async () => queue.add(async () => {
 		running++;
 		t.true(running <= concurrency);
 		t.true(queue.pending <= concurrency);
 		await delay(randomInt(30, 200));
 		running--;
+	}));
+
+	await Promise.all(input);
+});
+
+test('.add() - update concurrency', async t => {
+	let concurrency = 5;
+	const queue = new PQueue({concurrency});
+	let running = 0;
+
+	const input = new Array(100).fill(0).map(async (_value, index) => queue.add(async () => {
+		running++;
+
+		t.true(running <= concurrency);
+		t.true(queue.pending <= concurrency);
+
+		await delay(randomInt(30, 200));
+		running--;
+
+		if (index % 30 === 0) {
+			queue.concurrency = --concurrency;
+			t.is(queue.concurrency, concurrency);
+		}
 	}));
 
 	await Promise.all(input);
@@ -200,12 +223,12 @@ test('.onIdle() - no pending', async t => {
 
 test('.clear()', t => {
 	const queue = new PQueue({concurrency: 2});
-	queue.add(() => delay(20000));
-	queue.add(() => delay(20000));
-	queue.add(() => delay(20000));
-	queue.add(() => delay(20000));
-	queue.add(() => delay(20000));
-	queue.add(() => delay(20000));
+	queue.add(async () => delay(20000));
+	queue.add(async () => delay(20000));
+	queue.add(async () => delay(20000));
+	queue.add(async () => delay(20000));
+	queue.add(async () => delay(20000));
+	queue.add(async () => delay(20000));
 	t.is(queue.size, 4);
 	t.is(queue.pending, 2);
 	queue.clear();
@@ -247,6 +270,35 @@ test('enforce number in options.concurrency', t => {
 
 	t.notThrows(() => {
 		new PQueue({concurrency: Infinity});
+	});
+});
+
+test('enforce number in queue.concurrency', t => {
+	t.throws(
+		() => {
+			(new PQueue()).concurrency = 0;
+		},
+		TypeError
+	);
+
+	t.throws(
+		() => {
+			// @ts-ignore
+			(new PQueue()).concurrency = undefined;
+		},
+		TypeError
+	);
+
+	t.notThrows(() => {
+		(new PQueue()).concurrency = 1;
+	});
+
+	t.notThrows(() => {
+		(new PQueue()).concurrency = 10;
+	});
+
+	t.notThrows(() => {
+		(new PQueue()).concurrency = Infinity;
 	});
 });
 
@@ -313,10 +365,10 @@ test('enforce finite in options.interval', t => {
 test('autoStart: false', t => {
 	const queue = new PQueue({concurrency: 2, autoStart: false});
 
-	queue.add(() => delay(20000));
-	queue.add(() => delay(20000));
-	queue.add(() => delay(20000));
-	queue.add(() => delay(20000));
+	queue.add(async () => delay(20000));
+	queue.add(async () => delay(20000));
+	queue.add(async () => delay(20000));
+	queue.add(async () => delay(20000));
 	t.is(queue.size, 4);
 	t.is(queue.pending, 0);
 	t.is(queue.isPaused, true);
@@ -328,6 +380,19 @@ test('autoStart: false', t => {
 
 	queue.clear();
 	t.is(queue.size, 0);
+});
+
+test('.start() - return this', async t => {
+	const queue = new PQueue({concurrency: 2, autoStart: false});
+
+	queue.add(async () => delay(100));
+	queue.add(async () => delay(100));
+	queue.add(async () => delay(100));
+	t.is(queue.size, 3);
+	t.is(queue.pending, 0);
+	await queue.start().onIdle();
+	t.is(queue.size, 0);
+	t.is(queue.pending, 0);
 });
 
 test('.start() - not paused', t => {
@@ -344,11 +409,11 @@ test('.pause()', t => {
 	const queue = new PQueue({concurrency: 2});
 
 	queue.pause();
-	queue.add(() => delay(20000));
-	queue.add(() => delay(20000));
-	queue.add(() => delay(20000));
-	queue.add(() => delay(20000));
-	queue.add(() => delay(20000));
+	queue.add(async () => delay(20000));
+	queue.add(async () => delay(20000));
+	queue.add(async () => delay(20000));
+	queue.add(async () => delay(20000));
+	queue.add(async () => delay(20000));
 	t.is(queue.size, 5);
 	t.is(queue.pending, 0);
 	t.is(queue.isPaused, true);
@@ -358,7 +423,7 @@ test('.pause()', t => {
 	t.is(queue.pending, 2);
 	t.is(queue.isPaused, false);
 
-	queue.add(() => delay(20000));
+	queue.add(async () => delay(20000));
 	queue.pause();
 	t.is(queue.size, 4);
 	t.is(queue.pending, 2);
@@ -376,7 +441,7 @@ test('.pause()', t => {
 test('.add() sync/async mixed tasks', async t => {
 	const queue = new PQueue({concurrency: 1});
 	queue.add(() => 'sync 1');
-	queue.add(() => delay(1000));
+	queue.add(async () => delay(1000));
 	queue.add(() => 'sync 2');
 	queue.add(() => fixture);
 	t.is(queue.size, 3);
@@ -431,7 +496,7 @@ test('.addAll() sync/async mixed tasks', async t => {
 
 	const functions: Array<() => (string | Promise<void> | Promise<unknown>)> = [
 		() => 'sync 1',
-		() => delay(2000),
+		async () => delay(2000),
 		() => 'sync 2',
 		async () => fixture
 	];
@@ -448,7 +513,7 @@ test('should resolve empty when size is zero', async t => {
 
 	// It should take 1 seconds to resolve all tasks
 	for (let index = 0; index < 100; index++) {
-		queue.add(() => delay(10));
+		queue.add(async () => delay(10));
 	}
 
 	(async () => {
@@ -478,10 +543,10 @@ test('.add() - throttled', async t => {
 		interval: 500,
 		autoStart: false
 	});
-	queue.add(() => result.push(1));
+	queue.add(async () => result.push(1));
 	queue.start();
 	await delay(250);
-	queue.add(() => result.push(2));
+	queue.add(async () => result.push(2));
 	t.deepEqual(result, [1]);
 	await delay(300);
 	t.deepEqual(result, [1, 2]);
@@ -498,7 +563,7 @@ test('.add() - throttled, carryoverConcurrencyCount false', async t => {
 	});
 
 	const values = [0, 1];
-	values.forEach(value => queue.add(async () => {
+	values.forEach(async value => queue.add(async () => {
 		await delay(600);
 		result.push(value);
 	}));
@@ -532,7 +597,7 @@ test('.add() - throttled, carryoverConcurrencyCount true', async t => {
 	});
 
 	const values = [0, 1];
-	values.forEach(value => queue.add(async () => {
+	values.forEach(async value => queue.add(async () => {
 		await delay(600);
 		result.push(value);
 	}));
@@ -579,7 +644,7 @@ test('.add() - throttled 10, concurrency 5', async t => {
 	const firstValue = [...new Array(5).keys()];
 	const secondValue = [...new Array(10).keys()];
 	const thirdValue = [...new Array(13).keys()];
-	thirdValue.forEach(value => queue.add(async () => {
+	thirdValue.forEach(async value => queue.add(async () => {
 		await delay(300);
 		result.push(value);
 	}));
@@ -622,7 +687,7 @@ test('.add() - throttled finish and resume', async t => {
 	const values = [0, 1];
 	const firstValue = [0, 1];
 	const secondValue = [0, 1, 2];
-	values.forEach(value => queue.add(async () => {
+	values.forEach(async value => queue.add(async () => {
 		await delay(100);
 		result.push(value);
 	}));
@@ -661,7 +726,7 @@ test('pause should work when throttled', async t => {
 	const values = 	[0, 1, 2, 3];
 	const firstValue = 	[0, 1];
 	const secondValue = [0, 1, 2, 3];
-	values.forEach(value => queue.add(async () => {
+	values.forEach(async value => queue.add(async () => {
 		await delay(100);
 		result.push(value);
 	}));
