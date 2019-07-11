@@ -7,8 +7,8 @@ import {QueueAddOptions, DefaultAddOptions, Options} from './options';
 type ResolveFunction<T = void> = (value?: T | PromiseLike<T>) => void;
 
 type Task<TaskResultType> =
-		| (() => PromiseLike<TaskResultType>)
-		| (() => TaskResultType);
+	| (() => PromiseLike<TaskResultType>)
+	| (() => TaskResultType);
 
 const empty = (): void => {};
 
@@ -232,7 +232,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 				this._intervalCount++;
 
 				try {
-					const operation = (this._timeout === undefined && (options.timeout === undefined)) ? fn() : pTimeout(
+					const operation = (this._timeout === undefined && options.timeout === undefined) ? fn() : pTimeout(
 						Promise.resolve(fn()),
 						(options.timeout === undefined ? this._timeout : options.timeout) as number,
 						() => {
