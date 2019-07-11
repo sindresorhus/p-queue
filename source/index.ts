@@ -225,18 +225,18 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	/**
 	Adds a sync or async task to the queue. Always returns a promise.
 	*/
-	async add<TaskResultType>(fn: Task<TaskResultType>, options?: EnqueueOptionsType): Promise<TaskResultType> {
+	async add<TaskResultType>(fn: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType> {
 		return new Promise<TaskResultType>((resolve, reject) => {
 			const run = async (): Promise<void> => {
 				this._pendingCount++;
 				this._intervalCount++;
 
 				try {
-					const operation = this._timeout === undefined ? fn() : pTimeout(
+					const operation = (this._timeout === undefined && (options.timeout === undefined)) ? fn() : pTimeout(
 						Promise.resolve(fn()),
-						this._timeout,
+						(options.timeout === undefined ? this._timeout : options.timeout) as number,
 						() => {
-							if (this._throwOnTimeout) {
+							if (options.throwOnTimeout === undefined ? this._throwOnTimeout : options.throwOnTimout) {
 								reject(timeoutError);
 							}
 
