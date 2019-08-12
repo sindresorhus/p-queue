@@ -236,7 +236,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 						Promise.resolve(fn()),
 						(options.timeout === undefined ? this._timeout : options.timeout) as number,
 						() => {
-							if (options.throwOnTimeout === undefined ? this._throwOnTimeout : options.throwOnTimout) {
+							if (options.throwOnTimeout === undefined ? this._throwOnTimeout : options.throwOnTimeout) {
 								reject(timeoutError);
 							}
 
