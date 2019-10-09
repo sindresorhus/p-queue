@@ -15,7 +15,8 @@
 		"prepublishOnly": "npm run build"
 	},
 	"files": [
-		"dist"
+		"dist/*.d.ts",
+		"dist/*.js"
 	],
 	"types": "dist",
 	"keywords": [
