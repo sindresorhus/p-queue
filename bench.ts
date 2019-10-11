@@ -1,4 +1,5 @@
-import Benchmark, {Deferred, Event} from 'benchmark';
+import Benchmark = require('benchmark');
+import {Deferred, Event} from 'benchmark';
 import PQueue from './source';
 
 const suite = new Benchmark.Suite();

@@ -65,6 +65,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 			autoStart: true,
 			queueClass: PriorityQueue,
 			...options
+		// TODO: Remove this `as`.
 		} as Options<QueueType, EnqueueOptionsType>;
 
 		if (!(typeof options.intervalCap === 'number' && options.intervalCap >= 1)) {

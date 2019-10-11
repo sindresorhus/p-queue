@@ -1,5 +1,4 @@
 /* eslint-disable no-new */
-/* eslint-disable ava/no-ignored-test-files */
 import EventEmitter = require('eventemitter3');
 import test from 'ava';
 import delay from 'delay';
@@ -83,6 +82,7 @@ test('.add() - update concurrency', async t => {
 		running--;
 
 		if (index % 30 === 0) {
+			// eslint-disable-next-line require-atomic-updates
 			queue.concurrency = --concurrency;
 			t.is(queue.concurrency, concurrency);
 		}
