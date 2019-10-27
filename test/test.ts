@@ -82,7 +82,7 @@ test('.add() - update concurrency', async t => {
 		running--;
 
 		if (index % 30 === 0) {
-                        // eslint-disable-next-line require-atomic-updates	
+                      // eslint-disable-next-line require-atomic-updates	
 			queue.concurrency = --concurrency;
 			t.is(queue.concurrency, concurrency);
 		}
