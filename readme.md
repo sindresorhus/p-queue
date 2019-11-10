@@ -52,8 +52,8 @@ Type: `object`
 
 ##### concurrency
 
-Type: `number`<br>
-Default: `Infinity`<br>
+Type: `number`\
+Default: `Infinity`\
 Minimum: `1`
 
 Concurrency limit.
@@ -66,14 +66,14 @@ Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses
 
 ##### throwOnTimeout
 
-Type: `boolean`<br>
+Type: `boolean`\
 Default: `false`
 
 Whether or not a timeout is considered an exception.
 
 ##### autoStart
 
-Type: `boolean`<br>
+Type: `boolean`\
 Default: `true`
 
 Whether queue tasks within concurrency limit, are auto-executed as soon as they're added.
@@ -86,23 +86,23 @@ Class with a `enqueue` and `dequeue` method, and a `size` getter. See the [Custo
 
 ##### intervalCap
 
-Type: `number`<br>
-Default: `Infinity`<br>
+Type: `number`\
+Default: `Infinity`\
 Minimum: `1`
 
 The max number of runs in the given interval of time.
 
 ##### interval
 
-Type: `number`<br>
-Default: `0`<br>
+Type: `number`\
+Default: `0`\
 Minimum: `0`
 
 The length of time in milliseconds before the interval count resets. Must be finite.
 
 ##### carryoverConcurrencyCount
 
-Type: `boolean`<br>
+Type: `boolean`\
 Default: `false`
 
 Whether the task must finish in the given interval or will be carried over into the next interval count.
@@ -111,7 +111,7 @@ Whether the task must finish in the given interval or will be carried over into 
 
 `PQueue` instance.
 
-#### .add(fn, [options])
+#### .add(fn, options?)
 
 Adds a sync or async task to the queue. Always returns a promise.
 
@@ -123,16 +123,16 @@ Promise-returning/async function.
 
 #### options
 
-Type: `Object`
+Type: `object`
 
 ##### priority
 
-Type: `number`<br>
+Type: `number`\
 Default: `0`
 
 Priority of operation. Operations with greater priority will be scheduled first.
 
-#### .addAll(fns, [options])
+#### .addAll(fns, options?)
 
 Same as `.add()`, but accepts an array of sync or async functions and returns a promise that resolves when all functions are resolved.
 
