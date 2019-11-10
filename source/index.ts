@@ -1,5 +1,5 @@
 import EventEmitter = require('eventemitter3');
-import pTimeout from 'p-timeout';
+import {default as pTimeout, TimeoutError} from 'p-timeout';
 import {Queue} from './queue';
 import PriorityQueue from './priority-queue';
 import {QueueAddOptions, DefaultAddOptions, Options} from './options';
@@ -12,7 +12,7 @@ type Task<TaskResultType> =
 
 const empty = (): void => {};
 
-const timeoutError = new pTimeout.TimeoutError();
+const timeoutError = new TimeoutError();
 
 /**
 Promise queue with concurrency control.
