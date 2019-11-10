@@ -86,7 +86,8 @@
 			"@typescript-eslint/member-ordering": "off",
 			"@typescript-eslint/strict-boolean-expressions": "off",
 			"@typescript-eslint/require-await": "off",
-			"@typescript-eslint/no-misused-promises": "off"
+			"@typescript-eslint/no-misused-promises": "off",
+			"require-atomic-updates": "off"
 		}
 	},
 	"nyc": {
