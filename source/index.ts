@@ -345,6 +345,13 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	}
 
 	/**
+	Size of the queue filtered by options.
+	*/
+	sizeBy(options: Partial<EnqueueOptionsType>): number {
+		return this._queue.sizeBy(options);
+	}
+
+	/**
 	Number of pending promises.
 	*/
 	get pending(): number {

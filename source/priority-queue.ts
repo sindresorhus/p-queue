@@ -34,6 +34,10 @@ export default class PriorityQueue implements Queue<PriorityQueueOptions> {
 		return item && item.run;
 	}
 
+	sizeBy(options: Partial<PriorityQueueOptions>): number {
+		return this._queue.filter(element => element.priority === options.priority).length;
+	}
+
 	get size(): number {
 		return this._queue.length;
 	}
