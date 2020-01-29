@@ -82,17 +82,17 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 		this._interval = options.interval;
 		this._queue = new options.queueClass!();
 		this._queueClass = options.queueClass!;
-		this.concurrency = options.concurrency!;
+		this.concurrency(options.concurrency!);
 		this._timeout = options.timeout;
 		this._throwOnTimeout = options.throwOnTimeout === true;
 		this._isPaused = options.autoStart === false;
 	}
 
-	private get _doesIntervalAllowAnother(): boolean {
+	private _doesIntervalAllowAnother(): boolean {
 		return this._isIntervalIgnored || this._intervalCount < this._intervalCap;
 	}
 
-	private get _doesConcurrentAllowAnother(): boolean {
+	private _doesConcurrentAllowAnother(): boolean {
 		return this._pendingCount < this._concurrency;
 	}
 
@@ -145,7 +145,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	}
 
 	private _tryToStartAnother(): boolean {
-		if (this._queue.size === 0) {
+		if (this._queue.size() === 0) {
 			// We can clear the interval ("pause")
 			// Because we can redo it later ("resume")
 			if (this._intervalId) {
@@ -161,7 +161,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 		if (!this._isPaused) {
 			const canInitializeInterval = !this._isIntervalPaused();
-			if (this._doesIntervalAllowAnother && this._doesConcurrentAllowAnother) {
+			if (this._doesIntervalAllowAnother() && this._doesConcurrentAllowAnother()) {
 				this.emit('active');
 
 				this._queue.dequeue()!();
@@ -209,11 +209,11 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 		while (this._tryToStartAnother()) {}
 	}
 
-	get concurrency(): number {
+	concurrency(): number {
 		return this._concurrency;
 	}
 
-	set concurrency(newConcurrency: number) {
+	concurrency(newConcurrency: number) {
 		if (!(typeof newConcurrency === 'number' && newConcurrency >= 1)) {
 			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${newConcurrency}\` (${typeof newConcurrency})`);
 		}
@@ -304,7 +304,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	*/
 	async onEmpty(): Promise<void> {
 		// Instantly resolve if the queue is empty
-		if (this._queue.size === 0) {
+		if (this._queue.size() === 0) {
 			return;
 		}
 
@@ -324,7 +324,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	*/
 	async onIdle(): Promise<void> {
 		// Instantly resolve if none pending and if nothing else is queued
-		if (this._pendingCount === 0 && this._queue.size === 0) {
+		if (this._pendingCount === 0 && this._queue.size() === 0) {
 			return;
 		}
 
@@ -340,32 +340,32 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	/**
 	Size of the queue.
 	*/
-	get size(): number {
-		return this._queue.size;
+	size(): number {
+		return this._queue.size();
 	}
 
 	/**
 	Number of pending promises.
 	*/
-	get pending(): number {
+	pending(): number {
 		return this._pendingCount;
 	}
 
 	/**
 	Whether the queue is currently paused.
 	*/
-	get isPaused(): boolean {
+	isPaused(): boolean {
 		return this._isPaused;
 	}
 
 	/**
 	Set the timeout for future operations.
 	*/
-	set timeout(milliseconds: number | undefined) {
+	timeout(milliseconds: number | undefined) {
 		this._timeout = milliseconds;
 	}
 
-	get timeout(): number | undefined {
+	timeout(): number | undefined {
 		return this._timeout;
 	}
 }

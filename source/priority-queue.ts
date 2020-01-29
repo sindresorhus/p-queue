@@ -20,7 +20,7 @@ export default class PriorityQueue implements Queue<PriorityQueueOptions> {
 			run
 		};
 
-		if (this.size && this._queue[this.size - 1].priority! >= options.priority!) {
+		if (this.size() && this._queue[this.size() - 1].priority! >= options.priority!) {
 			this._queue.push(element);
 			return;
 		}
@@ -34,7 +34,7 @@ export default class PriorityQueue implements Queue<PriorityQueueOptions> {
 		return item && item.run;
 	}
 
-	get size(): number {
+	size(): number {
 		return this._queue.length;
 	}
 }
