@@ -348,7 +348,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 	Size of the queue filtered by options.
 	*/
 	sizeBy(options: Partial<EnqueueOptionsType>): number {
-		return this._queue.sizeBy(options);
+		return this._queue.filter(options).length;
 	}
 
 	/**
