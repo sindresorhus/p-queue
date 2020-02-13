@@ -346,6 +346,7 @@ export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = Priori
 
 	/**
 	Size of the queue filtered by options.
+	For example, this can be used to find the number of items remaining in the queue with a specific priority level.
 	*/
 	sizeBy(options: Partial<EnqueueOptionsType>): number {
 		return this._queue.filter(options).length;

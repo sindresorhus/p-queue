@@ -166,6 +166,22 @@ Clear the queue.
 
 Size of the queue.
 
+
+#### .sizeBy(options)
+
+Size of the queue, filtered by the provided options.
+
+```js
+const queue = new PQueue();
+queue.add(async () => '🦄', {priority: 1});
+queue.add(async () => '🦄', {priority: 0});
+queue.add(async () => '🦄', {priority: 1});
+console.log(queue.sizeBy({priority: 1}));
+//=> 2
+console.log(queue.sizeBy({priority: 0}));
+//=> 1
+```
+
 #### .pending
 
 Number of pending promises.
@@ -292,6 +308,9 @@ class QueueClass {
 	}
 	get size() {
 		return this._queue.length;
+	}
+	filter(options) {
+		return this._queue;
 	}
 }
 ```
