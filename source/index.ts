@@ -345,7 +345,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	/**
-	Size of the queue filtered by options.
+	Size of the queue, filtered by the given options.
+
 	For example, this can be used to find the number of items remaining in the queue with a specific priority level.
 	*/
 	sizeBy(options: Partial<EnqueueOptionsType>): number {
