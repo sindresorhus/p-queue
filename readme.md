@@ -169,7 +169,7 @@ Size of the queue.
 
 #### .sizeBy(options)
 
-Size of the queue, filtered by the provided options.
+Size of the queue, filtered by the given options.
 
 ```js
 const queue = new PQueue();
