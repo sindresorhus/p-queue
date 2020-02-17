@@ -171,6 +171,8 @@ Size of the queue.
 
 Size of the queue, filtered by the given options.
 
+For example, this can be used to find the number of items remaining in the queue with a specific priority level.
+
 ```js
 const queue = new PQueue();
 
