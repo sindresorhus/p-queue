@@ -103,6 +103,20 @@ test('.add() - priority', async t => {
 	t.deepEqual(result, [1, 3, 1, 2, 0, 0]);
 });
 
+test('.sizeBy() - priority', async t => {
+	const queue = new PQueue();
+	queue.pause();
+	queue.add(async () => 0, {priority: 1});
+	queue.add(async () => 0, {priority: 0});
+	queue.add(async () => 0, {priority: 1});
+	t.is(queue.sizeBy({priority: 1}), 2);
+	t.is(queue.sizeBy({priority: 0}), 1);
+	queue.clear();
+	await queue.onEmpty();
+	t.is(queue.sizeBy({priority: 1}), 0);
+	t.is(queue.sizeBy({priority: 0}), 0);
+});
+
 test('.add() - timeout without throwing', async t => {
 	const result: string[] = [];
 	const queue = new PQueue({timeout: 300, throwOnTimeout: false});

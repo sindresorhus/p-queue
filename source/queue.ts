@@ -1,7 +1,8 @@
 export type RunFunction = () => Promise<unknown>;
 
-export interface Queue<Options> {
+export interface Queue<Element, Options> {
 	size: number;
-	dequeue(): RunFunction | undefined;
-	enqueue(run: RunFunction, options?: Partial<Options>): void;
+	filter(options: Partial<Options>): Element[];
+	dequeue(): Element | undefined;
+	enqueue(run: Element, options?: Partial<Options>): void;
 }
