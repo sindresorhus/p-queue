@@ -1,6 +1,6 @@
 import EventEmitter = require('eventemitter3');
 import {default as pTimeout, TimeoutError} from 'p-timeout';
-import {Queue} from './queue';
+import {Queue, RunFunction} from './queue';
 import PriorityQueue from './priority-queue';
 import {QueueAddOptions, DefaultAddOptions, Options} from './options';
 
@@ -17,7 +17,7 @@ const timeoutError = new TimeoutError();
 /**
 Promise queue with concurrency control.
 */
-export default class PQueue<QueueType extends Queue<EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = DefaultAddOptions> extends EventEmitter<'active'> {
+export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = DefaultAddOptions> extends EventEmitter<'active'> {
 	private readonly _carryoverConcurrencyCount: boolean;
 
 	private readonly _isIntervalIgnored: boolean;

@@ -6,7 +6,7 @@ export interface PriorityQueueOptions extends QueueAddOptions {
 	priority?: number;
 }
 
-export default class PriorityQueue implements Queue<PriorityQueueOptions> {
+export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOptions> {
 	private readonly _queue: Array<PriorityQueueOptions & {run: RunFunction}> = [];
 
 	enqueue(run: RunFunction, options?: Partial<PriorityQueueOptions>): void {
@@ -34,8 +34,8 @@ export default class PriorityQueue implements Queue<PriorityQueueOptions> {
 		return item && item.run;
 	}
 
-	filter(options: Partial<PriorityQueueOptions>): Array<{}> {
-		return this._queue.filter(element => element.priority === options.priority);
+	filter(options: Partial<PriorityQueueOptions>): RunFunction[] {
+		return this._queue.filter(element => element.priority === options.priority).map(element => element.run);
 	}
 
 	get size(): number {
