@@ -105,7 +105,7 @@ The length of time in milliseconds before the interval count resets. Must be fin
 Type: `boolean`\
 Default: `false`
 
-Whether the task must finish in the given interval or will be carried over into the next interval count.
+If `true`, specifies that an incomplete `Promise` should be carried over into the next interval and counted against the `intervalCap`. If `false`, an incomplete promise will continue to run independent of the next interval and will not count towards the `intervalCap`.
 
 ### queue
 
