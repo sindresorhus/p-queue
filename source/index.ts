@@ -10,7 +10,8 @@ type Task<TaskResultType> =
 	| (() => PromiseLike<TaskResultType>)
 	| (() => TaskResultType);
 
-const empty = (): void => { /* do nothing */ };
+// eslint-disable-next-line @typescript-eslint/no-empty-function
+const empty = (): void => {};
 
 const timeoutError = new TimeoutError();
 
@@ -53,18 +54,19 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	private readonly _throwOnTimeout: boolean;
 
-	constructor(passedOptions?: Options<QueueType, EnqueueOptionsType>) {
+	constructor(options?: Options<QueueType, EnqueueOptionsType>) {
 		super();
 
-		const options: Options<QueueType, EnqueueOptionsType> = {
+		// eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+		options = {
 			carryoverConcurrencyCount: false,
 			intervalCap: Infinity,
 			interval: 0,
 			concurrency: Infinity,
 			autoStart: true,
 			queueClass: PriorityQueue,
-			...passedOptions
-		} as any;
+			...options
+		} as Options<QueueType, EnqueueOptionsType>;
 
 		if (!(typeof options.intervalCap === 'number' && options.intervalCap >= 1)) {
 			throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${options.intervalCap?.toString() ?? ''}\` (${typeof options.intervalCap})`);
@@ -203,7 +205,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	Executes all queued functions until it reaches the limit.
 	*/
 	private _processQueue(): void {
-		while (this._tryToStartAnother()) { /* do nothing */ }
+		// eslint-disable-next-line no-empty
+		while (this._tryToStartAnother()) {}
 	}
 
 	get concurrency(): number {
