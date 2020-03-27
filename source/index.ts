@@ -10,7 +10,7 @@ type Task<TaskResultType> =
 	| (() => PromiseLike<TaskResultType>)
 	| (() => TaskResultType);
 
-const empty = (): void => {};
+const empty = (): void => { /* do nothing */ };
 
 const timeoutError = new TimeoutError();
 
@@ -53,27 +53,25 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	private readonly _throwOnTimeout: boolean;
 
-	constructor(options?: Options<QueueType, EnqueueOptionsType>) {
+	constructor(passedOptions?: Options<QueueType, EnqueueOptionsType>) {
 		super();
 
-		// eslint-disable-next-line @typescript-eslint/no-object-literal-type-assertion
-		options = {
+		const options: Options<QueueType, EnqueueOptionsType> = {
 			carryoverConcurrencyCount: false,
 			intervalCap: Infinity,
 			interval: 0,
 			concurrency: Infinity,
 			autoStart: true,
 			queueClass: PriorityQueue,
-			...options
-		// TODO: Remove this `as`.
-		} as Options<QueueType, EnqueueOptionsType>;
+			...passedOptions
+		} as any;
 
 		if (!(typeof options.intervalCap === 'number' && options.intervalCap >= 1)) {
-			throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${options.intervalCap}\` (${typeof options.intervalCap})`);
+			throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${options.intervalCap?.toString() ?? ''}\` (${typeof options.intervalCap})`);
 		}
 
 		if (options.interval === undefined || !(Number.isFinite(options.interval) && options.interval >= 0)) {
-			throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${options.interval}\` (${typeof options.interval})`);
+			throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${options.interval?.toString() ?? ''}\` (${typeof options.interval})`);
 		}
 
 		this._carryoverConcurrencyCount = options.carryoverConcurrencyCount!;
@@ -205,8 +203,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	Executes all queued functions until it reaches the limit.
 	*/
 	private _processQueue(): void {
-		// eslint-disable-next-line no-empty
-		while (this._tryToStartAnother()) {}
+		while (this._tryToStartAnother()) { /* do nothing */ }
 	}
 
 	get concurrency(): number {
@@ -226,6 +223,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	/**
 	Adds a sync or async task to the queue. Always returns a promise.
 	*/
+	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types
 	async add<TaskResultType>(fn: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType> {
 		return new Promise<TaskResultType>((resolve, reject) => {
 			const run = async (): Promise<void> => {
@@ -349,7 +347,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	For example, this can be used to find the number of items remaining in the queue with a specific priority level.
 	*/
-	sizeBy(options: Partial<EnqueueOptionsType>): number {
+	sizeBy(options: Readonly<Partial<EnqueueOptionsType>>): number {
 		return this._queue.filter(options).length;
 	}
 
