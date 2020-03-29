@@ -15,6 +15,7 @@ suite
 			const queue = new PQueue();
 
 			for (let i = 0; i < 100; i++) {
+				// eslint-disable-next-line @typescript-eslint/no-empty-function
 				queue.add(async () => {});
 			}
 
@@ -29,6 +30,7 @@ suite
 			const queue = new PQueue();
 
 			for (let i = 0; i < 100; i++) {
+				// eslint-disable-next-line @typescript-eslint/no-empty-function
 				queue.add(async () => {}, {
 					priority: (Math.random() * 100) | 0
 				});
@@ -45,6 +47,7 @@ suite
 			const queue = new PQueue();
 
 			for (let i = 0; i < 100; i++) {
+				// eslint-disable-next-line @typescript-eslint/no-empty-function
 				queue.add(async () => {}, {
 					priority: i
 				});
@@ -60,7 +63,7 @@ suite
 	})
 	.on('complete', function () {
 		// @ts-ignore benchmark typings incorrect
-		console.log(`Fastest is ${(this as Benchmark.Suite).filter('fastest').map('name')}`);
+		console.log(`Fastest is ${(this as Benchmark.Suite).filter('fastest').map('name') as string}`);
 	})
 	.run({
 		async: true

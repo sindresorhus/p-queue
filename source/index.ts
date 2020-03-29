@@ -226,7 +226,6 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	/**
 	Adds a sync or async task to the queue. Always returns a promise.
 	*/
-	// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types
 	async add<TaskResultType>(fn: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType> {
 		return new Promise<TaskResultType>((resolve, reject) => {
 			const run = async (): Promise<void> => {
@@ -368,15 +367,15 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		return this._isPaused;
 	}
 
+	get timeout(): number | undefined {
+		return this._timeout;
+	}
+
 	/**
 	Set the timeout for future operations.
 	*/
 	set timeout(milliseconds: number | undefined) {
 		this._timeout = milliseconds;
-	}
-
-	get timeout(): number | undefined {
-		return this._timeout;
 	}
 }
 

@@ -3,7 +3,7 @@ import EventEmitter = require('eventemitter3');
 import test from 'ava';
 import delay from 'delay';
 import inRange = require('in-range');
-import timeSpan from 'time-span';
+import timeSpan = require('time-span');
 import randomInt = require('random-int');
 import PQueue from '../source';
 
@@ -41,7 +41,7 @@ test('.add() - concurrency: 1', async t => {
 
 	const end = timeSpan();
 	const queue = new PQueue({concurrency: 1});
-	// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+
 	const mapper = async ([value, ms]: readonly number[]) => queue.add(async () => {
 		await delay(ms);
 		return value;

@@ -48,21 +48,18 @@
 		"@sindresorhus/tsconfig": "^0.6.0",
 		"@types/benchmark": "^1.0.31",
 		"@types/node": "^12.12.7",
-		"@typescript-eslint/eslint-plugin": "^2.25.0",
-		"@typescript-eslint/parser": "^2.25.0",
 		"ava": "^2.0.0",
 		"benchmark": "^2.1.4",
 		"codecov": "^3.3.0",
 		"del-cli": "^3.0.0",
 		"delay": "^4.2.0",
-		"eslint-config-xo-typescript": "^0.27.0",
 		"in-range": "^2.0.0",
-		"nyc": "^14.0.0",
+		"nyc": "^15.0.0",
 		"random-int": "^2.0.0",
-		"time-span": "^3.1.0",
+		"time-span": "^4.0.0",
 		"ts-node": "^8.3.0",
 		"typescript": "3.8.3",
-		"xo": "^0.25.3"
+		"xo": "^0.28.1"
 	},
 	"ava": {
 		"babel": false,
@@ -78,16 +75,10 @@
 		]
 	},
 	"xo": {
-		"extends": "xo-typescript",
-		"extensions": [
-			"ts"
-		],
 		"rules": {
 			"@typescript-eslint/member-ordering": "off",
-			"@typescript-eslint/strict-boolean-expressions": "off",
-			"@typescript-eslint/require-await": "off",
-			"@typescript-eslint/no-misused-promises": "off",
-			"require-atomic-updates": "off"
+			"@typescript-eslint/prefer-readonly-parameter-types": "off",
+			"node/no-unsupported-features/es-syntax": "off"
 		}
 	},
 	"nyc": {
