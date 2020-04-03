@@ -6,7 +6,7 @@
 	"repository": "sindresorhus/p-queue",
 	"main": "dist/index.js",
 	"engines": {
-		"node": ">=8"
+		"node": ">=10"
 	},
 	"scripts": {
 		"build": "del dist && tsc",
@@ -41,7 +41,7 @@
 		"bluebird"
 	],
 	"dependencies": {
-		"eventemitter3": "^4.0.0",
+		"emittery": "^0.6.0",
 		"p-timeout": "^3.1.0"
 	},
 	"devDependencies": {

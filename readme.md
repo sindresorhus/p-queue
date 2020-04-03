@@ -44,7 +44,7 @@ const queue = new PQueue({concurrency: 1});
 
 ### PQueue(options?)
 
-Returns a new `queue` instance, which is an [`EventEmitter3`](https://github.com/primus/eventemitter3) subclass.
+Returns a new `queue` instance, which is an [`Emittery`](https://github.com/sindresorhus/emittery) subclass.
 
 #### options
 

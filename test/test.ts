@@ -1,5 +1,5 @@
 /* eslint-disable no-new */
-import EventEmitter = require('eventemitter3');
+import Emittery = require('emittery');
 import test from 'ava';
 import delay from 'delay';
 import inRange = require('in-range');
@@ -793,7 +793,7 @@ test('clear interval on pause', async t => {
 
 test('should be an event emitter', t => {
 	const queue = new PQueue();
-	t.true(queue instanceof EventEmitter);
+	t.true(queue instanceof Emittery);
 });
 
 test('should emit active event per item', async t => {
