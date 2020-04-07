@@ -28,7 +28,7 @@ const queue = new PQueue({concurrency: 1});
 })();
 
 (async () => {
-	await queue.add(() => got('https://ava.li/'));
+	await queue.add(() => got('https://ava.li'));
 	console.log('Done: ava.li');
 })();
 
