@@ -252,7 +252,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				this._next();
 			};
 
-			this._queue.enqueue(run, options);
+			this._queue.enqueue(run, options, resolve);
 			this._tryToStartAnother();
 		});
 	}
