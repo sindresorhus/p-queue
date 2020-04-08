@@ -23,12 +23,12 @@ const got = require('got');
 const queue = new PQueue({concurrency: 1});
 
 (async () => {
-	await queue.add(() => got('sindresorhus.com'));
+	await queue.add(() => got('https://sindresorhus.com'));
 	console.log('Done: sindresorhus.com');
 })();
 
 (async () => {
-	await queue.add(() => got('ava.li'));
+	await queue.add(() => got('https://ava.li'));
 	console.log('Done: ava.li');
 })();
 
