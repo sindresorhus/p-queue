@@ -4,13 +4,11 @@
 
 Useful for rate-limiting async (or sync) operations. For example, when interacting with a REST API or when doing CPU/memory intensive tasks.
 
-
 ## Install
 
 ```
 $ npm install p-queue
 ```
-
 
 ## Usage
 
@@ -28,8 +26,8 @@ const queue = new PQueue({concurrency: 1});
 })();
 
 (async () => {
-	await queue.add(() => got('https://ava.li'));
-	console.log('Done: ava.li');
+	await queue.add(() => got('https://avajs.dev'));
+	console.log('Done: avajs.dev');
 })();
 
 (async () => {
@@ -38,7 +36,6 @@ const queue = new PQueue({concurrency: 1});
 	console.log('Done: Unicorn task');
 })();
 ```
-
 
 ## API
 
@@ -166,7 +163,6 @@ Clear the queue.
 
 Size of the queue.
 
-
 #### .sizeBy(options)
 
 Size of the queue, filtered by the given options.
@@ -199,7 +195,6 @@ Number of pending promises.
 
 Whether the queue is currently paused.
 
-
 ## Events
 
 #### active
@@ -223,7 +218,6 @@ queue.add(() => Promise.resolve());
 queue.add(() => Promise.resolve());
 queue.add(() => delay(500));
 ```
-
 
 ## Advanced example
 
@@ -295,7 +289,6 @@ $ node example.js
 12. All work is done
 ```
 
-
 ## Custom QueueClass
 
 For implementing more complex scheduling policies, you can provide a QueueClass in the options:
@@ -326,7 +319,6 @@ class QueueClass {
 
 `p-queue` will call corresponding methods to put and get operations from this queue.
 
-
 ## Related
 
 - [p-limit](https://github.com/sindresorhus/p-limit) - Run multiple promise-returning & async functions with limited concurrency
@@ -334,7 +326,6 @@ class QueueClass {
 - [p-debounce](https://github.com/sindresorhus/p-debounce) - Debounce promise-returning & async functions
 - [p-all](https://github.com/sindresorhus/p-all) - Run promise-returning & async functions concurrently with optional limited concurrency
 - [More…](https://github.com/sindresorhus/promise-fun)
-
 
 ---
 
