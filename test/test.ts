@@ -814,6 +814,45 @@ test('should emit active event per item', async t => {
 	t.is(eventCount, items.length);
 });
 
+test('should emit idle event when idle', async t => {
+	const queue = new PQueue({concurrency: 1});
+
+	let timesCalled = 0;
+	queue.on('idle', () => {
+		timesCalled++;
+	});
+
+	const job1 = queue.add(async () => delay(100));
+	const job2 = queue.add(async () => delay(100));
+
+	t.is(queue.pending, 1);
+	t.is(queue.size, 1);
+	t.is(timesCalled, 0);
+
+	await job1;
+
+	t.is(queue.pending, 1);
+	t.is(queue.size, 0);
+	t.is(timesCalled, 0);
+
+	await job2;
+
+	t.is(queue.pending, 0);
+	t.is(queue.size, 0);
+	t.is(timesCalled, 1);
+
+	const job3 = queue.add(async () => delay(100));
+
+	t.is(queue.pending, 1);
+	t.is(queue.size, 0);
+	t.is(timesCalled, 1);
+
+	await job3;
+	t.is(queue.pending, 0);
+	t.is(queue.size, 0);
+	t.is(timesCalled, 2);
+});
+
 test('should verify timeout overrides passed to add', async t => {
 	const queue = new PQueue({timeout: 200, throwOnTimeout: true});
 

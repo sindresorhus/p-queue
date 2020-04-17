@@ -218,6 +218,30 @@ queue.add(() => Promise.resolve());
 queue.add(() => Promise.resolve());
 queue.add(() => delay(500));
 ```
+#### idle
+
+Emitted when the queue becomes empty, and all promises have completed; `queue.size === 0 && queue.pending === 0`.
+
+```js
+const delay = require('delay');
+const {default: PQueue} = require('p-queue');
+
+const queue = new PQueue();
+
+queue.on('idle', () => {
+	console.log(`Queue is idle.  Size: ${queue.size}  Pending: ${queue.pending}`);
+});
+
+const job1 = queue.add(() => delay(2000));
+const job2 = queue.add(() => delay(500));
+
+await job1;
+await job2;
+// => 'Queue is idle.  Size: 0  Pending: 0'
+
+await queue.add(() => delay(600));
+// => 'Queue is idle.  Size: 0  Pending: 0'
+```
 
 ## Advanced example
 
