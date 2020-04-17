@@ -42,7 +42,7 @@ test('.add() - concurrency: 1', async t => {
 	const end = timeSpan();
 	const queue = new PQueue({concurrency: 1});
 
-	const mapper = async ([value, ms]: readonly number[]) => queue.add(async () => {
+	const mapper = async ([value, ms]: readonly number[]): Promise<number> => queue.add(async () => {
 		await delay(ms);
 		return value;
 	});
