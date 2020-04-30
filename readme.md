@@ -220,7 +220,7 @@ queue.add(() => delay(500));
 ```
 #### idle
 
-Emitted when the queue becomes empty, and all promises have completed; `queue.size === 0 && queue.pending === 0`.
+Emitted every time the queue becomes empty, and all promises have completed; `queue.size === 0 && queue.pending === 0`.
 
 ```js
 const delay = require('delay');
