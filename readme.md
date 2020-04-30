@@ -243,6 +243,8 @@ await queue.add(() => delay(600));
 // => 'Queue is idle.  Size: 0  Pending: 0'
 ```
 
+`idle` event gets called every time the queue reaches an idle state. On the other hand `onIdle()` callback is only called once when the queue becomes idle instead of every time the queue is idle.
+
 ## Advanced example
 
 A more advanced example to help you understand the flow.
