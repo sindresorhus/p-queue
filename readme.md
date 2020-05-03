@@ -220,7 +220,7 @@ queue.add(() => delay(500));
 ```
 #### idle
 
-Emitted every time the queue becomes empty, and all promises have completed; `queue.size === 0 && queue.pending === 0`.
+Emitted every time the queue becomes empty and all promises have completed; `queue.size === 0 && queue.pending === 0`.
 
 ```js
 const delay = require('delay');
@@ -243,7 +243,7 @@ await queue.add(() => delay(600));
 // => 'Queue is idle.  Size: 0  Pending: 0'
 ```
 
-`idle` event gets called every time the queue reaches an idle state. On the other hand `onIdle()` callback is only called once when the queue becomes idle instead of every time the queue is idle.
+The `idle` event is emitted every time the queue reaches an idle state. On the other hand, the promise the `onIdle()` function returns resolves once the queue becomes idle instead of every time the queue is idle.
 
 ## Advanced example
 
