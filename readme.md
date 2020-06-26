@@ -245,6 +245,40 @@ await queue.add(() => delay(600));
 
 The `idle` event is emitted every time the queue reaches an idle state. On the other hand, the promise the `onIdle()` function returns resolves once the queue becomes idle instead of every time the queue is idle.
 
+#### add
+
+Emitted every time the add method is called and the number of pending or queued tasks is increased.
+
+#### next
+
+Emitted every time a task is completed and the number of pending or queued tasks is decreased.
+
+```js
+const delay = require('delay');
+const {default: PQueue} = require('p-queue');
+
+const queue = new PQueue();
+
+queue.on('add', () => {
+	console.log(`Task is added.  Size: ${queue.size}  Pending: ${queue.pending}`);
+});
+queue.on('next', () => {
+	console.log(`Task is completed.  Size: ${queue.size}  Pending: ${queue.pending}`);
+});
+
+const job1 = queue.add(() => delay(2000));
+const job2 = queue.add(() => delay(500));
+
+await job1;
+await job2;
+// => 'Task is added.  Size: 0  Pending: 1'
+// => 'Task is added.  Size: 0  Pending: 2'
+
+await queue.add(() => delay(600));
+// => 'Task is completed.  Size: 0  Pending: 1'
+// => 'Task is completed.  Size: 0  Pending: 0'
+```
+
 ## Advanced example
 
 A more advanced example to help you understand the flow.

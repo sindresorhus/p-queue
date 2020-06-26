@@ -18,7 +18,7 @@ const timeoutError = new TimeoutError();
 /**
 Promise queue with concurrency control.
 */
-export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = DefaultAddOptions> extends EventEmitter<'active' | 'idle'> {
+export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = DefaultAddOptions> extends EventEmitter<'active' | 'idle' | 'add' | 'next'> {
 	private readonly _carryoverConcurrencyCount: boolean;
 
 	private readonly _isIntervalIgnored: boolean;
@@ -99,6 +99,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	private _next(): void {
 		this._pendingCount--;
 		this._tryToStartAnother();
+		this.emit('next');
 	}
 
 	private _resolvePromises(): void {
@@ -255,6 +256,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 			this._queue.enqueue(run, options);
 			this._tryToStartAnother();
+			this.emit('add');
 		});
 	}
 
