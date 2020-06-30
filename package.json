@@ -42,7 +42,7 @@
 		"bluebird"
 	],
 	"dependencies": {
-		"eventemitter3": "^4.0.0",
+		"eventemitter3": "^4.0.4",
 		"p-timeout": "^3.1.0"
 	},
 	"devDependencies": {
