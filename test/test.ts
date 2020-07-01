@@ -47,6 +47,7 @@ test('.add() - concurrency: 1', async t => {
 		return value;
 	});
 
+	// eslint-disable-next-line unicorn/no-fn-reference-in-iterator
 	t.deepEqual(await Promise.all(input.map(mapper)), [10, 20, 30]);
 	t.true(inRange(end(), {start: 590, end: 650}));
 });
@@ -296,7 +297,7 @@ test('enforce number in queue.concurrency', t => {
 
 	t.throws(
 		() => {
-			// @ts-ignore
+			// @ts-expect-error
 			(new PQueue()).concurrency = undefined;
 		},
 		TypeError

@@ -351,6 +351,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	For example, this can be used to find the number of items remaining in the queue with a specific priority level.
 	*/
 	sizeBy(options: Readonly<Partial<EnqueueOptionsType>>): number {
+		// eslint-disable-next-line unicorn/no-fn-reference-in-iterator
 		return this._queue.filter(options).length;
 	}
 

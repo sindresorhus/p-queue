@@ -5,7 +5,7 @@ import PQueue from './source';
 const suite = new Benchmark.Suite();
 
 // Benchmark typings aren't up to date, let's help out manually
-type Resolvable = Deferred & {resolve(): void};
+type Resolvable = Deferred & {resolve: () => void};
 
 suite
 	.add('baseline', {
@@ -54,7 +54,7 @@ suite
 			}
 
 			await queue.onEmpty();
-			// @ts-ignore benchmark typings incorrect
+			// @ts-expect-error benchmark typings incorrect
 			deferred.resolve();
 		}
 	})
@@ -62,7 +62,7 @@ suite
 		console.log(String(event.target));
 	})
 	.on('complete', function () {
-		// @ts-ignore benchmark typings incorrect
+		// @ts-expect-error benchmark typings incorrect
 		console.log(`Fastest is ${(this as Benchmark.Suite).filter('fastest').map('name') as string}`);
 	})
 	.run({
