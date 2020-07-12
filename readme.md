@@ -105,7 +105,7 @@ The length of time in milliseconds before the interval count resets. Must be fin
 Type: `boolean`\
 Default: `false`
 
-If `true`, specifies that an incomplete `Promise` should be carried over into the next interval and counted against the `intervalCap`. If `false`, an incomplete promise will continue to run independent of the next interval and will not count towards the `intervalCap`.
+If `true`, specifies that any [pending](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise) Promises, should be carried over into the next interval and counted against the `intervalCap`. If `false`, any of those pending Promises will not count towards the next `intervalCap`.
 
 ### queue
 
