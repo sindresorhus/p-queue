@@ -853,6 +853,7 @@ test('should emit idle event when idle', async t => {
 	t.is(queue.size, 0);
 	t.is(timesCalled, 2);
 });
+
 test('should emit add event when adding task', async t => {
 	const queue = new PQueue({concurrency: 1});
 
@@ -896,6 +897,7 @@ test('should emit add event when adding task', async t => {
 	t.is(queue.size, 0);
 	t.is(timesCalled, 3);
 });
+
 test('should emit next event when completing task', async t => {
 	const queue = new PQueue({concurrency: 1});
 

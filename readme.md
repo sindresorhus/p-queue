@@ -1,4 +1,4 @@
-# p-queue [![Build Status](https://travis-ci.org/sindresorhus/p-queue.svg?branch=master)](https://travis-ci.org/sindresorhus/p-queue) [![codecov](https://codecov.io/gh/sindresorhus/p-queue/branch/master/graph/badge.svg)](https://codecov.io/gh/sindresorhus/p-queue)
+# p-queue [![Build Status](https://travis-ci.com/sindresorhus/p-queue.svg?branch=master)](https://travis-ci.com/github/sindresorhus/p-queue) [![codecov](https://codecov.io/gh/sindresorhus/p-queue/branch/master/graph/badge.svg)](https://codecov.io/gh/sindresorhus/p-queue)
 
 > Promise queue with concurrency control
 
@@ -271,12 +271,12 @@ const job2 = queue.add(() => delay(500));
 
 await job1;
 await job2;
-// => 'Task is added.  Size: 0  Pending: 1'
-// => 'Task is added.  Size: 0  Pending: 2'
+//=> 'Task is added.  Size: 0  Pending: 1'
+//=> 'Task is added.  Size: 0  Pending: 2'
 
 await queue.add(() => delay(600));
-// => 'Task is completed.  Size: 0  Pending: 1'
-// => 'Task is completed.  Size: 0  Pending: 0'
+//=> 'Task is completed.  Size: 0  Pending: 1'
+//=> 'Task is completed.  Size: 0  Pending: 0'
 ```
 
 ## Advanced example

@@ -48,19 +48,19 @@
 	"devDependencies": {
 		"@sindresorhus/tsconfig": "^0.7.0",
 		"@types/benchmark": "^1.0.31",
-		"@types/node": "^14.0.14",
+		"@types/node": "^14.0.23",
 		"ava": "^2.0.0",
 		"benchmark": "^2.1.4",
-		"codecov": "^3.3.0",
+		"codecov": "^3.7.1",
 		"del-cli": "^3.0.0",
-		"delay": "^4.2.0",
+		"delay": "^4.4.0",
 		"in-range": "^2.0.0",
 		"nyc": "^15.0.0",
 		"random-int": "^2.0.0",
 		"time-span": "^4.0.0",
 		"ts-node": "^8.3.0",
-		"typescript": "^3.9.5",
-		"xo": "^0.32.0"
+		"typescript": "^3.9.7",
+		"xo": "^0.32.1"
 	},
 	"ava": {
 		"babel": false,
@@ -78,7 +78,6 @@
 	"xo": {
 		"rules": {
 			"@typescript-eslint/member-ordering": "off",
-			"@typescript-eslint/prefer-readonly-parameter-types": "off",
 			"node/no-unsupported-features/es-syntax": "off",
 			"@typescript-eslint/no-floating-promises": "off",
 			"import/no-named-default": "off",
