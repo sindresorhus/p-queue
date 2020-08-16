@@ -18,7 +18,7 @@
 	"files": [
 		"dist"
 	],
-	"types": "dist",
+	"types": "dist/index.d.ts",
 	"keywords": [
 		"promise",
 		"queue",
