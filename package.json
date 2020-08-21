@@ -43,24 +43,24 @@
 	],
 	"dependencies": {
 		"eventemitter3": "^4.0.4",
-		"p-timeout": "^3.1.0"
+		"p-timeout": "^3.2.0"
 	},
 	"devDependencies": {
 		"@sindresorhus/tsconfig": "^0.7.0",
-		"@types/benchmark": "^1.0.31",
-		"@types/node": "^14.0.23",
+		"@types/benchmark": "^1.0.33",
+		"@types/node": "^14.6.0",
 		"ava": "^2.0.0",
 		"benchmark": "^2.1.4",
-		"codecov": "^3.7.1",
-		"del-cli": "^3.0.0",
+		"codecov": "^3.7.2",
+		"del-cli": "^3.0.1",
 		"delay": "^4.4.0",
 		"in-range": "^2.0.0",
-		"nyc": "^15.0.0",
-		"random-int": "^2.0.0",
+		"nyc": "^15.1.0",
+		"random-int": "^2.0.1",
 		"time-span": "^4.0.0",
-		"ts-node": "^8.3.0",
-		"typescript": "^3.9.7",
-		"xo": "^0.32.1"
+		"ts-node": "^9.0.0",
+		"typescript": "^4.0.2",
+		"xo": "^0.33.0"
 	},
 	"ava": {
 		"babel": false,
