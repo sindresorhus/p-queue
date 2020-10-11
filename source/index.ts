@@ -164,9 +164,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		if (!this._isPaused) {
 			const canInitializeInterval = !this._isIntervalPaused();
 			if (this._doesIntervalAllowAnother && this._doesConcurrentAllowAnother) {
-				this.emit('active');
+				const job = this._queue.dequeue();
+				if (!job) {
+					return false;
+				}
 
-				this._queue.dequeue()!();
+				this.emit('active');
+				job();
+
 				if (canInitializeInterval) {
 					this._initializeIntervalIfNeeded();
 				}
