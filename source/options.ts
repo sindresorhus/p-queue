@@ -1,8 +1,6 @@
 import {Queue, RunFunction} from './queue';
 
-export interface QueueAddOptions {
-	readonly [key: string]: unknown;
-}
+export type QueueAddOptions = Readonly<Record<string, unknown>>;
 
 export interface Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOptions extends QueueAddOptions> {
 	/**

@@ -47,7 +47,7 @@ test('.add() - concurrency: 1', async t => {
 		return value;
 	});
 
-	// eslint-disable-next-line unicorn/no-fn-reference-in-iterator
+	// eslint-disable-next-line unicorn/no-array-callback-reference
 	t.deepEqual(await Promise.all(input.map(mapper)), [10, 20, 30]);
 	t.true(inRange(end(), {start: 590, end: 650}));
 });
@@ -227,12 +227,11 @@ test('.onIdle()', async t => {
 
 test('.onIdle() - no pending', async t => {
 	const queue = new PQueue();
-
 	t.is(queue.size, 0);
 	t.is(queue.pending, 0);
 
-	const promise = await queue.onIdle();
-	t.is(promise, undefined);
+	// eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+	t.is(await queue.onIdle(), undefined);
 });
 
 test('.clear()', t => {
@@ -283,7 +282,7 @@ test('enforce number in options.concurrency', t => {
 	});
 
 	t.notThrows(() => {
-		new PQueue({concurrency: Infinity});
+		new PQueue({concurrency: Number.POSITIVE_INFINITY});
 	});
 });
 
@@ -312,7 +311,7 @@ test('enforce number in queue.concurrency', t => {
 	});
 
 	t.notThrows(() => {
-		(new PQueue()).concurrency = Infinity;
+		(new PQueue()).concurrency = Number.POSITIVE_INFINITY;
 	});
 });
 
@@ -340,7 +339,7 @@ test('enforce number in options.intervalCap', t => {
 	});
 
 	t.notThrows(() => {
-		new PQueue({intervalCap: Infinity});
+		new PQueue({intervalCap: Number.POSITIVE_INFINITY});
 	});
 });
 
@@ -360,7 +359,7 @@ test('enforce finite in options.interval', t => {
 	);
 
 	t.throws(() => {
-		new PQueue({interval: Infinity});
+		new PQueue({interval: Number.POSITIVE_INFINITY});
 	});
 
 	t.notThrows(() => {
@@ -372,7 +371,7 @@ test('enforce finite in options.interval', t => {
 	});
 
 	t.throws(() => {
-		new PQueue({interval: Infinity});
+		new PQueue({interval: Number.POSITIVE_INFINITY});
 	});
 });
 

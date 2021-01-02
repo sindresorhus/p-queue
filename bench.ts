@@ -32,7 +32,7 @@ suite
 			for (let i = 0; i < 100; i++) {
 				// eslint-disable-next-line @typescript-eslint/no-empty-function
 				queue.add(async () => {}, {
-					priority: (Math.random() * 100) | 0
+					priority: Math.trunc(Math.random() * 100)
 				});
 			}
 

@@ -5,7 +5,7 @@ export default function lowerBound<T>(array: readonly T[], value: T, comparator:
 	let count = array.length;
 
 	while (count > 0) {
-		const step = (count / 2) | 0;
+		const step = Math.trunc(count / 2);
 		let it = first + step;
 
 		if (comparator(array[it], value) <= 0) {

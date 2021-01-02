@@ -60,9 +60,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		// eslint-disable-next-line @typescript-eslint/consistent-type-assertions
 		options = {
 			carryoverConcurrencyCount: false,
-			intervalCap: Infinity,
+			intervalCap: Number.POSITIVE_INFINITY,
 			interval: 0,
-			concurrency: Infinity,
+			concurrency: Number.POSITIVE_INFINITY,
 			autoStart: true,
 			queueClass: PriorityQueue,
 			...options
@@ -77,7 +77,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		}
 
 		this._carryoverConcurrencyCount = options.carryoverConcurrencyCount!;
-		this._isIntervalIgnored = options.intervalCap === Infinity || options.interval === 0;
+		this._isIntervalIgnored = options.intervalCap === Number.POSITIVE_INFINITY || options.interval === 0;
 		this._intervalCap = options.intervalCap;
 		this._interval = options.interval;
 		this._queue = new options.queueClass!();
@@ -251,8 +251,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 							return undefined;
 						}
 					);
+
+					// TODO: Fix this ignore.
+					// @ts-expect-error
 					resolve(await operation);
-				} catch (error) {
+				} catch (error: unknown) {
 					reject(error);
 				}
 
@@ -358,7 +361,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	For example, this can be used to find the number of items remaining in the queue with a specific priority level.
 	*/
 	sizeBy(options: Readonly<Partial<EnqueueOptionsType>>): number {
-		// eslint-disable-next-line unicorn/no-fn-reference-in-iterator
+		// eslint-disable-next-line unicorn/no-array-callback-reference
 		return this._queue.filter(options).length;
 	}
 
