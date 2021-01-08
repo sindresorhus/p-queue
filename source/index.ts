@@ -349,7 +349,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	/**
-	Size of the queue.
+	Size of the queue, the number of queued items waiting to run.
 	*/
 	get size(): number {
 		return this._queue.size;
@@ -366,7 +366,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	/**
-	Number of pending promises.
+	Number of running items (no longer in the queue).
 	*/
 	get pending(): number {
 		return this._pendingCount;

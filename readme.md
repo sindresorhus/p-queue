@@ -161,7 +161,7 @@ Clear the queue.
 
 #### .size
 
-Size of the queue.
+Size of the queue, the number of queued items waiting to run.
 
 #### .sizeBy(options)
 
@@ -185,7 +185,7 @@ console.log(queue.sizeBy({priority: 0}));
 
 #### .pending
 
-Number of pending promises.
+Number of running items (no longer in the queue).
 
 #### [.timeout](#timeout)
 
@@ -375,9 +375,19 @@ class QueueClass {
 		return this._queue;
 	}
 }
+
+const queue = new PQueue({
+	queueClass: QueueClass
+});
 ```
 
 `p-queue` will call corresponding methods to put and get operations from this queue.
+
+## FAQ
+
+#### How do the `concurrency` and `intervalCap` options affect each other?
+
+They are just different constraints. The `concurrency` option limits how many things run at the same time. The `intervalCap` option limits how many things run in total during the interval (over time).
 
 ## Related
 
