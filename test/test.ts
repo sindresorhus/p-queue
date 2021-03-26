@@ -941,6 +941,60 @@ test('should emit next event when completing task', async t => {
 	t.is(timesCalled, 3);
 });
 
+test('should emit completed / error events', async t => {
+	const queue = new PQueue({concurrency: 1});
+
+	let errorEvents = 0;
+	let completedEvents = 0;
+	queue.on('error', () => {
+		errorEvents++;
+	});
+	queue.on('completed', () => {
+		completedEvents++;
+	});
+
+	const job1 = queue.add(async () => delay(100));
+
+	t.is(queue.pending, 1);
+	t.is(queue.size, 0);
+	t.is(errorEvents, 0);
+	t.is(completedEvents, 0);
+
+	const job2 = queue.add(async () => Promise.reject(new Error('failure')));
+
+	t.is(queue.pending, 1);
+	t.is(queue.size, 1);
+	t.is(errorEvents, 0);
+	t.is(completedEvents, 0);
+
+	await job1;
+
+	t.is(queue.pending, 1);
+	t.is(queue.size, 0);
+	t.is(errorEvents, 0);
+	t.is(completedEvents, 1);
+
+	await t.throwsAsync(job2);
+
+	t.is(queue.pending, 0);
+	t.is(queue.size, 0);
+	t.is(errorEvents, 1);
+	t.is(completedEvents, 1);
+
+	const job3 = queue.add(async () => delay(100));
+
+	t.is(queue.pending, 1);
+	t.is(queue.size, 0);
+	t.is(errorEvents, 1);
+	t.is(completedEvents, 1);
+
+	await job3;
+	t.is(queue.pending, 0);
+	t.is(queue.size, 0);
+	t.is(errorEvents, 1);
+	t.is(completedEvents, 2);
+});
+
 test('should verify timeout overrides passed to add', async t => {
 	const queue = new PQueue({timeout: 200, throwOnTimeout: true});
 
