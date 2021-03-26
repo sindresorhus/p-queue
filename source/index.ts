@@ -329,6 +329,29 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	/**
+	Wait for the queue size (the number of items not yet started) to fall below a certain threshold
+
+	@returns A promise that settles when the queue size is below the given limit
+	 */
+	async onSizeLessThan(limit: number): Promise<void> {
+		// Instantly resolve if the queue is empty
+		if (this._queue.size < limit) {
+			return;
+		}
+
+		return new Promise<void>(resolve => {
+			const listener = () => {
+				if (this._queue.size < limit) {
+					this.removeListener('next', listener);
+					resolve();
+				}
+			};
+
+			this.on('next', listener);
+		});
+	}
+
+	/**
 	The difference with `.onEmpty` is that `.onIdle` guarantees that all work from the queue has finished. `.onEmpty` merely signals that the queue is empty, but it could mean that some promises haven't completed yet.
 
 	@returns A promise that settles when the queue becomes empty, and all promises have completed; `queue.size === 0 && queue.pending === 0`.
