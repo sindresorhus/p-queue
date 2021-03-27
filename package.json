@@ -16,7 +16,7 @@
 	},
 	"scripts": {
 		"build": "del dist && tsc",
-		"postbuild": "ts-node scripts/addESMWrapper.ts",
+		"postbuild": "ts-node scripts/add-esm-wrapper.ts",
 		"test": "xo && npm run build && nyc ava",
 		"bench": "ts-node bench.ts",
 		"prepublishOnly": "npm run build"
