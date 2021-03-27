@@ -6,11 +6,17 @@
 	"repository": "sindresorhus/p-queue",
 	"funding": "https://github.com/sponsors/sindresorhus",
 	"main": "dist/index.js",
+	"module": "dist/wrapper.mjs",
+	"exports": {
+		"import": "./dist/wrapper.mjs",
+		"require": "./dist/index.js"
+	},
 	"engines": {
 		"node": ">=10"
 	},
 	"scripts": {
 		"build": "del dist && tsc",
+		"postbuild": "ts-node scripts/addESMWrapper.ts",
 		"test": "xo && npm run build && nyc ava",
 		"bench": "ts-node bench.ts",
 		"prepublishOnly": "npm run build"
