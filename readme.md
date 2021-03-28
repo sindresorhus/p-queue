@@ -112,9 +112,7 @@ If `true`, specifies that any [pending](https://developer.mozilla.org/en-US/docs
 
 Adds a sync or async task to the queue. Always returns a promise.
 
-Note: if your items can potentially throw an exception, you must handle those errors from the returned
-Promise or they may be reported as an unhandled Promise rejection and potentially cause your process to
-exit immediately.
+Note: If your items can potentially throw an exception, you must handle those errors from the returned Promise or they may be reported as an unhandled Promise rejection and potentially cause your process to exit immediately.
 
 ##### fn
 
