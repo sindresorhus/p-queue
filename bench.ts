@@ -1,6 +1,5 @@
-import Benchmark = require('benchmark');
-import {Deferred, Event} from 'benchmark';
-import PQueue from './source';
+import Benchmark, {Deferred, Event} from 'benchmark';
+import PQueue from './source/index.js';
 
 const suite = new Benchmark.Suite();
 
@@ -54,7 +53,6 @@ suite
 			}
 
 			await queue.onEmpty();
-			// @ts-expect-error benchmark typings incorrect
 			deferred.resolve();
 		}
 	})

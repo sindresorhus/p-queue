@@ -1,8 +1,8 @@
-import EventEmitter = require('eventemitter3');
-import {default as pTimeout, TimeoutError} from 'p-timeout';
-import {Queue, RunFunction} from './queue';
-import PriorityQueue from './priority-queue';
-import {QueueAddOptions, DefaultAddOptions, Options} from './options';
+import EventEmitter from 'eventemitter3';
+import pTimeout, {TimeoutError} from 'p-timeout';
+import {Queue, RunFunction} from './queue.js';
+import PriorityQueue from './priority-queue.js';
+import {QueueAddOptions, DefaultAddOptions, Options} from './options.js';
 
 type ResolveFunction<T = void> = (value?: T | PromiseLike<T>) => void;
 

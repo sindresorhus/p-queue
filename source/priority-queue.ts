@@ -1,6 +1,6 @@
-import {Queue, RunFunction} from './queue';
-import lowerBound from './lower-bound';
-import {QueueAddOptions} from './options';
+import {Queue, RunFunction} from './queue.js';
+import lowerBound from './lower-bound.js';
+import {QueueAddOptions} from './options.js';
 
 export interface PriorityQueueOptions extends QueueAddOptions {
 	priority?: number;
@@ -20,7 +20,7 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 			run
 		};
 
-		if (this.size && this._queue[this.size - 1].priority! >= options.priority!) {
+		if (this.size && this._queue[this.size - 1]?.priority! >= options.priority!) {
 			this._queue.push(element);
 			return;
 		}
@@ -40,7 +40,7 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 	filter(options: Readonly<Partial<PriorityQueueOptions>>): RunFunction[] {
 		return this._queue.filter(
 			(element: Readonly<PriorityQueueOptions>) => element.priority === options.priority
-		).map((element: Readonly<{ run: RunFunction }>) => element.run);
+		).map((element: Readonly<{run: RunFunction}>) => element.run);
 	}
 
 	get size(): number {
