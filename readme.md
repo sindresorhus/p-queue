@@ -157,12 +157,12 @@ The difference with `.onEmpty` is that `.onIdle` guarantees that all work from t
 
 #### .onSizeLessThan(limit)
 
-Returns a promise that settles when the queue size is less than the given limit; `queue.size < limit`.
+Returns a promise that settles when the queue size is less than the given limit: `queue.size < limit`.
 
 If you want to avoid having the queue grow beyond a certain size you can `await queue.onSizeLessThan()` before
 adding a new item.
 
-Note that this only limits the number of items waiting to start; there could still be up to `concurrency` jobs
+Note that this only limits the number of items waiting to start. There could still be up to `concurrency` jobs
 already running that this call does not include in its calculation.
 
 #### .clear()
