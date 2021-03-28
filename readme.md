@@ -225,27 +225,35 @@ queue.add(() => delay(500));
 
 #### completed
 
-Emitted when an item completes without error
+Emitted when an item completes without error.
 
 ```js
 const delay = require('delay');
 const {default: PQueue} = require('p-queue');
 
 const queue = new PQueue({concurrency: 2});
-queue.on('completed', (result) => console.log(result));
+
+queue.on('completed', result => {
+	console.log(result);
+});
+
 queue.add(() => Promise.resolve('hello, world!'));
 ```
 
 #### error
 
-Emitted if an item throws an error
+Emitted if an item throws an error.
 
 ```js
 const delay = require('delay');
 const {default: PQueue} = require('p-queue');
 
 const queue = new PQueue({concurrency: 2});
-queue.on('error', (err) => console.error(err));
+
+queue.on('error', error => {
+	console.error(error);
+});
+
 queue.add(() => Promise.reject(new Error('error')));
 ```
 
@@ -282,8 +290,7 @@ Emitted every time the add method is called and the number of pending or queued 
 
 #### next
 
-Emitted every time a task is completed and the number of pending or queued tasks is decreased.  This is emitted
-regardless of whether the task completed normally or with an error.
+Emitted every time a task is completed and the number of pending or queued tasks is decreased. This is emitted regardless of whether the task completed normally or with an error.
 
 ```js
 const delay = require('delay');
