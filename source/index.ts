@@ -329,12 +329,12 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	/**
-	Wait for the queue size (the number of items not yet started) to fall below a certain threshold
+	Wait for the queue size (the number of items not yet started) to fall below a certain threshold.
 
-	@returns A promise that settles when the queue size is below the given limit
-	 */
+	@returns A promise that settles when the queue size is below the given limit.
+	*/
 	async onSizeLessThan(limit: number): Promise<void> {
-		// Instantly resolve if the queue is empty
+		// Instantly resolve if the queue is empty.
 		if (this._queue.size < limit) {
 			return;
 		}
