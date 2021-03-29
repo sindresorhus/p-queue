@@ -225,7 +225,7 @@ test('.onIdle()', async t => {
 	t.is(queue.pending, 0);
 });
 
-test('onSizeLessThan()', async t => {
+test('.onSizeLessThan()', async t => {
 	const queue = new PQueue({concurrency: 1});
 
 	queue.add(async () => delay(100));
