@@ -14,7 +14,7 @@
 		"build": "del dist && tsc",
 		"test": "xo && npm run build && nyc ava",
 		"bench": "node --loader=ts-node/esm bench.ts",
-		"prepublishOnly": "npm run build"
+		"prepare": "npm run build"
 	},
 	"files": [
 		"dist"
