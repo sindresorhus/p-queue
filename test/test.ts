@@ -960,7 +960,9 @@ test('should emit completed / error events', async t => {
 	t.is(errorEvents, 0);
 	t.is(completedEvents, 0);
 
-	const job2 = queue.add(async () => { throw new Error('failure'); });
+	const job2 = queue.add(async () => {
+		throw new Error('failure');
+	});
 
 	t.is(queue.pending, 1);
 	t.is(queue.size, 1);
