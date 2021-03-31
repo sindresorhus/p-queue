@@ -961,6 +961,7 @@ test('should emit completed / error events', async t => {
 	t.is(completedEvents, 0);
 
 	const job2 = queue.add(async () => {
+		await delay(1);
 		throw new Error('failure');
 	});
 
