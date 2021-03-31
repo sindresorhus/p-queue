@@ -228,8 +228,8 @@ queue.add(() => delay(500));
 Emitted when an item completes without error.
 
 ```js
-const delay = require('delay');
-const {default: PQueue} = require('p-queue');
+import delay from 'delay';
+import PQueue from 'p-queue';
 
 const queue = new PQueue({concurrency: 2});
 
@@ -245,8 +245,8 @@ queue.add(() => Promise.resolve('hello, world!'));
 Emitted if an item throws an error.
 
 ```js
-const delay = require('delay');
-const {default: PQueue} = require('p-queue');
+import delay from 'delay';
+import PQueue from 'p-queue';
 
 const queue = new PQueue({concurrency: 2});
 
