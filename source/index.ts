@@ -329,14 +329,12 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	/**
-	Returns a promise that settles when the queue size is less than the given limit: `queue.size < limit`.
+	@returns A promise that settles when the queue size is less than the given limit: `queue.size < limit`.
 
-	If you want to avoid having the queue grow beyond a certain size you can `await queue.onSizeLessThan()` before
-	adding a new item.
+	If you want to avoid having the queue grow beyond a certain size you can `await queue.onSizeLessThan()` before adding a new item.
 
-	Note that this only limits the number of items waiting to start. There could still be up to `concurrency` jobs
-	already running that this call does not include in its calculation.
-	 */
+	Note that this only limits the number of items waiting to start. There could still be up to `concurrency` jobs already running that this call does not include in its calculation.
+	*/
 	async onSizeLessThan(limit: number): Promise<void> {
 		// Instantly resolve if the queue is empty.
 		if (this._queue.size < limit) {
