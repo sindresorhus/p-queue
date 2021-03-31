@@ -5,15 +5,16 @@
 	"license": "MIT",
 	"repository": "sindresorhus/p-queue",
 	"funding": "https://github.com/sponsors/sindresorhus",
-	"main": "dist/index.js",
+	"type": "module",
+	"exports": "./dist/index.js",
 	"engines": {
-		"node": ">=10"
+		"node": ">=12"
 	},
 	"scripts": {
 		"build": "del dist && tsc",
 		"test": "xo && npm run build && nyc ava",
-		"bench": "ts-node bench.ts",
-		"prepublishOnly": "npm run build"
+		"bench": "node --loader=ts-node/esm bench.ts",
+		"prepare": "npm run build"
 	},
 	"files": [
 		"dist"
@@ -46,41 +47,40 @@
 		"p-timeout": "^4.1.0"
 	},
 	"devDependencies": {
-		"@sindresorhus/tsconfig": "^0.7.0",
+		"@sindresorhus/tsconfig": "^1.0.0",
 		"@types/benchmark": "^2.1.0",
-		"@types/node": "^14.14.19",
-		"ava": "^2.4.0",
+		"@types/node": "^14.14.37",
+		"ava": "^3.15.0",
 		"benchmark": "^2.1.4",
 		"codecov": "^3.8.1",
 		"del-cli": "^3.0.1",
-		"delay": "^4.4.0",
-		"in-range": "^2.0.0",
+		"delay": "^5.0.0",
+		"in-range": "^3.0.0",
 		"nyc": "^15.1.0",
 		"random-int": "^2.0.1",
 		"time-span": "^4.0.0",
 		"ts-node": "^9.1.1",
-		"typescript": "^4.1.3",
-		"xo": "^0.37.1"
+		"typescript": "^4.2.3",
+		"xo": "^0.38.2"
 	},
 	"ava": {
-		"babel": false,
-		"compileEnhancements": false,
-		"extensions": [
-			"ts"
-		],
-		"require": [
-			"ts-node/register"
-		],
 		"files": [
 			"test/**"
+		],
+		"extensions": {
+			"ts": "module"
+		},
+		"nonSemVerExperiments": {
+			"configurableModuleFormat": true
+		},
+		"nodeArguments": [
+			"--loader=ts-node/esm"
 		]
 	},
 	"xo": {
 		"rules": {
 			"@typescript-eslint/member-ordering": "off",
-			"node/no-unsupported-features/es-syntax": "off",
 			"@typescript-eslint/no-floating-promises": "off",
-			"import/no-named-default": "off",
 			"@typescript-eslint/no-invalid-void-type": "off"
 		}
 	},

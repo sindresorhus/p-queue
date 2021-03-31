@@ -1,4 +1,4 @@
-import {Queue, RunFunction} from './queue';
+import {Queue, RunFunction} from './queue.js';
 
 export type QueueAddOptions = Readonly<Record<string, unknown>>;
 
