@@ -155,6 +155,14 @@ Returns a promise that settles when the queue becomes empty, and all promises ha
 
 The difference with `.onEmpty` is that `.onIdle` guarantees that all work from the queue has finished. `.onEmpty` merely signals that the queue is empty, but it could mean that some promises haven't completed yet.
 
+#### .onSizeLessThan(limit)
+
+Returns a promise that settles when the queue size is less than the given limit: `queue.size < limit`.
+
+If you want to avoid having the queue grow beyond a certain size you can `await queue.onSizeLessThan()` before adding a new item.
+
+Note that this only limits the number of items waiting to start. There could still be up to `concurrency` jobs already running that this call does not include in its calculation.
+
 #### .clear()
 
 Clear the queue.

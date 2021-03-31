@@ -225,6 +225,32 @@ test('.onIdle()', async t => {
 	t.is(queue.pending, 0);
 });
 
+test('.onSizeLessThan()', async t => {
+	const queue = new PQueue({concurrency: 1});
+
+	queue.add(async () => delay(100));
+	queue.add(async () => delay(100));
+	queue.add(async () => delay(100));
+	queue.add(async () => delay(100));
+	queue.add(async () => delay(100));
+
+	await queue.onSizeLessThan(4);
+	t.is(queue.size, 3);
+	t.is(queue.pending, 1);
+
+	await queue.onSizeLessThan(2);
+	t.is(queue.size, 1);
+	t.is(queue.pending, 1);
+
+	await queue.onSizeLessThan(10);
+	t.is(queue.size, 1);
+	t.is(queue.pending, 1);
+
+	await queue.onSizeLessThan(1);
+	t.is(queue.size, 0);
+	t.is(queue.pending, 1);
+});
+
 test('.onIdle() - no pending', async t => {
 	const queue = new PQueue();
 	t.is(queue.size, 0);

@@ -329,6 +329,31 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	/**
+	@returns A promise that settles when the queue size is less than the given limit: `queue.size < limit`.
+
+	If you want to avoid having the queue grow beyond a certain size you can `await queue.onSizeLessThan()` before adding a new item.
+
+	Note that this only limits the number of items waiting to start. There could still be up to `concurrency` jobs already running that this call does not include in its calculation.
+	*/
+	async onSizeLessThan(limit: number): Promise<void> {
+		// Instantly resolve if the queue is empty.
+		if (this._queue.size < limit) {
+			return;
+		}
+
+		return new Promise<void>(resolve => {
+			const listener = () => {
+				if (this._queue.size < limit) {
+					this.removeListener('next', listener);
+					resolve();
+				}
+			};
+
+			this.on('next', listener);
+		});
+	}
+
+	/**
 	The difference with `.onEmpty` is that `.onIdle` guarantees that all work from the queue has finished. `.onEmpty` merely signals that the queue is empty, but it could mean that some promises haven't completed yet.
 
 	@returns A promise that settles when the queue becomes empty, and all promises have completed; `queue.size === 0 && queue.pending === 0`.
