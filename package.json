@@ -6,7 +6,10 @@
 	"repository": "sindresorhus/p-queue",
 	"funding": "https://github.com/sponsors/sindresorhus",
 	"type": "module",
-	"exports": "./dist/index.js",
+	"exports": {
+		".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
 	"engines": {
 		"node": ">=12"
 	},
