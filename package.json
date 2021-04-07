@@ -8,8 +8,8 @@
 	"type": "module",
 	"exports": {
 		".": "./dist/index.js",
-    "./package.json": "./package.json"
-  },
+		"./package.json": "./package.json"
+	},
 	"engines": {
 		"node": ">=12"
 	},
