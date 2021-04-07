@@ -44,10 +44,10 @@
 	],
 	"dependencies": {
 		"eventemitter3": "^4.0.7",
-		"p-timeout": "^4.1.0"
+		"p-timeout": "^5.0.0"
 	},
 	"devDependencies": {
-		"@sindresorhus/tsconfig": "^1.0.0",
+		"@sindresorhus/tsconfig": "^1.0.1",
 		"@types/benchmark": "^2.1.0",
 		"@types/node": "^14.14.37",
 		"ava": "^3.15.0",
