@@ -5,4 +5,13 @@ export interface Queue<Element, Options> {
 	filter: (options: Partial<Options>) => Element[];
 	dequeue: () => Element | undefined;
 	enqueue: (run: Element, options?: Partial<Options>) => void;
+	/**
+	 * Removes an entry by task.  This is a hack because ideally
+	 * it should be
+	 *
+	 * remove: (fn: Task<unknown>) => void
+	 *
+	 * which is not allowed.
+	 */
+	remove: (fn: any) => void;
 }

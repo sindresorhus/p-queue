@@ -104,6 +104,40 @@ test('.add() - priority', async t => {
 	t.deepEqual(result, [1, 3, 1, 2, 0, 0]);
 });
 
+test('.add() - priority with cancelation', async t => {
+	const result: number[] = [];
+	const queue = new PQueue({concurrency: 1});
+	const removable = async () => {
+		delay(200);
+		result.push(3);
+	};
+
+	queue.add(async () => {
+		delay(200);
+		result.push(1);
+	}, {priority: 1});
+	queue.add(async () => {
+		delay(200);
+		result.push(0);
+	}, {priority: 0});
+	queue.add(async () => {
+		delay(200);
+		result.push(1);
+	}, {priority: 1});
+	queue.add(async () => {
+		delay(200);
+		result.push(2);
+	}, {priority: 1});
+	queue.add(removable, {priority: 2});
+	queue.add(async () => {
+		delay(200);
+		result.push(0);
+	}, {priority: -1});
+	queue.cancel(removable);
+	await queue.onEmpty();
+	t.deepEqual(result, [1, 1, 2, 0, 0]);
+});
+
 test('.sizeBy() - priority', async t => {
 	const queue = new PQueue();
 	queue.pause();

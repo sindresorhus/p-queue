@@ -69,4 +69,8 @@ export interface DefaultAddOptions extends QueueAddOptions {
 	@default 0
 	*/
 	readonly priority?: number;
+	/**
+	Task
+	*/
+	fn: any;
 }

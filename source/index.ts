@@ -263,7 +263,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				this._next();
 			};
 
-			this._queue.enqueue(run, options);
+			this._queue.enqueue(run, {...options, fn});
 			this._tryToStartAnother();
 			this.emit('add');
 		});
@@ -279,6 +279,15 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		options?: EnqueueOptionsType
 	): Promise<TaskResultsType[]> {
 		return Promise.all(functions.map(async function_ => this.add(function_, options)));
+	}
+
+	/**
+	Cancels an task from the queue.
+
+	@param fn task to remove from the queue
+	*/
+	cancel<TaskResultType>(fn: Task<TaskResultType>): void {
+		this._queue.remove(fn);
 	}
 
 	/**
