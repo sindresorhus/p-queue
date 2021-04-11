@@ -4,7 +4,7 @@ import {QueueAddOptions} from './options.js';
 
 export interface PriorityQueueOptions extends QueueAddOptions {
 	priority?: number;
-	fn: any;
+	fn?: () => unknown;
 }
 
 export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOptions> {
@@ -18,7 +18,7 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 
 		const element = {
 			priority: options.priority,
-			fn: options.fn,
+			fn: options.fn!,
 			run
 		};
 
