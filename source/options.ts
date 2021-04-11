@@ -72,5 +72,5 @@ export interface DefaultAddOptions extends QueueAddOptions {
 	/**
 	Task
 	*/
-	fn: any;
+	fn: () => unknown;
 }

@@ -45,7 +45,7 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 		).map((element: Readonly<{run: RunFunction}>) => element.run);
 	}
 
-	remove(fn: any): void {
+	remove(fn: () => unknown): void {
 		for (let i = 0; i < this._queue.length; ++i) {
 			if (fn === this._queue[i]!.fn) {
 				this._queue.splice(i, 1);

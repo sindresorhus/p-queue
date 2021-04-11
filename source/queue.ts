@@ -12,5 +12,5 @@ export interface Queue<Element, Options> {
 
 	remove: (fn: Task<unknown>) => void
 	*/
-	remove: (fn: any) => void;
+	remove: (fn: () => unknown) => void;
 }
