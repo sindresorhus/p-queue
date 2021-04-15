@@ -11,7 +11,7 @@
 		"node": ">=12"
 	},
 	"scripts": {
-		"build": "del dist && tsc",
+		"build": "rimraf dist && tsc",
 		"test": "xo && npm run build && nyc ava",
 		"bench": "node --loader=ts-node/esm bench.ts",
 		"prepare": "npm run build"
@@ -19,7 +19,8 @@
 	"files": [
 		"dist"
 	],
-	"types": "dist/index.d.ts",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
 	"keywords": [
 		"promise",
 		"queue",
@@ -58,6 +59,7 @@
 		"in-range": "^3.0.0",
 		"nyc": "^15.1.0",
 		"random-int": "^2.0.1",
+		"rimraf": "^3.0.2",
 		"time-span": "^4.0.0",
 		"ts-node": "^9.1.1",
 		"typescript": "^4.2.3",
