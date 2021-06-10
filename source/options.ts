@@ -13,6 +13,13 @@ export interface Options<QueueType extends Queue<RunFunction, QueueOptions>, Que
 	readonly concurrency?: number;
 
 	/**
+	Should we stop processing if we encounter an error
+
+	@default false
+	*/
+	readonly pauseOnError?: boolean;
+
+	/**
 	Whether queue tasks within concurrency limit, are auto-executed as soon as they're added.
 
 	@default true

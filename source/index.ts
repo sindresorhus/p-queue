@@ -19,6 +19,8 @@ const timeoutError = new TimeoutError();
 Promise queue with concurrency control.
 */
 export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = DefaultAddOptions> extends EventEmitter<'active' | 'idle' | 'add' | 'next' | 'completed' | 'error'> {
+	private readonly _pauseOnError: boolean;
+
 	private readonly _carryoverConcurrencyCount: boolean;
 
 	private readonly _isIntervalIgnored: boolean;
@@ -76,6 +78,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${options.interval?.toString() ?? ''}\` (${typeof options.interval})`);
 		}
 
+		this._pauseOnError = options.pauseOnError ?? false;
 		this._carryoverConcurrencyCount = options.carryoverConcurrencyCount!;
 		this._isIntervalIgnored = options.intervalCap === Number.POSITIVE_INFINITY || options.interval === 0;
 		this._intervalCap = options.intervalCap;
@@ -256,11 +259,15 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					resolve(result!);
 					this.emit('completed', result);
 				} catch (error: unknown) {
+					if (this._pauseOnError) {
+						this.pause();
+					}
+
 					reject(error);
 					this.emit('error', error);
+				} finally {
+					this._next();
 				}
-
-				this._next();
 			};
 
 			this._queue.enqueue(run, options);
