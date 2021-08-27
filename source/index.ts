@@ -65,7 +65,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			concurrency: Number.POSITIVE_INFINITY,
 			autoStart: true,
 			queueClass: PriorityQueue,
-			...options
+			...options,
 		} as Options<QueueType, EnqueueOptionsType>;
 
 		if (!(typeof options.intervalCap === 'number' && options.intervalCap >= 1)) {
@@ -135,7 +135,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 						() => {
 							this._onResumeInterval();
 						},
-						delay
+						delay,
 					);
 				}
 
@@ -192,7 +192,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			() => {
 				this._onInterval();
 			},
-			this._interval
+			this._interval,
 		);
 
 		this._intervalEnd = Date.now() + this._interval;
@@ -249,7 +249,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 							}
 
 							return undefined;
-						}
+						},
 					);
 
 					const result = await operation;
@@ -276,7 +276,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
-		options?: EnqueueOptionsType
+		options?: EnqueueOptionsType,
 	): Promise<TaskResultsType[]> {
 		return Promise.all(functions.map(async function_ => this.add(function_, options)));
 	}

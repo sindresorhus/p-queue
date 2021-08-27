@@ -20,7 +20,7 @@ suite
 
 			await queue.onEmpty();
 			deferred.resolve();
-		}
+		},
 	})
 	.add('operation with random priority', {
 		defer: true,
@@ -31,13 +31,13 @@ suite
 			for (let i = 0; i < 100; i++) {
 				// eslint-disable-next-line @typescript-eslint/no-empty-function
 				queue.add(async () => {}, {
-					priority: Math.trunc(Math.random() * 100)
+					priority: Math.trunc(Math.random() * 100),
 				});
 			}
 
 			await queue.onEmpty();
 			deferred.resolve();
-		}
+		},
 	})
 	.add('operation with increasing priority', {
 		defer: true,
@@ -48,13 +48,13 @@ suite
 			for (let i = 0; i < 100; i++) {
 				// eslint-disable-next-line @typescript-eslint/no-empty-function
 				queue.add(async () => {}, {
-					priority: i
+					priority: i,
 				});
 			}
 
 			await queue.onEmpty();
 			deferred.resolve();
-		}
+		},
 	})
 	.on('cycle', (event: Event) => {
 		console.log(String(event.target));
@@ -64,5 +64,5 @@ suite
 		console.log(`Fastest is ${(this as Benchmark.Suite).filter('fastest').map('name') as string}`);
 	})
 	.run({
-		async: true
+		async: true,
 	});

@@ -36,7 +36,7 @@ test('.add() - concurrency: 1', async t => {
 	const input = [
 		[10, 300],
 		[20, 200],
-		[30, 100]
+		[30, 100],
 	];
 
 	const end = timeSpan();
@@ -262,12 +262,12 @@ test('.onIdle() - no pending', async t => {
 
 test('.clear()', t => {
 	const queue = new PQueue({concurrency: 2});
-	queue.add(async () => delay(20000));
-	queue.add(async () => delay(20000));
-	queue.add(async () => delay(20000));
-	queue.add(async () => delay(20000));
-	queue.add(async () => delay(20000));
-	queue.add(async () => delay(20000));
+	queue.add(async () => delay(20_000));
+	queue.add(async () => delay(20_000));
+	queue.add(async () => delay(20_000));
+	queue.add(async () => delay(20_000));
+	queue.add(async () => delay(20_000));
+	queue.add(async () => delay(20_000));
 	t.is(queue.size, 4);
 	t.is(queue.pending, 2);
 	queue.clear();
@@ -289,14 +289,14 @@ test('enforce number in options.concurrency', t => {
 		() => {
 			new PQueue({concurrency: 0});
 		},
-		{instanceOf: TypeError}
+		{instanceOf: TypeError},
 	);
 
 	t.throws(
 		() => {
 			new PQueue({concurrency: undefined});
 		},
-		{instanceOf: TypeError}
+		{instanceOf: TypeError},
 	);
 
 	t.notThrows(() => {
@@ -317,15 +317,15 @@ test('enforce number in queue.concurrency', t => {
 		() => {
 			(new PQueue()).concurrency = 0;
 		},
-		{instanceOf: TypeError}
+		{instanceOf: TypeError},
 	);
 
 	t.throws(
 		() => {
-			// @ts-expect-error
+			// @ts-expect-error Testing
 			(new PQueue()).concurrency = undefined;
 		},
-		{instanceOf: TypeError}
+		{instanceOf: TypeError},
 	);
 
 	t.notThrows(() => {
@@ -346,14 +346,14 @@ test('enforce number in options.intervalCap', t => {
 		() => {
 			new PQueue({intervalCap: 0});
 		},
-		{instanceOf: TypeError}
+		{instanceOf: TypeError},
 	);
 
 	t.throws(
 		() => {
 			new PQueue({intervalCap: undefined});
 		},
-		{instanceOf: TypeError}
+		{instanceOf: TypeError},
 	);
 
 	t.notThrows(() => {
@@ -374,14 +374,14 @@ test('enforce finite in options.interval', t => {
 		() => {
 			new PQueue({interval: -1});
 		},
-		{instanceOf: TypeError}
+		{instanceOf: TypeError},
 	);
 
 	t.throws(
 		() => {
 			new PQueue({interval: undefined});
 		},
-		{instanceOf: TypeError}
+		{instanceOf: TypeError},
 	);
 
 	t.throws(() => {
@@ -404,10 +404,10 @@ test('enforce finite in options.interval', t => {
 test('autoStart: false', t => {
 	const queue = new PQueue({concurrency: 2, autoStart: false});
 
-	queue.add(async () => delay(20000));
-	queue.add(async () => delay(20000));
-	queue.add(async () => delay(20000));
-	queue.add(async () => delay(20000));
+	queue.add(async () => delay(20_000));
+	queue.add(async () => delay(20_000));
+	queue.add(async () => delay(20_000));
+	queue.add(async () => delay(20_000));
 	t.is(queue.size, 4);
 	t.is(queue.pending, 0);
 	t.is(queue.isPaused, true);
@@ -448,11 +448,11 @@ test('.pause()', t => {
 	const queue = new PQueue({concurrency: 2});
 
 	queue.pause();
-	queue.add(async () => delay(20000));
-	queue.add(async () => delay(20000));
-	queue.add(async () => delay(20000));
-	queue.add(async () => delay(20000));
-	queue.add(async () => delay(20000));
+	queue.add(async () => delay(20_000));
+	queue.add(async () => delay(20_000));
+	queue.add(async () => delay(20_000));
+	queue.add(async () => delay(20_000));
+	queue.add(async () => delay(20_000));
 	t.is(queue.size, 5);
 	t.is(queue.pending, 0);
 	t.is(queue.isPaused, true);
@@ -462,7 +462,7 @@ test('.pause()', t => {
 	t.is(queue.pending, 2);
 	t.is(queue.isPaused, false);
 
-	queue.add(async () => delay(20000));
+	queue.add(async () => delay(20_000));
 	queue.pause();
 	t.is(queue.size, 4);
 	t.is(queue.pending, 2);
@@ -498,9 +498,9 @@ test.failing('.add() - handle task throwing error', async t => {
 		queue.add(
 			() => {
 				throw new Error('broken');
-			}
+			},
 		),
-		{message: 'broken'}
+		{message: 'broken'},
 	);
 	queue.add(() => 'sync 2');
 
@@ -516,9 +516,9 @@ test('.add() - handle task promise failure', async t => {
 		queue.add(
 			async () => {
 				throw new Error('broken');
-			}
+			},
 		),
-		{message: 'broken'}
+		{message: 'broken'},
 	);
 
 	queue.add(() => 'task #1');
@@ -537,7 +537,7 @@ test('.addAll() sync/async mixed tasks', async t => {
 		() => 'sync 1',
 		async () => delay(2000),
 		() => 'sync 2',
-		async () => fixture
+		async () => fixture,
 	];
 
 	const promise = queue.addAll(functions);
@@ -569,7 +569,7 @@ test('should resolve empty when size is zero', async t => {
 			await delay(10);
 			queue.start();
 		},
-		500
+		500,
 	);
 
 	await queue.onIdle();
@@ -580,7 +580,7 @@ test('.add() - throttled', async t => {
 	const queue = new PQueue({
 		intervalCap: 1,
 		interval: 500,
-		autoStart: false
+		autoStart: false,
 	});
 	queue.add(async () => result.push(1));
 	queue.start();
@@ -598,7 +598,7 @@ test('.add() - throttled, carryoverConcurrencyCount false', async t => {
 		intervalCap: 1,
 		carryoverConcurrencyCount: false,
 		interval: 500,
-		autoStart: false
+		autoStart: false,
 	});
 
 	const values = [0, 1];
@@ -634,7 +634,7 @@ test('.add() - throttled, carryoverConcurrencyCount true', async t => {
 		carryoverConcurrencyCount: true,
 		intervalCap: 1,
 		interval: 500,
-		autoStart: false
+		autoStart: false,
 	});
 
 	const values = [0, 1];
@@ -681,7 +681,7 @@ test('.add() - throttled 10, concurrency 5', async t => {
 		concurrency: 5,
 		intervalCap: 10,
 		interval: 1000,
-		autoStart: false
+		autoStart: false,
 	});
 
 	const firstValue = [...Array.from({length: 5}).keys()];
@@ -727,7 +727,7 @@ test('.add() - throttled finish and resume', async t => {
 		concurrency: 1,
 		intervalCap: 2,
 		interval: 2000,
-		autoStart: false
+		autoStart: false,
 	});
 
 	const values = [0, 1];
@@ -769,7 +769,7 @@ test('pause should work when throttled', async t => {
 		concurrency: 2,
 		intervalCap: 2,
 		interval: 1000,
-		autoStart: false
+		autoStart: false,
 	});
 
 	const values = 	[0, 1, 2, 3];
@@ -816,7 +816,7 @@ test('pause should work when throttled', async t => {
 test('clear interval on pause', async t => {
 	const queue = new PQueue({
 		interval: 100,
-		intervalCap: 1
+		intervalCap: 1,
 	});
 
 	queue.add(() => {

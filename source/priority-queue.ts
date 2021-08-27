@@ -12,22 +12,22 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 	enqueue(run: RunFunction, options?: Partial<PriorityQueueOptions>): void {
 		options = {
 			priority: 0,
-			...options
+			...options,
 		};
 
 		const element = {
 			priority: options.priority,
-			run
+			run,
 		};
 
-		if (this.size && this._queue[this.size - 1]?.priority! >= options.priority!) {
+		if (this.size && this._queue[this.size - 1]!.priority! >= options.priority!) {
 			this._queue.push(element);
 			return;
 		}
 
 		const index = lowerBound(
 			this._queue, element,
-			(a: Readonly<PriorityQueueOptions>, b: Readonly<PriorityQueueOptions>) => b.priority! - a.priority!
+			(a: Readonly<PriorityQueueOptions>, b: Readonly<PriorityQueueOptions>) => b.priority! - a.priority!,
 		);
 		this._queue.splice(index, 0, element);
 	}
@@ -39,7 +39,7 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 
 	filter(options: Readonly<Partial<PriorityQueueOptions>>): RunFunction[] {
 		return this._queue.filter(
-			(element: Readonly<PriorityQueueOptions>) => element.priority === options.priority
+			(element: Readonly<PriorityQueueOptions>) => element.priority === options.priority,
 		).map((element: Readonly<{run: RunFunction}>) => element.run);
 	}
 
