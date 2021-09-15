@@ -1,6 +1,7 @@
 import {Queue, RunFunction} from './queue.js';
 import lowerBound from './lower-bound.js';
 import {QueueAddOptions} from './options.js';
+import {shallowPartialEqual} from './shallow-equal.js';
 
 export interface PriorityQueueOptions extends QueueAddOptions {
 	priority?: number;
@@ -16,8 +17,8 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 		};
 
 		const element = {
-			priority: options.priority,
 			run,
+			...options,
 		};
 
 		if (this.size && this._queue[this.size - 1]!.priority! >= options.priority!) {
@@ -39,7 +40,7 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 
 	filter(options: Readonly<Partial<PriorityQueueOptions>>): RunFunction[] {
 		return this._queue.filter(
-			(element: Readonly<PriorityQueueOptions>) => element.priority === options.priority,
+			(element: Readonly<PriorityQueueOptions>) => shallowPartialEqual(options, element),
 		).map((element: Readonly<{run: RunFunction}>) => element.run);
 	}
 
