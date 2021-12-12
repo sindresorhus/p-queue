@@ -16,6 +16,7 @@
 		"bench": "node --loader=ts-node/esm bench.ts",
 		"prepare": "npm run build"
 	},
+	"main": "./dist/index.js",
 	"files": [
 		"dist"
 	],
