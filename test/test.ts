@@ -118,6 +118,19 @@ test('.sizeBy() - priority', async t => {
 	t.is(queue.sizeBy({priority: 0}), 0);
 });
 
+test('.sizeBy() - uid', async t => {
+	const queue = new PQueue();
+	queue.pause();
+	queue.add(async () => 0, {uid: '341a0c1b-147a-4b8e-9b9d-186773918a25'});
+	queue.add(async () => 0, {uid: '07227c1e-0476-46b5-bd5b-5436626ede16'});
+	queue.add(async () => 0, {uid: '341a0c1b-147a-4b8e-9b9d-186773918a25'});
+	t.is(queue.sizeBy({uid: '341a0c1b-147a-4b8e-9b9d-186773918a25'}), 2);
+	t.is(queue.sizeBy({uid: '07227c1e-0476-46b5-bd5b-5436626ede16'}), 1);
+	queue.clear();
+	await queue.onEmpty();
+	t.is(queue.sizeBy({uid: '341a0c1b-147a-4b8e-9b9d-186773918a25'}), 0);
+	t.is(queue.sizeBy({uid: '07227c1e-0476-46b5-bd5b-5436626ede16'}), 0);
+});
 test('.add() - timeout without throwing', async t => {
 	const result: string[] = [];
 	const queue = new PQueue({timeout: 300, throwOnTimeout: false});

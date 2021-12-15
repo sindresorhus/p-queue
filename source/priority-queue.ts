@@ -17,8 +17,8 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 		};
 
 		const element = {
-			run,
 			...options,
+			run,
 		};
 
 		if (this.size && this._queue[this.size - 1]!.priority! >= options.priority!) {
