@@ -131,6 +131,12 @@ Default: `0`
 
 Priority of operation. Operations with greater priority will be scheduled first.
 
+##### any other key
+
+Type: `object`
+
+You can pass any keys in options to use then later in sizeBy filtering
+
 #### .addAll(fns, options?)
 
 Same as `.add()`, but accepts an array of sync or async functions and returns a promise that resolves when all functions are resolved.
@@ -177,7 +183,7 @@ Size of the queue, the number of queued items waiting to run.
 
 Size of the queue, filtered by the given options.
 
-For example, this can be used to find the number of items remaining in the queue with a specific priority level.
+For example, this can be used to find the number of items remaining in the queue with a specific priority level or any other field.
 
 ```js
 import PQueue from 'p-queue';
