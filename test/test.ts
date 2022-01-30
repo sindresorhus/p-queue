@@ -1062,3 +1062,25 @@ test('should verify timeout overrides passed to add', async t => {
 
 	await queue.onIdle();
 });
+
+test('should skip an aborted job', t => {
+	const queue = new PQueue();
+
+	const controller = new AbortController();
+
+	controller.abort();
+	queue.add(() => {
+		t.fail();
+	}, {signal: controller.signal});
+	t.pass();
+});
+
+test('should pass AbortSignal instance to job', async t => {
+	const queue = new PQueue();
+
+	const controller = new AbortController();
+
+	await queue.add(async ({signal}) => {
+		t.is(controller.signal, signal);
+	}, {signal: controller.signal});
+});

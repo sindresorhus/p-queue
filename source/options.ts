@@ -1,8 +1,20 @@
 import {Queue, RunFunction} from './queue.js';
 
-export type QueueAddOptions = Readonly<Record<string, unknown>>;
+interface TimeoutOptions {
+	/**
+	Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
+	*/
+	timeout?: number;
 
-export interface Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOptions extends QueueAddOptions> {
+	/**
+	Whether or not a timeout is considered an exception.
+
+	@default false
+	*/
+	throwOnTimeout?: boolean;
+}
+
+export interface Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOptions extends QueueAddOptions> extends TimeoutOptions {
 	/**
 	Concurrency limit.
 
@@ -48,25 +60,46 @@ export interface Options<QueueType extends Queue<RunFunction, QueueOptions>, Que
 	@default false
 	*/
 	readonly carryoverConcurrencyCount?: boolean;
-
-	/**
-	Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
-	*/
-	timeout?: number;
-
-	/**
-	Whether or not a timeout is considered an exception.
-
-	@default false
-	*/
-	throwOnTimeout?: boolean;
 }
 
-export interface DefaultAddOptions extends QueueAddOptions {
+export interface QueueAddOptions extends TaskOptions, TimeoutOptions {
 	/**
 	Priority of operation. Operations with greater priority will be scheduled first.
 
 	@default 0
 	*/
 	readonly priority?: number;
+}
+
+export interface TaskOptions {
+	/**
+	AbortSignal for cancellation of the operation. When aborted, it will be removed from the queue. If the operation is already running, the signal will need to be handled by the operation itself.
+
+	@example
+	```
+	import PQueue from 'p-queue';
+	import got, {CancelError} from 'got';
+
+	const queue = new PQueue();
+
+	const controller = new AbortController();
+
+	await queue.add(({signal}) => {
+		const request = got('https://sindresorhus.com');
+
+		signal.addEventListener('abort', () => {
+			request.cancel();
+		});
+
+		try {
+			return await request;
+		} catch (error) {
+			if (!(error instanceof CancelError)) {
+				throw error;
+			}
+		}
+	}, {signal: controller.signal});
+	```
+	*/
+	readonly signal?: AbortSignal;
 }

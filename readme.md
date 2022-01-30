@@ -118,7 +118,7 @@ Note: If your items can potentially throw an exception, you must handle those er
 
 Type: `Function`
 
-Promise-returning/async function.
+Promise-returning/async function. When executed, it will receive `{signal}` as the first argument.
 
 #### options
 
@@ -130,6 +130,37 @@ Type: `number`\
 Default: `0`
 
 Priority of operation. Operations with greater priority will be scheduled first.
+
+##### signal
+
+Type: `AbortSignal`
+
+AbortSignal for cancellation of the operation. When aborted, it will be removed from the queue. If the operation is already running, the signal will need to be handled by the operation itself.
+
+```js
+import PQueue from 'p-queue';
+import got, {CancelError} from 'got';
+
+const queue = new PQueue();
+
+const controller = new AbortController();
+
+await queue.add(({signal}) => {
+	const request = got('https://sindresorhus.com');
+
+	signal.addEventListener('abort', () => {
+		request.cancel();
+	});
+
+	try {
+		return await request;
+	} catch (error) {
+		if (!(error instanceof CancelError)) {
+			throw error;
+		}
+	}
+}, {signal: controller.signal});
+```
 
 #### .addAll(fns, options?)
 
