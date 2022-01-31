@@ -5,7 +5,7 @@ import delay from 'delay';
 import inRange from 'in-range';
 import timeSpan from 'time-span';
 import randomInt from 'random-int';
-import PQueue from '../source/index.js';
+import PQueue, {AbortError} from '../source/index.js';
 
 const fixture = Symbol('fixture');
 
@@ -1063,16 +1063,16 @@ test('should verify timeout overrides passed to add', async t => {
 	await queue.onIdle();
 });
 
-test('should skip an aborted job', t => {
+test('should skip an aborted job', async t => {
 	const queue = new PQueue();
 
 	const controller = new AbortController();
 
 	controller.abort();
-	queue.add(() => {
-		t.fail();
-	}, {signal: controller.signal});
-	t.pass();
+	// eslint-disable-next-line @typescript-eslint/no-empty-function
+	await t.throwsAsync(queue.add(() => {}, {signal: controller.signal}), {
+		instanceOf: AbortError,
+	});
 });
 
 test('should pass AbortSignal instance to job', async t => {

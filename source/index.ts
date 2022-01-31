@@ -16,6 +16,11 @@ const empty = (): void => {};
 const timeoutError = new TimeoutError();
 
 /**
+The error thrown by `queue.add()` when a job is aborted before it is run. See `signal`.
+*/
+export class AbortError extends Error {}
+
+/**
 Promise queue with concurrency control.
 */
 export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = QueueAddOptions> extends EventEmitter<'active' | 'idle' | 'add' | 'next' | 'completed' | 'error'> {
@@ -240,23 +245,27 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				this.#intervalCount++;
 
 				try {
-					if (!options.signal?.aborted) {
-						const operation = (this.#timeout === undefined && options.timeout === undefined) ? fn({signal: options.signal}) : pTimeout(
-							Promise.resolve(fn({signal: options.signal})),
-							(options.timeout === undefined ? this.#timeout : options.timeout)!,
-							() => {
-								if (options.throwOnTimeout === undefined ? this.#throwOnTimeout : options.throwOnTimeout) {
-									reject(timeoutError);
-								}
-
-								return undefined;
-							},
-						);
-
-						const result = await operation;
-						resolve(result!);
-						this.emit('completed', result);
+					if (options.signal?.aborted) {
+						// TODO: Use ABORT_ERR code when targeting Node.js 16 (https://nodejs.org/docs/latest-v16.x/api/errors.html#abort_err)
+						reject(new AbortError('The task was aborted.'));
+						return;
 					}
+
+					const operation = (this.#timeout === undefined && options.timeout === undefined) ? fn({signal: options.signal}) : pTimeout(
+						Promise.resolve(fn({signal: options.signal})),
+						(options.timeout === undefined ? this.#timeout : options.timeout)!,
+						() => {
+							if (options.throwOnTimeout === undefined ? this.#throwOnTimeout : options.throwOnTimeout) {
+								reject(timeoutError);
+							}
+
+							return undefined;
+						},
+					);
+
+					const result = await operation;
+					resolve(result!);
+					this.emit('completed', result);
 				} catch (error: unknown) {
 					reject(error);
 					this.emit('error', error);

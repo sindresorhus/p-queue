@@ -133,33 +133,37 @@ Priority of operation. Operations with greater priority will be scheduled first.
 
 ##### signal
 
-Type: `AbortSignal`
-
-AbortSignal for cancellation of the operation. When aborted, it will be removed from the queue. If the operation is already running, the signal will need to be handled by the operation itself.
+[AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) for cancellation of the operation. When aborted, it will be removed from the queue and the `queue.add()` call will reject with an `AbortError`. If the operation is already running, the signal will need to be handled by the operation itself.
 
 ```js
-import PQueue from 'p-queue';
+import PQueue, {AbortError} from 'p-queue';
 import got, {CancelError} from 'got';
 
 const queue = new PQueue();
 
 const controller = new AbortController();
 
-await queue.add(({signal}) => {
-	const request = got('https://sindresorhus.com');
+try {
+	await queue.add(({signal}) => {
+		const request = got('https://sindresorhus.com');
 
-	signal.addEventListener('abort', () => {
-		request.cancel();
-	});
+		signal.addEventListener('abort', () => {
+			request.cancel();
+		});
 
-	try {
-		return await request;
-	} catch (error) {
-		if (!(error instanceof CancelError)) {
-			throw error;
+		try {
+			return await request;
+		} catch (error) {
+			if (!(error instanceof CancelError)) {
+				throw error;
+			}
 		}
+	}, {signal: controller.signal});
+} catch (error) {
+	if (!(error instanceof AbortError)) {
+		throw error;
 	}
-}, {signal: controller.signal});
+}
 ```
 
 #### .addAll(fns, options?)
@@ -357,6 +361,10 @@ await queue.add(() => delay(600));
 //=> 'Task is completed.  Size: 0  Pending: 1'
 //=> 'Task is completed.  Size: 0  Pending: 0'
 ```
+
+### AbortError
+
+The error thrown by `queue.add()` when a job is aborted before it is run. See [`signal`](#signal).
 
 ## Advanced example
 
