@@ -133,6 +133,8 @@ Priority of operation. Operations with greater priority will be scheduled first.
 
 ##### signal
 
+*Requires Node.js 16 or later.*
+
 [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) for cancellation of the operation. When aborted, it will be removed from the queue and the `queue.add()` call will reject with an `AbortError`. If the operation is already running, the signal will need to be handled by the operation itself.
 
 ```js
