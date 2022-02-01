@@ -6,8 +6,8 @@ Useful for rate-limiting async (or sync) operations. For example, when interacti
 
 ## Install
 
-```
-$ npm install p-queue
+```sh
+npm install p-queue
 ```
 
 ## Usage
@@ -475,6 +475,11 @@ const queue = new PQueue({queueClass: QueueClass});
 #### How do the `concurrency` and `intervalCap` options affect each other?
 
 They are just different constraints. The `concurrency` option limits how many things run at the same time. The `intervalCap` option limits how many things run in total during the interval (over time).
+
+## Maintainers
+
+- [Sindre Sorhus](https://github.com/sindresorhus)
+- [Richie Bendall](https://github.com/Richienb)
 
 ## Related
 
