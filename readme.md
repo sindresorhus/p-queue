@@ -135,7 +135,7 @@ Priority of operation. Operations with greater priority will be scheduled first.
 
 Type: `object`
 
-You can pass any keys in options to use then later in sizeBy filtering
+You can pass any keys in options to use then later in `sizeBy` filtering.
 
 #### .addAll(fns, options?)
 
