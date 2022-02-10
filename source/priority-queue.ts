@@ -8,7 +8,7 @@ export interface PriorityQueueOptions extends QueueAddOptions {
 }
 
 export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOptions> {
-	private readonly _queue: Array<PriorityQueueOptions & {run: RunFunction}> = [];
+	readonly #queue: Array<PriorityQueueOptions & {run: RunFunction}> = [];
 
 	enqueue(run: RunFunction, options?: Partial<PriorityQueueOptions>): void {
 		options = {
@@ -21,30 +21,30 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 			run,
 		};
 
-		if (this.size && this._queue[this.size - 1]!.priority! >= options.priority!) {
-			this._queue.push(element);
+		if (this.size && this.#queue[this.size - 1]!.priority! >= options.priority!) {
+			this.#queue.push(element);
 			return;
 		}
 
 		const index = lowerBound(
-			this._queue, element,
+			this.#queue, element,
 			(a: Readonly<PriorityQueueOptions>, b: Readonly<PriorityQueueOptions>) => b.priority! - a.priority!,
 		);
-		this._queue.splice(index, 0, element);
+		this.#queue.splice(index, 0, element);
 	}
 
 	dequeue(): RunFunction | undefined {
-		const item = this._queue.shift();
+		const item = this.#queue.shift();
 		return item?.run;
 	}
 
 	filter(options: Readonly<Partial<PriorityQueueOptions>>): RunFunction[] {
-		return this._queue.filter(
+		return this.#queue.filter(
 			(element: Readonly<PriorityQueueOptions>) => shallowPartialEqual(options, element),
 		).map((element: Readonly<{run: RunFunction}>) => element.run);
 	}
 
 	get size(): number {
-		return this._queue.length;
+		return this.#queue.length;
 	}
 }
