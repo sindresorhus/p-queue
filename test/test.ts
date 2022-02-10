@@ -131,6 +131,7 @@ test('.sizeBy() - uid', async t => {
 	t.is(queue.sizeBy({uid: '341a0c1b-147a-4b8e-9b9d-186773918a25'}), 0);
 	t.is(queue.sizeBy({uid: '07227c1e-0476-46b5-bd5b-5436626ede16'}), 0);
 });
+
 test('.add() - timeout without throwing', async t => {
 	const result: string[] = [];
 	const queue = new PQueue({timeout: 300, throwOnTimeout: false});
