@@ -4,6 +4,10 @@
 
 Useful for rate-limiting async (or sync) operations. For example, when interacting with a REST API or when doing CPU/memory intensive tasks.
 
+For servers, you probably want a Redis-backed [job queue](https://github.com/sindresorhus/awesome-nodejs#job-queues) instead.
+
+Note that the project is feature complete. We are happy to review pull requests, but we don't plan any further development. We are also not answering email support questions.
+
 ## Install
 
 ```sh
