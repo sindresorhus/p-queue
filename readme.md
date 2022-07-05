@@ -14,6 +14,8 @@ Note that the project is feature complete. We are happy to review pull requests,
 npm install p-queue
 ```
 
+**Warning:** This package is native [ESM](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules) and no longer provides a CommonJS export. If your project uses CommonJS, you'll have to [convert to ESM](https://gist.github.com/sindresorhus/a39789f98801d908bbc7ff3ecc99d99c) or use the [dynamic `import()`](https://v8.dev/features/dynamic-import) function. Please don't open issues for questions regarding CommonJS / ESM. You can also use [version 6](https://github.com/sindresorhus/p-queue/tree/v6.6.2) instead which is pretty stable. We will backport security fixes to v6 for the foreseeable future.
+
 ## Usage
 
 Here we run only one promise at the time. For example, set `concurrency` to 4 to run four promises at the same time.
