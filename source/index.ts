@@ -4,14 +4,9 @@ import {Queue, RunFunction} from './queue.js';
 import PriorityQueue from './priority-queue.js';
 import {QueueAddOptions, Options, TaskOptions} from './options.js';
 
-type ResolveFunction<T = void> = (value?: T | PromiseLike<T>) => void;
-
 type Task<TaskResultType> =
 	| ((options: TaskOptions) => PromiseLike<TaskResultType>)
 	| ((options: TaskOptions) => TaskResultType);
-
-// eslint-disable-next-line @typescript-eslint/no-empty-function
-const empty = (): void => {};
 
 const timeoutError = new TimeoutError();
 
@@ -20,10 +15,12 @@ The error thrown by `queue.add()` when a job is aborted before it is run. See `s
 */
 export class AbortError extends Error {}
 
+type EventName = 'active' | 'idle' | 'empty' | 'add' | 'next' | 'completed' | 'error';
+
 /**
 Promise queue with concurrency control.
 */
-export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = QueueAddOptions> extends EventEmitter<'active' | 'idle' | 'add' | 'next' | 'completed' | 'error'> {
+export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = QueueAddOptions> extends EventEmitter<EventName> {
 	readonly #carryoverConcurrencyCount: boolean;
 
 	readonly #isIntervalIgnored: boolean;
@@ -51,13 +48,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	#isPaused: boolean;
 
-	#resolveEmpty: ResolveFunction = empty;
-
-	#resolveIdle: ResolveFunction = empty;
-
-	#timeout?: number;
-
 	readonly #throwOnTimeout: boolean;
+
+	/**
+	Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
+
+	Applies to each future operation.
+	*/
+	timeout?: number;
 
 	constructor(options?: Options<QueueType, EnqueueOptionsType>) {
 		super();
@@ -88,7 +86,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		this.#queue = new options.queueClass!();
 		this.#queueClass = options.queueClass!;
 		this.concurrency = options.concurrency!;
-		this.#timeout = options.timeout;
+		this.timeout = options.timeout;
 		this.#throwOnTimeout = options.throwOnTimeout === true;
 		this.#isPaused = options.autoStart === false;
 	}
@@ -107,13 +105,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		this.emit('next');
 	}
 
-	#resolvePromises(): void {
-		this.#resolveEmpty();
-		this.#resolveEmpty = empty;
+	#emitEvents(): void {
+		this.emit('empty');
 
 		if (this.#pendingCount === 0) {
-			this.#resolveIdle();
-			this.#resolveIdle = empty;
 			this.emit('idle');
 		}
 	}
@@ -124,7 +119,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		this.#timeoutId = undefined;
 	}
 
-	#isIntervalPaused(): boolean {
+	get #isIntervalPaused(): boolean {
 		const now = Date.now();
 
 		if (this.#intervalId === undefined) {
@@ -161,13 +156,13 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 			this.#intervalId = undefined;
 
-			this.#resolvePromises();
+			this.#emitEvents();
 
 			return false;
 		}
 
 		if (!this.#isPaused) {
-			const canInitializeInterval = !this.#isIntervalPaused();
+			const canInitializeInterval = !this.#isIntervalPaused;
 			if (this.#doesIntervalAllowAnother && this.#doesConcurrentAllowAnother) {
 				const job = this.#queue.dequeue();
 				if (!job) {
@@ -251,9 +246,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 						return;
 					}
 
-					const operation = (this.#timeout === undefined && options.timeout === undefined) ? fn({signal: options.signal}) : pTimeout(
+					const operation = (this.timeout === undefined && options.timeout === undefined) ? fn({signal: options.signal}) : pTimeout(
 						Promise.resolve(fn({signal: options.signal})),
-						(options.timeout === undefined ? this.#timeout : options.timeout)!,
+						(options.timeout === undefined ? this.timeout : options.timeout)!,
 						() => {
 							if (options.throwOnTimeout === undefined ? this.#throwOnTimeout : options.throwOnTimeout) {
 								reject(timeoutError);
@@ -331,13 +326,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			return;
 		}
 
-		return new Promise<void>(resolve => {
-			const existingResolve = this.#resolveEmpty;
-			this.#resolveEmpty = () => {
-				existingResolve();
-				resolve();
-			};
-		});
+		await this.#onEvent('empty');
 	}
 
 	/**
@@ -353,16 +342,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			return;
 		}
 
-		return new Promise<void>(resolve => {
-			const listener = () => {
-				if (this.#queue.size < limit) {
-					this.removeListener('next', listener);
-					resolve();
-				}
-			};
-
-			this.on('next', listener);
-		});
+		await this.#onEvent('next', () => this.#queue.size < limit);
 	}
 
 	/**
@@ -376,12 +356,21 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			return;
 		}
 
-		return new Promise<void>(resolve => {
-			const existingResolve = this.#resolveIdle;
-			this.#resolveIdle = () => {
-				existingResolve();
+		await this.#onEvent('idle');
+	}
+
+	async #onEvent(event: EventName, filter?: () => boolean): Promise<void> {
+		return new Promise(resolve => {
+			const listener = () => {
+				if (filter && !filter()) {
+					return;
+				}
+
+				this.off(event, listener);
 				resolve();
 			};
+
+			this.on(event, listener);
 		});
 	}
 
@@ -414,17 +403,6 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	get isPaused(): boolean {
 		return this.#isPaused;
-	}
-
-	get timeout(): number | undefined {
-		return this.#timeout;
-	}
-
-	/**
-	Set the timeout for future operations.
-	*/
-	set timeout(milliseconds: number | undefined) {
-		this.#timeout = milliseconds;
 	}
 }
 

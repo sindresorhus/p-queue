@@ -5,6 +5,7 @@ import delay from 'delay';
 import inRange from 'in-range';
 import timeSpan from 'time-span';
 import randomInt from 'random-int';
+import pDefer from 'p-defer';
 import PQueue, {AbortError} from '../source/index.js';
 
 const fixture = Symbol('fixture');
@@ -890,6 +891,38 @@ test('should emit idle event when idle', async t => {
 	t.is(queue.pending, 0);
 	t.is(queue.size, 0);
 	t.is(timesCalled, 2);
+});
+
+test('should emit empty event when empty', async t => {
+	const queue = new PQueue({concurrency: 1});
+
+	let timesCalled = 0;
+	queue.on('empty', () => {
+		timesCalled++;
+	});
+
+	const {resolve: resolveJob1, promise: job1Promise} = pDefer();
+	const {resolve: resolveJob2, promise: job2Promise} = pDefer();
+
+	const job1 = queue.add(async () => job1Promise);
+	const job2 = queue.add(async () => job2Promise);
+	t.is(queue.size, 1);
+	t.is(queue.pending, 1);
+	t.is(timesCalled, 0);
+
+	resolveJob1();
+	await job1;
+
+	t.is(queue.size, 0);
+	t.is(queue.pending, 1);
+	t.is(timesCalled, 0);
+
+	resolveJob2();
+	await job2;
+
+	t.is(queue.size, 0);
+	t.is(queue.pending, 0);
+	t.is(timesCalled, 1);
 });
 
 test('should emit add event when adding task', async t => {

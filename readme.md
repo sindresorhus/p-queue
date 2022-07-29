@@ -308,9 +308,17 @@ queue.on('error', error => {
 queue.add(() => Promise.reject(new Error('error')));
 ```
 
+#### empty
+
+Emitted every time the queue becomes empty.
+
+Useful if you for example add additional items at a later time.
+
 #### idle
 
 Emitted every time the queue becomes empty and all promises have completed; `queue.size === 0 && queue.pending === 0`.
+
+The difference with `empty` is that `idle` guarantees that all work from the queue has finished. `empty` merely signals that the queue is empty, but it could mean that some promises haven't completed yet.
 
 ```js
 import delay from 'delay';
