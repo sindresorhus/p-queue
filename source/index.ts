@@ -8,8 +8,6 @@ type Task<TaskResultType> =
 	| ((options: TaskOptions) => PromiseLike<TaskResultType>)
 	| ((options: TaskOptions) => TaskResultType);
 
-const timeoutError = new TimeoutError();
-
 /**
 The error thrown by `queue.add()` when a job is aborted before it is run. See `signal`.
 */
@@ -41,7 +39,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	readonly #queueClass: new () => QueueType;
 
-	#pendingCount = 0;
+	#pending = 0;
 
 	// The `!` is needed because of https://github.com/microsoft/TypeScript/issues/32194
 	#concurrency!: number;
@@ -96,21 +94,13 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	get #doesConcurrentAllowAnother(): boolean {
-		return this.#pendingCount < this.#concurrency;
+		return this.#pending < this.#concurrency;
 	}
 
 	#next(): void {
-		this.#pendingCount--;
+		this.#pending--;
 		this.#tryToStartAnother();
 		this.emit('next');
-	}
-
-	#emitEvents(): void {
-		this.emit('empty');
-
-		if (this.#pendingCount === 0) {
-			this.emit('idle');
-		}
 	}
 
 	#onResumeInterval(): void {
@@ -127,7 +117,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			if (delay < 0) {
 				// Act as the interval was done
 				// We don't need to resume it here because it will be resumed on line 160
-				this.#intervalCount = (this.#carryoverConcurrencyCount) ? this.#pendingCount : 0;
+				this.#intervalCount = (this.#carryoverConcurrencyCount) ? this.#pending : 0;
 			} else {
 				// Act as the interval is pending
 				if (this.#timeoutId === undefined) {
@@ -156,7 +146,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 			this.#intervalId = undefined;
 
-			this.#emitEvents();
+			this.emit('empty');
+
+			if (this.#pending === 0) {
+				this.emit('idle');
+			}
 
 			return false;
 		}
@@ -199,12 +193,12 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	#onInterval(): void {
-		if (this.#intervalCount === 0 && this.#pendingCount === 0 && this.#intervalId) {
+		if (this.#intervalCount === 0 && this.#pending === 0 && this.#intervalId) {
 			clearInterval(this.#intervalId);
 			this.#intervalId = undefined;
 		}
 
-		this.#intervalCount = this.#carryoverConcurrencyCount ? this.#pendingCount : 0;
+		this.#intervalCount = this.#carryoverConcurrencyCount ? this.#pending : 0;
 		this.#processQueue();
 	}
 
@@ -230,48 +224,69 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		this.#processQueue();
 	}
 
+	async #throwOnAbort(signal: AbortSignal): Promise<never> {
+		return new Promise((_resolve, reject) => {
+			signal.addEventListener('abort', () => {
+				// TODO: Reject with signal.throwIfAborted() when targeting Node.js 18
+				// TODO: Use ABORT_ERR code when targeting Node.js 16 (https://nodejs.org/docs/latest-v16.x/api/errors.html#abort_err)
+				reject(new AbortError('The task was aborted.'));
+			}, {once: true});
+		});
+	}
+
 	/**
 	Adds a sync or async task to the queue. Always returns a promise.
 	*/
-	async add<TaskResultType>(fn: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType> {
-		return new Promise<TaskResultType>((resolve, reject) => {
-			const run = async (): Promise<void> => {
-				this.#pendingCount++;
+	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<TaskResultType | void>;
+	async add<TaskResultType>(function_: Task<TaskResultType>, options: {throwOnTimeout: true} & Exclude<EnqueueOptionsType, 'throwOnTimeout'>): Promise<TaskResultType>;
+	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType | void> {
+		options = {
+			timeout: this.timeout,
+			throwOnTimeout: this.#throwOnTimeout,
+			...options,
+		};
+
+		return new Promise((resolve, reject) => {
+			this.#queue.enqueue(async () => {
+				this.#pending++;
 				this.#intervalCount++;
 
 				try {
+					// TODO: Use options.signal?.throwIfAborted() when targeting Node.js 18
 					if (options.signal?.aborted) {
 						// TODO: Use ABORT_ERR code when targeting Node.js 16 (https://nodejs.org/docs/latest-v16.x/api/errors.html#abort_err)
-						reject(new AbortError('The task was aborted.'));
+						throw new AbortError('The task was aborted.');
+					}
+
+					let operation = function_({signal: options.signal});
+
+					if (options.timeout) {
+						operation = pTimeout(Promise.resolve(operation), options.timeout);
+					}
+
+					if (options.signal) {
+						operation = Promise.race([operation, this.#throwOnAbort(options.signal)]);
+					}
+
+					const result = await operation;
+					resolve(result);
+					this.emit('completed', result);
+				} catch (error: unknown) {
+					if (error instanceof TimeoutError && !options.throwOnTimeout) {
+						resolve();
 						return;
 					}
 
-					const operation = (this.timeout === undefined && options.timeout === undefined) ? fn({signal: options.signal}) : pTimeout(
-						Promise.resolve(fn({signal: options.signal})),
-						(options.timeout === undefined ? this.timeout : options.timeout)!,
-						() => {
-							if (options.throwOnTimeout === undefined ? this.#throwOnTimeout : options.throwOnTimeout) {
-								reject(timeoutError);
-							}
-
-							return undefined;
-						},
-					);
-
-					const result = await operation;
-					resolve(result!);
-					this.emit('completed', result);
-				} catch (error: unknown) {
 					reject(error);
 					this.emit('error', error);
+				} finally {
+					this.#next();
 				}
+			}, options);
 
-				this.#next();
-			};
-
-			this.#queue.enqueue(run, options);
-			this.#tryToStartAnother();
 			this.emit('add');
+
+			this.#tryToStartAnother();
 		});
 	}
 
@@ -282,8 +297,16 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
-		options?: EnqueueOptionsType,
-	): Promise<TaskResultsType[]> {
+		options?: Partial<EnqueueOptionsType>,
+	): Promise<Array<TaskResultsType | void>>;
+	async addAll<TaskResultsType>(
+		functions: ReadonlyArray<Task<TaskResultsType>>,
+		options?: {throwOnTimeout: true} & Partial<Exclude<EnqueueOptionsType, 'throwOnTimeout'>>,
+	): Promise<TaskResultsType[]>
+	async addAll<TaskResultsType>(
+		functions: ReadonlyArray<Task<TaskResultsType>>,
+		options?: Partial<EnqueueOptionsType>,
+	): Promise<Array<TaskResultsType | void>> {
 		return Promise.all(functions.map(async function_ => this.add(function_, options)));
 	}
 
@@ -352,7 +375,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	async onIdle(): Promise<void> {
 		// Instantly resolve if none pending and if nothing else is queued
-		if (this.#pendingCount === 0 && this.#queue.size === 0) {
+		if (this.#pending === 0 && this.#queue.size === 0) {
 			return;
 		}
 
@@ -395,7 +418,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	Number of running items (no longer in the queue).
 	*/
 	get pending(): number {
-		return this.#pendingCount;
+		return this.#pending;
 	}
 
 	/**

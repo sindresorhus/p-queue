@@ -773,8 +773,8 @@ test('pause should work when throttled', async t => {
 		autoStart: false,
 	});
 
-	const values = 	[0, 1, 2, 3];
-	const firstValue = 	[0, 1];
+	const values = [0, 1, 2, 3];
+	const firstValue = [0, 1];
 	const secondValue = [0, 1, 2, 3];
 
 	for (const value of values) {
@@ -1114,4 +1114,23 @@ test('should pass AbortSignal instance to job', async t => {
 	await queue.add(async ({signal}) => {
 		t.is(controller.signal, signal!);
 	}, {signal: controller.signal});
+});
+
+test('aborting multiple jobs at the same time', async t => {
+	const queue = new PQueue({concurrency: 1});
+
+	const controller1 = new AbortController();
+	const controller2 = new AbortController();
+
+	const task1 = queue.add(async () => new Promise(() => {}), {signal: controller1.signal}); // eslint-disable-line @typescript-eslint/no-empty-function
+	const task2 = queue.add(async () => new Promise(() => {}), {signal: controller2.signal}); // eslint-disable-line @typescript-eslint/no-empty-function
+
+	setTimeout(() => {
+		controller1.abort();
+		controller2.abort();
+	}, 0);
+
+	await t.throwsAsync(task1, {instanceOf: AbortError});
+	await t.throwsAsync(task2, {instanceOf: AbortError});
+	t.like(queue, {size: 0, pending: 0});
 });
