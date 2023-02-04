@@ -78,10 +78,5 @@
 			"@typescript-eslint/no-floating-promises": "off",
 			"@typescript-eslint/no-invalid-void-type": "off"
 		}
-	},
-	"nyc": {
-		"extension": [
-			".ts"
-		]
 	}
 }
