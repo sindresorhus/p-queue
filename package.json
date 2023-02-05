@@ -11,10 +11,10 @@
 		"node": ">=12"
 	},
 	"scripts": {
-		"build": "tsc --build --clean",
+		"build": "del-cli dist && tsc",
 		"test": "xo && ava",
 		"bench": "node --loader=ts-node/esm bench.ts",
-		"prepublishOnly": "tsc --build --clean"
+		"prepublishOnly": "del-cli dist && tsc"
 	},
 	"files": [
 		"dist"
@@ -52,6 +52,7 @@
 		"@types/node": "^17.0.13",
 		"ava": "^5.1.1",
 		"benchmark": "^2.1.4",
+		"del-cli": "^5.0.0",
 		"delay": "^5.0.0",
 		"in-range": "^3.0.0",
 		"p-defer": "^4.0.0",
