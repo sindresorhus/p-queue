@@ -14,7 +14,7 @@
 		"build": "tsc --build --clean",
 		"test": "xo && ava",
 		"bench": "node --loader=ts-node/esm bench.ts",
-		"prepare": "tsc --build --clean"
+		"prepublishOnly": "tsc --build --clean"
 	},
 	"files": [
 		"dist"
