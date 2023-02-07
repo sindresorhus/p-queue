@@ -55,6 +55,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	timeout?: number;
 
+	// TODO: The `throwOnTimeout` option should affect the return types of `add()` and `addAll()`
 	constructor(options?: Options<QueueType, EnqueueOptionsType>) {
 		super();
 
@@ -237,8 +238,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	/**
 	Adds a sync or async task to the queue. Always returns a promise.
 	*/
-	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<TaskResultType | void>;
 	async add<TaskResultType>(function_: Task<TaskResultType>, options: {throwOnTimeout: true} & Exclude<EnqueueOptionsType, 'throwOnTimeout'>): Promise<TaskResultType>;
+	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<TaskResultType | void>;
 	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType | void> {
 		options = {
 			timeout: this.timeout,
@@ -297,12 +298,12 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
-		options?: Partial<EnqueueOptionsType>,
-	): Promise<Array<TaskResultsType | void>>;
-	async addAll<TaskResultsType>(
-		functions: ReadonlyArray<Task<TaskResultsType>>,
 		options?: {throwOnTimeout: true} & Partial<Exclude<EnqueueOptionsType, 'throwOnTimeout'>>,
 	): Promise<TaskResultsType[]>
+	async addAll<TaskResultsType>(
+		functions: ReadonlyArray<Task<TaskResultsType>>,
+		options?: Partial<EnqueueOptionsType>,
+	): Promise<Array<TaskResultsType | void>>;
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
 		options?: Partial<EnqueueOptionsType>,
