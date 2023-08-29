@@ -6,6 +6,8 @@ Useful for rate-limiting async (or sync) operations. For example, when interacti
 
 For servers, you probably want a Redis-backed [job queue](https://github.com/sindresorhus/awesome-nodejs#job-queues) instead.
 
+**This project is NOT for browser and event system will not work in browser. See [#169](https://github.com/sindresorhus/p-queue/issues/169)**
+
 Note that the project is feature complete. We are happy to review pull requests, but we don't plan any further development. We are also not answering email support questions.
 
 ## Install
