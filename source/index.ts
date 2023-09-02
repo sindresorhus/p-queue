@@ -1,4 +1,4 @@
-import EventEmitter from 'eventemitter3';
+import {EventEmitter} from 'eventemitter3';
 import pTimeout, {TimeoutError} from 'p-timeout';
 import {Queue, RunFunction} from './queue.js';
 import PriorityQueue from './priority-queue.js';
