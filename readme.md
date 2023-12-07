@@ -14,7 +14,7 @@ Note that the project is feature complete. We are happy to review pull requests,
 npm install p-queue
 ```
 
-**Warning:** This package is native [ESM](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules) and no longer provides a CommonJS export. If your project uses CommonJS, you'll have to [convert to ESM](https://gist.github.com/sindresorhus/a39789f98801d908bbc7ff3ecc99d99c) or use the [dynamic `import()`](https://v8.dev/features/dynamic-import) function. Please don't open issues for questions regarding CommonJS / ESM.
+**Warning:** This package is native [ESM](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules) and no longer provides a CommonJS export. If your project uses CommonJS, you'll have to [convert to ESM](https://gist.github.com/sindresorhus/a39789f98801d908bbc7ff3ecc99d99c). Please don't open issues for questions regarding CommonJS / ESM.
 
 ## Usage
 
@@ -139,12 +139,10 @@ Priority of operation. Operations with greater priority will be scheduled first.
 
 ##### signal
 
-*Requires Node.js 16 or later.*
-
-[`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) for cancellation of the operation. When aborted, it will be removed from the queue and the `queue.add()` call will reject with an `AbortError`. If the operation is already running, the signal will need to be handled by the operation itself.
+[`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) for cancellation of the operation. When aborted, it will be removed from the queue and the `queue.add()` call will reject with an [error](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/reason). If the operation is already running, the signal will need to be handled by the operation itself.
 
 ```js
-import PQueue, {AbortError} from 'p-queue';
+import PQueue from 'p-queue';
 import got, {CancelError} from 'got';
 
 const queue = new PQueue();
@@ -168,7 +166,7 @@ try {
 		}
 	}, {signal: controller.signal});
 } catch (error) {
-	if (!(error instanceof AbortError)) {
+	if (!(error instanceof DOMException)) {
 		throw error;
 	}
 }
@@ -377,10 +375,6 @@ await queue.add(() => delay(600));
 //=> 'Task is completed.  Size: 0  Pending: 1'
 //=> 'Task is completed.  Size: 0  Pending: 0'
 ```
-
-### AbortError
-
-The error thrown by `queue.add()` when a job is aborted before it is run. See [`signal`](#signal).
 
 ## Advanced example
 

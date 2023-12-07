@@ -1,24 +1,19 @@
 import {EventEmitter} from 'eventemitter3';
 import pTimeout, {TimeoutError} from 'p-timeout';
-import {Queue, RunFunction} from './queue.js';
+import {type Queue, type RunFunction} from './queue.js';
 import PriorityQueue from './priority-queue.js';
-import {QueueAddOptions, Options, TaskOptions} from './options.js';
+import {type QueueAddOptions, type Options, type TaskOptions} from './options.js';
 
 type Task<TaskResultType> =
 	| ((options: TaskOptions) => PromiseLike<TaskResultType>)
 	| ((options: TaskOptions) => TaskResultType);
-
-/**
-The error thrown by `queue.add()` when a job is aborted before it is run. See `signal`.
-*/
-export class AbortError extends Error {}
 
 type EventName = 'active' | 'idle' | 'empty' | 'add' | 'next' | 'completed' | 'error';
 
 /**
 Promise queue with concurrency control.
 */
-export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = QueueAddOptions> extends EventEmitter<EventName> {
+export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = QueueAddOptions> extends EventEmitter<EventName> { // eslint-disable-line @typescript-eslint/naming-convention, unicorn/prefer-event-target
 	readonly #carryoverConcurrencyCount: boolean;
 
 	readonly #isIntervalIgnored: boolean;
@@ -228,9 +223,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	async #throwOnAbort(signal: AbortSignal): Promise<never> {
 		return new Promise((_resolve, reject) => {
 			signal.addEventListener('abort', () => {
-				// TODO: Reject with signal.throwIfAborted() when targeting Node.js 18
-				// TODO: Use ABORT_ERR code when targeting Node.js 16 (https://nodejs.org/docs/latest-v16.x/api/errors.html#abort_err)
-				reject(new AbortError('The task was aborted.'));
+				reject(signal.reason);
 			}, {once: true});
 		});
 	}
@@ -253,16 +246,12 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				this.#intervalCount++;
 
 				try {
-					// TODO: Use options.signal?.throwIfAborted() when targeting Node.js 18
-					if (options.signal?.aborted) {
-						// TODO: Use ABORT_ERR code when targeting Node.js 16 (https://nodejs.org/docs/latest-v16.x/api/errors.html#abort_err)
-						throw new AbortError('The task was aborted.');
-					}
+					options.signal?.throwIfAborted();
 
 					let operation = function_({signal: options.signal});
 
 					if (options.timeout) {
-						operation = pTimeout(Promise.resolve(operation), options.timeout);
+						operation = pTimeout(Promise.resolve(operation), {milliseconds: options.timeout});
 					}
 
 					if (options.signal) {
@@ -299,7 +288,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
 		options?: {throwOnTimeout: true} & Partial<Exclude<EnqueueOptionsType, 'throwOnTimeout'>>,
-	): Promise<TaskResultsType[]>
+	): Promise<TaskResultsType[]>;
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
 		options?: Partial<EnqueueOptionsType>,
@@ -430,5 +419,5 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 }
 
-// TODO: Rename `DefaultAddOptions` to `QueueAddOptions` in next major version
-export {Queue, QueueAddOptions, QueueAddOptions as DefaultAddOptions, Options};
+export type {Queue} from './queue.js';
+export {type QueueAddOptions, type Options} from './options.js';

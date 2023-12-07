@@ -1103,7 +1103,7 @@ test('should skip an aborted job', async t => {
 	controller.abort();
 	// eslint-disable-next-line @typescript-eslint/no-empty-function
 	await t.throwsAsync(queue.add(() => {}, {signal: controller.signal}), {
-		instanceOf: AbortError,
+		instanceOf: DOMException,
 	});
 });
 
@@ -1130,7 +1130,7 @@ test('aborting multiple jobs at the same time', async t => {
 		controller2.abort();
 	}, 0);
 
-	await t.throwsAsync(task1, {instanceOf: AbortError});
-	await t.throwsAsync(task2, {instanceOf: AbortError});
+	await t.throwsAsync(task1, {instanceOf: DOMException});
+	await t.throwsAsync(task2, {instanceOf: DOMException});
 	t.like(queue, {size: 0, pending: 0});
 });

@@ -1,10 +1,10 @@
-import {Queue, RunFunction} from './queue.js';
+import {type Queue, type RunFunction} from './queue.js';
 import lowerBound from './lower-bound.js';
-import {QueueAddOptions} from './options.js';
+import {type QueueAddOptions} from './options.js';
 
-export interface PriorityQueueOptions extends QueueAddOptions {
+export type PriorityQueueOptions = {
 	priority?: number;
-}
+} & QueueAddOptions;
 
 export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOptions> {
 	readonly #queue: Array<PriorityQueueOptions & {run: RunFunction}> = [];

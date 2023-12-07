@@ -1,6 +1,6 @@
-import {Queue, RunFunction} from './queue.js';
+import {type Queue, type RunFunction} from './queue.js';
 
-interface TimeoutOptions {
+type TimeoutOptions = {
 	/**
 	Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
 	*/
@@ -12,9 +12,9 @@ interface TimeoutOptions {
 	@default false
 	*/
 	throwOnTimeout?: boolean;
-}
+};
 
-export interface Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOptions extends QueueAddOptions> extends TimeoutOptions {
+export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOptions extends QueueAddOptions> = {
 	/**
 	Concurrency limit.
 
@@ -60,18 +60,18 @@ export interface Options<QueueType extends Queue<RunFunction, QueueOptions>, Que
 	@default false
 	*/
 	readonly carryoverConcurrencyCount?: boolean;
-}
+} & TimeoutOptions;
 
-export interface QueueAddOptions extends TaskOptions, TimeoutOptions {
+export type QueueAddOptions = {
 	/**
 	Priority of operation. Operations with greater priority will be scheduled first.
 
 	@default 0
 	*/
 	readonly priority?: number;
-}
+} & TaskOptions & TimeoutOptions;
 
-export interface TaskOptions {
+export type TaskOptions = {
 	/**
 	[`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) for cancellation of the operation. When aborted, it will be removed from the queue and the `queue.add()` call will reject with an `AbortError`. If the operation is already running, the signal will need to be handled by the operation itself.
 
@@ -108,4 +108,4 @@ export interface TaskOptions {
 	```
 	*/
 	readonly signal?: AbortSignal;
-}
+};

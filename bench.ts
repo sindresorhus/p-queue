@@ -1,4 +1,4 @@
-import Benchmark, {Deferred, Event} from 'benchmark';
+import Benchmark, {type Deferred, type Event} from 'benchmark';
 import PQueue from './source/index.js';
 
 const suite = new Benchmark.Suite();
@@ -10,7 +10,7 @@ suite
 	.add('baseline', {
 		defer: true,
 
-		fn: async (deferred: Resolvable) => {
+		async fn(deferred: Resolvable) {
 			const queue = new PQueue();
 
 			for (let i = 0; i < 100; i++) {
@@ -25,7 +25,7 @@ suite
 	.add('operation with random priority', {
 		defer: true,
 
-		fn: async (deferred: Resolvable) => {
+		async fn(deferred: Resolvable) {
 			const queue = new PQueue();
 
 			for (let i = 0; i < 100; i++) {
@@ -42,7 +42,7 @@ suite
 	.add('operation with increasing priority', {
 		defer: true,
 
-		fn: async (deferred: Resolvable) => {
+		async fn(deferred: Resolvable) {
 			const queue = new PQueue();
 
 			for (let i = 0; i < 100; i++) {
