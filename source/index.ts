@@ -50,7 +50,6 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	timeout?: number;
 
-	// TODO: The `throwOnTimeout` option should affect the return types of `add()` and `addAll()`
 	constructor(options?: Options<QueueType, EnqueueOptionsType>) {
 		super();
 
