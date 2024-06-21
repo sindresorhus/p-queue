@@ -63,7 +63,8 @@ Concurrency limit.
 
 ##### timeout
 
-Type: `number`
+Type: `number`\
+Default: `undefined` (i.e. no timeout is enforced)
 
 Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
 
@@ -72,7 +73,7 @@ Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses
 Type: `boolean`\
 Default: `false`
 
-Whether or not a timeout is considered an exception.
+Whether or not a timeout is considered an exception. This option only has an effect when `timeout` is defined.
 
 ##### autoStart
 
