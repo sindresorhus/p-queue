@@ -300,15 +300,19 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
-		options?: {throwOnTimeout: true} & Partial<Exclude<EnqueueOptionsType, 'throwOnTimeout'>>,
+		options?: WithoutTimeout<Partial<EnqueueOptionsType>>,
 	): Promise<TaskResultsType[]>;
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
-		options?: Partial<EnqueueOptionsType>,
+		options: WithTimeoutThrow<Partial<EnqueueOptionsType>>
+	): Promise<TaskResultsType[]>;
+	async addAll<TaskResultsType>(
+		functions: ReadonlyArray<Task<TaskResultsType>>,
+		options: WithoutTimeoutThrow<Partial<EnqueueOptionsType>>,
 	): Promise<Array<TaskResultsType | void>>;
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
-		options?: Partial<EnqueueOptionsType>,
+		options: Partial<EnqueueOptionsType> = {},
 	): Promise<Array<TaskResultsType | void>> {
 		return Promise.all(functions.map(async function_ => this.add(function_, options)));
 	}
