@@ -2,7 +2,7 @@ import {EventEmitter} from 'eventemitter3';
 import pTimeout, {TimeoutError} from 'p-timeout';
 import {type Queue, type RunFunction} from './queue.js';
 import PriorityQueue from './priority-queue.js';
-import {type QueueAddOptions, type Options, type TaskOptions} from './options.js';
+import {type QueueAddOptions, type Options, type TaskOptions, type WithoutTimeout, type WithoutTimeoutThrow, type WithTimeoutThrow} from './options.js';
 
 type Task<TaskResultType> =
 	| ((options: TaskOptions) => PromiseLike<TaskResultType>)
@@ -231,9 +231,22 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	/**
 	Adds a sync or async task to the queue. Always returns a promise.
 	*/
-	async add<TaskResultType>(function_: Task<TaskResultType>, options: {throwOnTimeout: true} & Exclude<EnqueueOptionsType, 'throwOnTimeout'>): Promise<TaskResultType>;
-	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<TaskResultType | void>;
-	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType | void> {
+	async add<TaskResultType>(
+		function_: Task<TaskResultType>,
+		options?: WithoutTimeout<Partial<EnqueueOptionsType>>
+	): Promise<TaskResultType>;
+	async add<TaskResultType>(
+		function_: Task<TaskResultType>,
+		options: WithTimeoutThrow<Partial<EnqueueOptionsType>>
+	): Promise<TaskResultType>;
+	async add<TaskResultType>(
+		function_: Task<TaskResultType>,
+		options: WithoutTimeoutThrow<Partial<EnqueueOptionsType>>
+	): Promise<TaskResultType | void>;
+	async add<TaskResultType>(
+		function_: Task<TaskResultType>,
+		options: Partial<EnqueueOptionsType> = {},
+	): Promise<TaskResultType | void> {
 		options = {
 			timeout: this.timeout,
 			throwOnTimeout: this.#throwOnTimeout,
