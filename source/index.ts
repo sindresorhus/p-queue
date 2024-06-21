@@ -252,6 +252,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			...options,
 		};
 
+		if (!options.timeout && options.throwOnTimeout) {
+			console.warn('You specified `throwOnTimeout=true` without defining `timeout`.');
+		}
+
 		return new Promise((resolve, reject) => {
 			this.#queue.enqueue(async () => {
 				this.#pending++;
