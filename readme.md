@@ -73,7 +73,9 @@ Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses
 Type: `boolean`\
 Default: `false`
 
-Whether or not a timeout is considered an exception. This option only has an effect when `timeout` is defined.
+Whether or not a timeout is considered an exception. When `false`, promises will resolve without a value on timeout.
+
+Obviously, this option only has an effect when `timeout` is defined.
 
 ##### autoStart
 
