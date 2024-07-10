@@ -43,6 +43,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	readonly #throwOnTimeout: boolean;
 
+	/** use to assign a unique identifier to a promise function, if not explicitly specified */
 	#uidAssigner: number = 1;
 
 	/**
@@ -241,7 +242,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>, uid?: string): Promise<TaskResultType | void>;
 	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}, uid?: string): Promise<TaskResultType | void> {
 		// incase uid is not defined
-		uid = (this.#uidAssigner++).toString();
+		!uid && (uid = (this.#uidAssigner++).toString());
 		options = {
 			timeout: this.timeout,
 			throwOnTimeout: this.#throwOnTimeout,
