@@ -8,7 +8,7 @@ type Task<TaskResultType> =
 	| ((options: TaskOptions) => PromiseLike<TaskResultType>)
 	| ((options: TaskOptions) => TaskResultType);
 
-type EventName = 'active' | 'idle' | 'empty' | 'add' | 'next' | 'completed' | 'error';
+type EventName = 'active' | 'idle' | 'empty' | 'add' | 'next' | 'completed' | 'error' | 'started';
 
 /**
 Promise queue with concurrency control.
@@ -42,6 +42,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	#isPaused: boolean;
 
 	readonly #throwOnTimeout: boolean;
+
+	#uidAssigner: number = 1;
 
 	/**
 	Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
@@ -228,15 +230,22 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		});
 	}
 
+	async setPriority(uid: string, priority: number) {
+		this.#queue.prioritize(uid, priority);
+	}
+
 	/**
 	Adds a sync or async task to the queue. Always returns a promise.
 	*/
-	async add<TaskResultType>(function_: Task<TaskResultType>, options: {throwOnTimeout: true} & Exclude<EnqueueOptionsType, 'throwOnTimeout'>): Promise<TaskResultType>;
-	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<TaskResultType | void>;
-	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType | void> {
+	async add<TaskResultType>(function_: Task<TaskResultType>, options: { throwOnTimeout: true } & Exclude<EnqueueOptionsType, 'throwOnTimeout'>, uid?: string): Promise<TaskResultType>;
+	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>, uid?: string): Promise<TaskResultType | void>;
+	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}, uid?: string): Promise<TaskResultType | void> {
+		// incase uid is not defined
+		uid = (this.#uidAssigner++).toString();
 		options = {
 			timeout: this.timeout,
 			throwOnTimeout: this.#throwOnTimeout,
+			uid,
 			...options,
 		};
 
@@ -258,6 +267,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 						operation = Promise.race([operation, this.#throwOnAbort(options.signal)]);
 					}
 
+					uid && this.emit('started', uid);
 					const result = await operation;
 					resolve(result);
 					this.emit('completed', result);

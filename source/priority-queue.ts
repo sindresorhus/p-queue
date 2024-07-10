@@ -4,6 +4,7 @@ import {type QueueAddOptions} from './options.js';
 
 export type PriorityQueueOptions = {
 	priority?: number;
+	uid?: string;
 } & QueueAddOptions;
 
 export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOptions> {
@@ -30,6 +31,11 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 			(a: Readonly<PriorityQueueOptions>, b: Readonly<PriorityQueueOptions>) => b.priority! - a.priority!,
 		);
 		this.#queue.splice(index, 0, element);
+	}
+
+	prioritize(uid: string, priority?: number) {
+		const item = this.#queue.find((element: Readonly<PriorityQueueOptions>) => element.uid === uid);
+		item && (item.priority = priority || ((item.priority || 0) + 1));
 	}
 
 	dequeue(): RunFunction | undefined {

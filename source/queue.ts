@@ -5,4 +5,5 @@ export type Queue<Element, Options> = {
 	filter: (options: Readonly<Partial<Options>>) => Element[];
 	dequeue: () => Element | undefined;
 	enqueue: (run: Element, options?: Partial<Options>) => void;
+	prioritize: (uid: string, priority: number) => void;
 };
