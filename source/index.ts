@@ -43,8 +43,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	readonly #throwOnTimeout: boolean;
 
-	/** use to assign a unique identifier to a promise function, if not explicitly specified */
-	#uidAssigner: number = 1;
+	/** Use to assign a unique identifier to a promise function, if not explicitly specified */
+	#uidAssigner = 1;
 
 	/**
 	Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
@@ -238,11 +238,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	/**
 	Adds a sync or async task to the queue. Always returns a promise.
 	*/
-	async add<TaskResultType>(function_: Task<TaskResultType>, options: { throwOnTimeout: true } & Exclude<EnqueueOptionsType, 'throwOnTimeout'>, uid?: string): Promise<TaskResultType>;
+	async add<TaskResultType>(function_: Task<TaskResultType>, options: {throwOnTimeout: true} & Exclude<EnqueueOptionsType, 'throwOnTimeout'>, uid?: string): Promise<TaskResultType>;
 	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>, uid?: string): Promise<TaskResultType | void>;
 	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}, uid?: string): Promise<TaskResultType | void> {
-		// incase uid is not defined
-		!uid && (uid = (this.#uidAssigner++).toString());
+		// Incase uid is not defined
+		if (uid === undefined) {
+			uid = (this.#uidAssigner++).toString();
+		}
+
 		options = {
 			timeout: this.timeout,
 			throwOnTimeout: this.#throwOnTimeout,
@@ -268,7 +271,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 						operation = Promise.race([operation, this.#throwOnAbort(options.signal)]);
 					}
 
-					uid && this.emit('started', uid);
+					this.emit('started', uid);
 					const result = await operation;
 					resolve(result);
 					this.emit('completed', result);

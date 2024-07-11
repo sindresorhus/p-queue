@@ -34,8 +34,24 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 	}
 
 	prioritize(uid: string, priority?: number) {
-		const item = this.#queue.find((element: Readonly<PriorityQueueOptions>) => element.uid === uid);
-		item && (item.priority = priority || ((item.priority || 0) + 1));
+		const queueIndex: number = this.#queue.findIndex((element: Readonly<PriorityQueueOptions>) => element.uid === uid);
+		const [item] = this.#queue.splice(queueIndex, 1);
+		if (item === undefined) {
+			return;
+		}
+
+		item.priority = priority ?? ((item.priority ?? 0) + 1);
+		if (this.size && this.#queue[this.size - 1]!.priority! >= priority!) {
+			this.#queue.push(item);
+			return;
+		}
+
+		const index = lowerBound(
+			this.#queue, item,
+			(a: Readonly<PriorityQueueOptions>, b: Readonly<PriorityQueueOptions>) => b.priority! - a.priority!,
+		);
+
+		this.#queue.splice(index, 0, item);
 	}
 
 	dequeue(): RunFunction | undefined {
