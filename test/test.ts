@@ -1141,40 +1141,16 @@ test('.setPriority() - execute a promise before planned', async t => {
 	queue.add(async () => {
 		await delay(400);
 		result.push('🐌');
-	}, {}, 'snail');
+	}, {id: '🐌'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('🦆');
-	}, {}, 'duck');
+	}, {id: '🦆'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('🐢');
-	}, {}, 'turtle');
-	queue.setPriority('turtle', 1);
-	await queue.onIdle();
-	t.deepEqual(result, ['🐌', '🐢', '🦆']);
-});
-
-test('started event to check when promise function is called', async t => {
-	const result: string[] = [];
-	const queue = new PQueue({concurrency: 1});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🐌');
-	}, {}, '🐌');
-	queue.add(async () => {
-		await delay(400);
-		result.push('🦆');
-	}, {}, '🦆');
-	queue.add(async () => {
-		await delay(400);
-		result.push('🐢');
-	}, {}, '🐢');
-	queue.on('started', uid => {
-		if (uid === '🦆') {
-			t.deepEqual(result, ['🐌', '🐢']);
-		}
-	});
+	}, {id: '🐢'});
 	queue.setPriority('🐢', 1);
 	await queue.onIdle();
+	t.deepEqual(result, ['🐌', '🐢', '🦆']);
 });

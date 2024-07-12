@@ -4,7 +4,6 @@ import {type QueueAddOptions} from './options.js';
 
 export type PriorityQueueOptions = {
 	priority?: number;
-	uid?: string;
 } & QueueAddOptions;
 
 export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOptions> {
@@ -33,9 +32,9 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 		this.#queue.splice(index, 0, element);
 	}
 
-	prioritize(uid: string, priority?: number) {
-		const queueIndex: number = this.#queue.findIndex((element: Readonly<PriorityQueueOptions>) => element.uid === uid);
-		const [item] = this.#queue.splice(queueIndex, 1);
+	setPriority(id: string, priority?: number) {
+		const existingIndex: number = this.#queue.findIndex((element: Readonly<PriorityQueueOptions>) => element.id === id);
+		const [item] = this.#queue.splice(existingIndex, 1);
 		if (item === undefined) {
 			return;
 		}

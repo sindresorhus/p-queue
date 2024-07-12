@@ -69,6 +69,7 @@ export type QueueAddOptions = {
 	@default 0
 	*/
 	readonly priority?: number;
+	id?: string;
 } & TaskOptions & TimeoutOptions;
 
 export type TaskOptions = {

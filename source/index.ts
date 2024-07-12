@@ -8,7 +8,7 @@ type Task<TaskResultType> =
 	| ((options: TaskOptions) => PromiseLike<TaskResultType>)
 	| ((options: TaskOptions) => TaskResultType);
 
-type EventName = 'active' | 'idle' | 'empty' | 'add' | 'next' | 'completed' | 'error' | 'started';
+type EventName = 'active' | 'idle' | 'empty' | 'add' | 'next' | 'completed' | 'error';
 
 /**
 Promise queue with concurrency control.
@@ -44,7 +44,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	readonly #throwOnTimeout: boolean;
 
 	/** Use to assign a unique identifier to a promise function, if not explicitly specified */
-	#uidAssigner = 1;
+	#idAssigner = 1;
 
 	/**
 	Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
@@ -231,25 +231,24 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		});
 	}
 
-	async setPriority(uid: string, priority: number) {
-		this.#queue.prioritize(uid, priority);
+	setPriority(id: string, priority: number) {
+		this.#queue.setPriority(id, priority);
 	}
 
 	/**
 	Adds a sync or async task to the queue. Always returns a promise.
 	*/
-	async add<TaskResultType>(function_: Task<TaskResultType>, options: {throwOnTimeout: true} & Exclude<EnqueueOptionsType, 'throwOnTimeout'>, uid?: string): Promise<TaskResultType>;
-	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>, uid?: string): Promise<TaskResultType | void>;
-	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}, uid?: string): Promise<TaskResultType | void> {
-		// Incase uid is not defined
-		if (uid === undefined) {
-			uid = (this.#uidAssigner++).toString();
+	async add<TaskResultType>(function_: Task<TaskResultType>, options: {throwOnTimeout: true} & Exclude<EnqueueOptionsType, 'throwOnTimeout'>): Promise<TaskResultType>;
+	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<TaskResultType | void>;
+	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType | void> {
+		// Incase id is not defined
+		if (options.id === undefined) {
+			options.id = (this.#idAssigner++).toString();
 		}
 
 		options = {
 			timeout: this.timeout,
 			throwOnTimeout: this.#throwOnTimeout,
-			uid,
 			...options,
 		};
 
@@ -271,7 +270,6 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 						operation = Promise.race([operation, this.#throwOnAbort(options.signal)]);
 					}
 
-					this.emit('started', uid);
 					const result = await operation;
 					resolve(result);
 					this.emit('completed', result);
