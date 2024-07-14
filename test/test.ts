@@ -7,6 +7,7 @@ import timeSpan from 'time-span';
 import randomInt from 'random-int';
 import pDefer from 'p-defer';
 import PQueue from '../source/index.js';
+import type {QueueAddOptions} from '../source/index.js';
 
 const fixture = Symbol('fixture');
 
@@ -1153,4 +1154,22 @@ test('.setPriority() - execute a promise before planned', async t => {
 	queue.setPriority('🐢', 1);
 	await queue.onIdle();
 	t.deepEqual(result, ['🐌', '🐢', '🦆']);
+});
+
+test('track event "invoke" to check with respect to concurrency - 1', async t => {
+	const invoked: Array<string | undefined> = [];
+	const queue = new PQueue({concurrency: 1});
+	queue.on('invoke', (data: QueueAddOptions) => {
+		invoked.push(data.id);
+	});
+	const job1 = queue.add(async () => {
+		await delay(400);
+	}, {id: '🐌'});
+	const job2 = queue.add(async () => {
+		await delay(400);
+	}, {id: '🦆'});
+	t.deepEqual(invoked, ['🐌']);
+	await job1;
+	t.deepEqual(invoked, ['🐌', '🦆']);
+	await queue.onIdle();
 });

@@ -8,7 +8,7 @@ type Task<TaskResultType> =
 	| ((options: TaskOptions) => PromiseLike<TaskResultType>)
 	| ((options: TaskOptions) => TaskResultType);
 
-type EventName = 'active' | 'idle' | 'empty' | 'add' | 'next' | 'completed' | 'error';
+type EventName = 'active' | 'idle' | 'empty' | 'add' | 'next' | 'completed' | 'error' | 'invoke';
 
 /**
 Promise queue with concurrency control.
@@ -270,6 +270,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 						operation = Promise.race([operation, this.#throwOnAbort(options.signal)]);
 					}
 
+					this.emit('invoke', {id: options.id});
 					const result = await operation;
 					resolve(result);
 					this.emit('completed', result);
