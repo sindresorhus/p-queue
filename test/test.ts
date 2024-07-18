@@ -1154,3 +1154,23 @@ test('.setPriority() - execute a promise before planned', async t => {
 	await queue.onIdle();
 	t.deepEqual(result, ['🐌', '🐢', '🦆']);
 });
+
+test.failing('.setPriority() - with invalid "id"', async t => {
+	const result: string[] = [];
+	const queue = new PQueue({concurrency: 1});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐌');
+	}, {id: '🐌'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦆');
+	}, {id: '🦆'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐢');
+	}, {id: '🐢'});
+	queue.setPriority('⚡️', 1);
+	await queue.onIdle();
+	t.deepEqual(result, ['🐌', '🐢', '🦆']);
+});
