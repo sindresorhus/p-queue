@@ -44,18 +44,7 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 			throw new Error('Undefined Item - No promise function of specified id available in the queue.');
 		}
 
-		item.priority = priority;
-		if (this.size === 0 || this.#queue[this.size - 1]!.priority! >= priority) {
-			this.#queue.push(item);
-			return;
-		}
-
-		const index = lowerBound(
-			this.#queue, item,
-			(a: Readonly<PriorityQueueOptions>, b: Readonly<PriorityQueueOptions>) => b.priority! - a.priority!,
-		);
-
-		this.#queue.splice(index, 0, item);
+		this.enqueue(item.run, {priority, id});
 	}
 
 	dequeue(): RunFunction | undefined {
