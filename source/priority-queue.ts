@@ -35,7 +35,7 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 
 	setPriority(id: string, priority: number) {
 		const existingIndex: number = this.#queue.findIndex((element: Readonly<PriorityQueueOptions>) => element.id === id);
-		if (existingIndex === -1 ) {
+		if (existingIndex === -1) {
 			throw new Error('Invalid Index - No promise function of specified id available in the queue.');
 		}
 
