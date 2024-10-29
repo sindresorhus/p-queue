@@ -116,7 +116,9 @@ If `true`, specifies that any [pending](https://developer.mozilla.org/en-US/docs
 
 #### .add(fn, options?)
 
-Adds a sync or async task to the queue. Always returns a promise.
+Adds a sync or async task to the queue.
+
+Returns a promise with the return value of `fn`.
 
 Note: If your items can potentially throw an exception, you must handle those errors from the returned Promise or they may be reported as an unhandled Promise rejection and potentially cause your process to exit immediately.
 
