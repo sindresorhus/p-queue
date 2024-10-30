@@ -109,3 +109,23 @@ export type TaskOptions = {
 	*/
 	readonly signal?: AbortSignal;
 };
+
+/**
+Helper type to target the case where timeout=number.
+*/
+export type WithTimeout<Options> = Options & {timeout: number};
+
+/**
+Helper type to target the case where timeout=undefined.
+*/
+export type WithoutTimeout<Options> = Omit<Options, 'timeout'> | {timeout: undefined};
+
+/**
+Helper type to target the case where timeout=number and throwOnTimeout=true.
+*/
+export type WithTimeoutThrow<Options> = WithTimeout<Options> & {throwOnTimeout: true};
+
+/**
+Helper type to target the case where timeout=number and throwOnTimeout=false/undefined.
+*/
+export type WithoutTimeoutThrow<Options> = WithTimeout<Options> & {throwOnTimeout?: false};

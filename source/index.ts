@@ -2,7 +2,7 @@ import {EventEmitter} from 'eventemitter3';
 import pTimeout, {TimeoutError} from 'p-timeout';
 import {type Queue, type RunFunction} from './queue.js';
 import PriorityQueue from './priority-queue.js';
-import {type QueueAddOptions, type Options, type TaskOptions} from './options.js';
+import {type QueueAddOptions, type Options, type TaskOptions, type WithoutTimeout, type WithoutTimeoutThrow, type WithTimeoutThrow} from './options.js';
 
 type Task<TaskResultType> =
 	| ((options: TaskOptions) => PromiseLike<TaskResultType>)
@@ -231,14 +231,31 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	/**
 	Adds a sync or async task to the queue. Always returns a promise.
 	*/
-	async add<TaskResultType>(function_: Task<TaskResultType>, options: {throwOnTimeout: true} & Exclude<EnqueueOptionsType, 'throwOnTimeout'>): Promise<TaskResultType>;
-	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<TaskResultType | void>;
-	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType | void> {
+	async add<TaskResultType>(
+		function_: Task<TaskResultType>,
+		options?: WithoutTimeout<Partial<EnqueueOptionsType>>
+	): Promise<TaskResultType>;
+	async add<TaskResultType>(
+		function_: Task<TaskResultType>,
+		options: WithTimeoutThrow<Partial<EnqueueOptionsType>>
+	): Promise<TaskResultType>;
+	async add<TaskResultType>(
+		function_: Task<TaskResultType>,
+		options: WithoutTimeoutThrow<Partial<EnqueueOptionsType>>
+	): Promise<TaskResultType | void>;
+	async add<TaskResultType>(
+		function_: Task<TaskResultType>,
+		options: Partial<EnqueueOptionsType> = {},
+	): Promise<TaskResultType | void> {
 		options = {
 			timeout: this.timeout,
 			throwOnTimeout: this.#throwOnTimeout,
 			...options,
 		};
+
+		if (!options.timeout && options.throwOnTimeout) {
+			console.warn('You specified `throwOnTimeout=true` without defining `timeout`.');
+		}
 
 		return new Promise((resolve, reject) => {
 			this.#queue.enqueue(async () => {
@@ -287,15 +304,19 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
-		options?: {throwOnTimeout: true} & Partial<Exclude<EnqueueOptionsType, 'throwOnTimeout'>>,
+		options?: WithoutTimeout<Partial<EnqueueOptionsType>>,
 	): Promise<TaskResultsType[]>;
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
-		options?: Partial<EnqueueOptionsType>,
+		options: WithTimeoutThrow<Partial<EnqueueOptionsType>>
+	): Promise<TaskResultsType[]>;
+	async addAll<TaskResultsType>(
+		functions: ReadonlyArray<Task<TaskResultsType>>,
+		options: WithoutTimeoutThrow<Partial<EnqueueOptionsType>>,
 	): Promise<Array<TaskResultsType | void>>;
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
-		options?: Partial<EnqueueOptionsType>,
+		options: Partial<EnqueueOptionsType> = {},
 	): Promise<Array<TaskResultsType | void>> {
 		return Promise.all(functions.map(async function_ => this.add(function_, options)));
 	}
