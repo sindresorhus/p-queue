@@ -43,8 +43,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	readonly #throwOnTimeout: boolean;
 
-	/** Use to assign a unique identifier to a promise function, if not explicitly specified */
-	#idAssigner = 1;
+	// Use to assign a unique identifier to a promise function, if not explicitly specified
+	#idAssigner = 1n;
 
 	/**
 	Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
@@ -231,6 +231,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		});
 	}
 
+	/**
+	Update priority of a known promise function, using the `id` identifier, and a priority value to override existing priority value. The updated value of priority ensures whether to execute this promise function sooner or later.
+	*/
 	setPriority(id: string, priority: number) {
 		this.#queue.setPriority(id, priority);
 	}
@@ -241,10 +244,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	async add<TaskResultType>(function_: Task<TaskResultType>, options: {throwOnTimeout: true} & Exclude<EnqueueOptionsType, 'throwOnTimeout'>): Promise<TaskResultType>;
 	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<TaskResultType | void>;
 	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType | void> {
-		// Incase id is not defined
-		if (options.id === undefined) {
-			options.id = (this.#idAssigner++).toString();
-		}
+		// In case `id` is not defined.
+		options.id ??= (this.#idAssigner++).toString();
 
 		options = {
 			timeout: this.timeout,

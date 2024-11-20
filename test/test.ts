@@ -1155,7 +1155,7 @@ test('.setPriority() - execute a promise before planned', async t => {
 	t.deepEqual(result, ['🐌', '🐢', '🦆']);
 });
 
-test.failing('.setPriority() - with invalid "id"', async t => {
+test('.setPriority() - execute a promise after planned', async t => {
 	const result: string[] = [];
 	const queue = new PQueue({concurrency: 1});
 	queue.add(async () => {
@@ -1168,9 +1168,131 @@ test.failing('.setPriority() - with invalid "id"', async t => {
 	}, {id: '🦆'});
 	queue.add(async () => {
 		await delay(400);
+		result.push('🦆');
+	}, {id: '🦆'});
+	queue.add(async () => {
+		await delay(400);
 		result.push('🐢');
 	}, {id: '🐢'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦆');
+	}, {id: '🦆'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦆');
+	}, {id: '🦆'});
+	queue.setPriority('🐢', -1);
+	await queue.onIdle();
+	t.deepEqual(result, ['🐌', '🦆', '🦆', '🦆', '🦆', '🐢']);
+});
+
+test('.setPriority() - execute a promise before planned - concurrency 2', async t => {
+	const result: string[] = [];
+	const queue = new PQueue({concurrency: 2});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐌');
+	}, {id: '🐌'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦆');
+	}, {id: '🦆'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐢');
+	}, {id: '🐢'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('⚡️');
+	}, {id: '⚡️'});
 	queue.setPriority('⚡️', 1);
 	await queue.onIdle();
-	t.deepEqual(result, ['🐌', '🐢', '🦆']);
+	t.deepEqual(result, ['🐌', '🦆', '⚡️', '🐢']);
 });
+
+test('.setPriority() - execute a promise before planned - concurrency 3', async t => {
+	const result: string[] = [];
+	const queue = new PQueue({concurrency: 3});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐌');
+	}, {id: '🐌'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦆');
+	}, {id: '🦆'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐢');
+	}, {id: '🐢'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('⚡️');
+	}, {id: '⚡️'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦀');
+	}, {id: '🦀'});
+	queue.setPriority('🦀', 1);
+	await queue.onIdle();
+	t.deepEqual(result, ['🐌', '🦆', '🐢', '🦀', '⚡️']);
+});
+
+test('.setPriority() - execute a multiple promise before planned, with variable priority', async t => {
+	const result: string[] = [];
+	const queue = new PQueue({concurrency: 2});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐌');
+	}, {id: '🐌'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦆');
+	}, {id: '🦆'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐢');
+	}, {id: '🐢'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('⚡️');
+	}, {id: '⚡️'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦀');
+	}, {id: '🦀'});
+	queue.setPriority('⚡️', 1);
+	queue.setPriority('🦀', 2);
+	await queue.onIdle();
+	t.deepEqual(result, ['🐌', '🦆', '🦀', '⚡️', '🐢']);
+});
+
+test('.setPriority() - execute a promise before planned - concurrency 3 and unspecified `id`', async t => {
+	const result: string[] = [];
+	const queue = new PQueue({concurrency: 3});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐌');
+	});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦆');
+	});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐢');
+	});
+	queue.add(async () => {
+		await delay(400);
+		result.push('⚡️');
+	});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦀');
+	});
+	queue.setPriority('5', 1);
+	await queue.onIdle();
+	t.deepEqual(result, ['🐌', '🦆', '🐢', '🦀', '⚡️']);
+});
+

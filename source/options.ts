@@ -69,6 +69,13 @@ export type QueueAddOptions = {
 	@default 0
 	*/
 	readonly priority?: number;
+	/**
+	Unique identifier for the promise function. This can be used to update priority, before it gets executed.
+
+	@default '1'
+
+	Value of `id` will be assigned using a bigint number assigner which increments for every new promise function with unspecified id
+	*/
 	id?: string;
 } & TaskOptions & TimeoutOptions;
 

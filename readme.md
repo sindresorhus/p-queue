@@ -236,6 +236,44 @@ console.log(queue.sizeBy({priority: 0}));
 //=> 1
 ```
 
+#### .setPriority(id, priority)
+
+Update priority of a known promise function, using the `id` identifier, and a priority value to override existing priority value. The updated value of priority ensures whether to execute this promise function sooner or later.
+
+Function works only when we specify a defined concurrency to change any priorities.
+
+For example, this can be used to make a promise function run earlier.
+
+```js
+import PQueue from 'p-queue';
+
+const queue = new PQueue({concurrency: 1});
+
+queue.add(async () => '🦄', {priority: 1});
+queue.add(async () => '🦀', {priority: 0, id: '🦀'});
+queue.add(async () => '🦄', {priority: 1});
+queue.add(async () => '🦄', {priority: 1});
+
+queue.setPriority('🦀', 2);
+```
+In above case, promise function with '🦀' executes second.
+
+We can also delay a promise function.
+
+```js
+import PQueue from 'p-queue';
+
+const queue = new PQueue({concurrency: 1});
+
+queue.add(async () => '🦄', {priority: 1});
+queue.add(async () => '🦀', {priority: 1, id: '🦀'});
+queue.add(async () => '🦄');
+queue.add(async () => '🦄', {priority: 0});
+
+queue.setPriority('🦀', -1);
+```
+In above case, promise function with '🦀' executes last.
+
 #### .pending
 
 Number of running items (no longer in the queue).
