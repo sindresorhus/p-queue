@@ -69,6 +69,7 @@ export type QueueAddOptions = {
 	@default 0
 	*/
 	readonly priority?: number;
+
 	/**
 	Unique identifier for the promise function. This can be used to update priority, before it gets executed.
 
