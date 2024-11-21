@@ -71,7 +71,7 @@ export type QueueAddOptions = {
 	readonly priority?: number;
 
 	/**
-	Unique identifier for the promise function, used to update its priority before execution. If not specified, it is auto-assigned as an incrementing bigint starting from 1n.   
+	Unique identifier for the promise function, used to update its priority before execution. If not specified, it is auto-assigned as an incrementing bigint starting from 1n.
 	*/
 	id?: string;
 } & TaskOptions & TimeoutOptions;
