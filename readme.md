@@ -137,6 +137,12 @@ Default: `0`
 
 Priority of operation. Operations with greater priority will be scheduled first.
 
+##### id
+
+Type `string`
+
+Unique identifier for the promise function, used to update its priority before execution. If not specified, it is auto-assigned as an incrementing bigint starting from 1n.
+
 ##### signal
 
 [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) for cancellation of the operation. When aborted, it will be removed from the queue and the `queue.add()` call will reject with an [error](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/reason). If the operation is already running, the signal will need to be handled by the operation itself.
@@ -238,11 +244,9 @@ console.log(queue.sizeBy({priority: 0}));
 
 #### .setPriority(id, priority)
 
-Update priority of a known promise function, using the `id` identifier, and a priority value to override existing priority value. The updated value of priority ensures whether to execute this promise function sooner or later.
+Updates the priority of a promise function by its id, affecting its execution order. Requires a defined concurrency limit to take effect.
 
-Function works only when we specify a defined concurrency to change any priorities.
-
-For example, this can be used to make a promise function run earlier.
+For example, this can be used to prioritize a promise function to run earlier.
 
 ```js
 import PQueue from 'p-queue';
@@ -256,9 +260,9 @@ queue.add(async () => '🦄', {priority: 1});
 
 queue.setPriority('🦀', 2);
 ```
-In above case, promise function with '🦀' executes second.
+In this case, the promise function with id: '🦀' runs second.
 
-We can also delay a promise function.
+You can also deprioritize a promise function to delay its execution:
 
 ```js
 import PQueue from 'p-queue';
@@ -272,7 +276,7 @@ queue.add(async () => '🦄', {priority: 0});
 
 queue.setPriority('🦀', -1);
 ```
-In above case, promise function with '🦀' executes last.
+Here, the promise function with id: '🦀' executes last.
 
 #### .pending
 

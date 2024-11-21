@@ -232,7 +232,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	/**
-	Update priority of a known promise function, using the `id` identifier, and a priority value to override existing priority value. The updated value of priority ensures whether to execute this promise function sooner or later.
+	Updates the priority of a promise function by its id, affecting its execution order. Requires a defined concurrency limit to take effect.
+
+	For example, this can be used to prioritize a promise function to run earlier.
 	*/
 	setPriority(id: string, priority: number) {
 		this.#queue.setPriority(id, priority);
