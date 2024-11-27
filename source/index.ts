@@ -235,6 +235,36 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	Updates the priority of a promise function by its id, affecting its execution order. Requires a defined concurrency limit to take effect.
 
 	For example, this can be used to prioritize a promise function to run earlier.
+
+	```js
+	import PQueue from 'p-queue';
+
+	const queue = new PQueue({concurrency: 1});
+
+	queue.add(async () => '🦄', {priority: 1});
+	queue.add(async () => '🦀', {priority: 0, id: '🦀'});
+	queue.add(async () => '🦄', {priority: 1});
+	queue.add(async () => '🦄', {priority: 1});
+
+	queue.setPriority('🦀', 2);
+	```
+	In this case, the promise function with id: '🦀' runs second.
+
+	You can also deprioritize a promise function to delay its execution:
+
+	```js
+	import PQueue from 'p-queue';
+
+	const queue = new PQueue({concurrency: 1});
+
+	queue.add(async () => '🦄', {priority: 1});
+	queue.add(async () => '🦀', {priority: 1, id: '🦀'});
+	queue.add(async () => '🦄');
+	queue.add(async () => '🦄', {priority: 0});
+
+	queue.setPriority('🦀', -1);
+	```
+	Here, the promise function with id: '🦀' executes last.
 	*/
 	setPriority(id: string, priority: number) {
 		this.#queue.setPriority(id, priority);
