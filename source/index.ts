@@ -248,7 +248,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	queue.setPriority('🦀', 2);
 	```
-	In this case, the promise function with id: '🦀' runs second.
+ 
+	In this case, the promise function with `id: '🦀'` runs second.
 
 	You can also deprioritize a promise function to delay its execution:
 
@@ -264,7 +265,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	queue.setPriority('🦀', -1);
 	```
-	Here, the promise function with id: '🦀' executes last.
+	Here, the promise function with `id: '🦀'` executes last.
 	*/
 	setPriority(id: string, priority: number) {
 		this.#queue.setPriority(id, priority);
