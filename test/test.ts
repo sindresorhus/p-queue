@@ -1295,4 +1295,3 @@ test('.setPriority() - execute a promise before planned - concurrency 3 and unsp
 	await queue.onIdle();
 	t.deepEqual(result, ['🐌', '🦆', '🐢', '🦀', '⚡️']);
 });
-
