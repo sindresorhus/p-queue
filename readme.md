@@ -260,7 +260,8 @@ queue.add(async () => '🦄', {priority: 1});
 
 queue.setPriority('🦀', 2);
 ```
-In this case, the promise function with id: '🦀' runs second.
+
+In this case, the promise function with `id: '🦀'` runs second.
 
 You can also deprioritize a promise function to delay its execution:
 
@@ -276,7 +277,8 @@ queue.add(async () => '🦄', {priority: 0});
 
 queue.setPriority('🦀', -1);
 ```
-Here, the promise function with id: '🦀' executes last.
+
+Here, the promise function with `id: '🦀'` executes last.
 
 #### .pending
 
