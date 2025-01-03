@@ -17,7 +17,7 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 
 		const element = {
 			priority: options.priority,
-			index: options.index,
+			id: options.id,
 			run,
 		};
 
@@ -33,14 +33,14 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 		this.#queue.splice(index, 0, element);
 	}
 
-	setPriority(index: string, priority: number) {
-		const existingIndex: number = this.#queue.findIndex((element: Readonly<PriorityQueueOptions>) => element.index === index);
-		if (existingIndex === -1) {
-			throw new ReferenceError(`No promise function with the index "${index}" exists in the queue.`);
+	setPriority(id: string, priority: number) {
+		const index: number = this.#queue.findIndex((element: Readonly<PriorityQueueOptions>) => element.id === id);
+		if (index === -1) {
+			throw new ReferenceError(`No promise function with the id "${id}" exists in the queue.`);
 		}
 
-		const [item] = this.#queue.splice(existingIndex, 1);
-		this.enqueue(item!.run, {priority, index});
+		const [item] = this.#queue.splice(index, 1);
+		this.enqueue(item!.run, {priority, id});
 	}
 
 	dequeue(): RunFunction | undefined {

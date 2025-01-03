@@ -1141,15 +1141,15 @@ test('.setPriority() - execute a promise before planned', async t => {
 	queue.add(async () => {
 		await delay(400);
 		result.push('🐌');
-	}, {index: '🐌'});
+	}, {id: '🐌'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('🦆');
-	}, {index: '🦆'});
+	}, {id: '🦆'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('🐢');
-	}, {index: '🐢'});
+	}, {id: '🐢'});
 	queue.setPriority('🐢', 1);
 	await queue.onIdle();
 	t.deepEqual(result, ['🐌', '🐢', '🦆']);
@@ -1161,27 +1161,27 @@ test('.setPriority() - execute a promise after planned', async t => {
 	queue.add(async () => {
 		await delay(400);
 		result.push('🐌');
-	}, {index: '🐌'});
+	}, {id: '🐌'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('🦆');
-	}, {index: '🦆'});
+	}, {id: '🦆'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('🦆');
-	}, {index: '🦆'});
+	}, {id: '🦆'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('🐢');
-	}, {index: '🐢'});
+	}, {id: '🐢'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('🦆');
-	}, {index: '🦆'});
+	}, {id: '🦆'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('🦆');
-	}, {index: '🦆'});
+	}, {id: '🦆'});
 	queue.setPriority('🐢', -1);
 	await queue.onIdle();
 	t.deepEqual(result, ['🐌', '🦆', '🦆', '🦆', '🦆', '🐢']);
@@ -1193,19 +1193,19 @@ test('.setPriority() - execute a promise before planned - concurrency 2', async 
 	queue.add(async () => {
 		await delay(400);
 		result.push('🐌');
-	}, {index: '🐌'});
+	}, {id: '🐌'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('🦆');
-	}, {index: '🦆'});
+	}, {id: '🦆'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('🐢');
-	}, {index: '🐢'});
+	}, {id: '🐢'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('⚡️');
-	}, {index: '⚡️'});
+	}, {id: '⚡️'});
 	queue.setPriority('⚡️', 1);
 	await queue.onIdle();
 	t.deepEqual(result, ['🐌', '🦆', '⚡️', '🐢']);
@@ -1217,23 +1217,23 @@ test('.setPriority() - execute a promise before planned - concurrency 3', async 
 	queue.add(async () => {
 		await delay(400);
 		result.push('🐌');
-	}, {index: '🐌'});
+	}, {id: '🐌'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('🦆');
-	}, {index: '🦆'});
+	}, {id: '🦆'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('🐢');
-	}, {index: '🐢'});
+	}, {id: '🐢'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('⚡️');
-	}, {index: '⚡️'});
+	}, {id: '⚡️'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('🦀');
-	}, {index: '🦀'});
+	}, {id: '🦀'});
 	queue.setPriority('🦀', 1);
 	await queue.onIdle();
 	t.deepEqual(result, ['🐌', '🦆', '🐢', '🦀', '⚡️']);
@@ -1245,30 +1245,30 @@ test('.setPriority() - execute a multiple promise before planned, with variable 
 	queue.add(async () => {
 		await delay(400);
 		result.push('🐌');
-	}, {index: '🐌'});
+	}, {id: '🐌'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('🦆');
-	}, {index: '🦆'});
+	}, {id: '🦆'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('🐢');
-	}, {index: '🐢'});
+	}, {id: '🐢'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('⚡️');
-	}, {index: '⚡️'});
+	}, {id: '⚡️'});
 	queue.add(async () => {
 		await delay(400);
 		result.push('🦀');
-	}, {index: '🦀'});
+	}, {id: '🦀'});
 	queue.setPriority('⚡️', 1);
 	queue.setPriority('🦀', 2);
 	await queue.onIdle();
 	t.deepEqual(result, ['🐌', '🦆', '🦀', '⚡️', '🐢']);
 });
 
-test('.setPriority() - execute a promise before planned - concurrency 3 and unspecified `index`', async t => {
+test('.setPriority() - execute a promise before planned - concurrency 3 and unspecified `id`', async t => {
 	const result: string[] = [];
 	const queue = new PQueue({concurrency: 3});
 	queue.add(async () => {
