@@ -232,7 +232,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	/**
-	Updates the priority of a promise function by its id, affecting its execution order. Requires a defined concurrency limit to take effect.
+	Updates the priority of a promise function by its index, affecting its execution order. Requires a defined concurrency limit to take effect.
 
 	For example, this can be used to prioritize a promise function to run earlier.
 
@@ -242,13 +242,13 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	const queue = new PQueue({concurrency: 1});
 
 	queue.add(async () => '🦄', {priority: 1});
-	queue.add(async () => '🦀', {priority: 0, id: '🦀'});
+	queue.add(async () => '🦀', {priority: 0, index: '🦀'});
 	queue.add(async () => '🦄', {priority: 1});
 	queue.add(async () => '🦄', {priority: 1});
 
 	queue.setPriority('🦀', 2);
 	```
-	In this case, the promise function with id: '🦀' runs second.
+	In this case, the promise function with index: '🦀' runs second.
 
 	You can also deprioritize a promise function to delay its execution:
 
@@ -258,16 +258,16 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	const queue = new PQueue({concurrency: 1});
 
 	queue.add(async () => '🦄', {priority: 1});
-	queue.add(async () => '🦀', {priority: 1, id: '🦀'});
+	queue.add(async () => '🦀', {priority: 1, index: '🦀'});
 	queue.add(async () => '🦄');
 	queue.add(async () => '🦄', {priority: 0});
 
 	queue.setPriority('🦀', -1);
 	```
-	Here, the promise function with id: '🦀' executes last.
+	Here, the promise function with index: '🦀' executes last.
 	*/
-	setPriority(id: string, priority: number) {
-		this.#queue.setPriority(id, priority);
+	setPriority(index: string, priority: number) {
+		this.#queue.setPriority(index, priority);
 	}
 
 	/**
@@ -276,8 +276,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	async add<TaskResultType>(function_: Task<TaskResultType>, options: {throwOnTimeout: true} & Exclude<EnqueueOptionsType, 'throwOnTimeout'>): Promise<TaskResultType>;
 	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<TaskResultType | void>;
 	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType | void> {
-		// In case `id` is not defined.
-		options.id ??= (this.#idAssigner++).toString();
+		// In case `index` is not defined.
+		options.index ??= (this.#idAssigner++).toString();
 
 		options = {
 			timeout: this.timeout,

@@ -137,11 +137,11 @@ Default: `0`
 
 Priority of operation. Operations with greater priority will be scheduled first.
 
-##### id
+##### index
 
 Type `string`
 
-Unique identifier for the promise function, used to update its priority before execution. If not specified, it is auto-assigned as an incrementing bigint starting from 1n.
+Unique identifier for the promise function, used to update its priority before execution. If not specified, it is auto-assigned an incrementing BigInt starting from `1n`.
 
 ##### signal
 
@@ -242,9 +242,9 @@ console.log(queue.sizeBy({priority: 0}));
 //=> 1
 ```
 
-#### .setPriority(id, priority)
+#### .setPriority(index, priority)
 
-Updates the priority of a promise function by its id, affecting its execution order. Requires a defined concurrency limit to take effect.
+Updates the priority of a promise function by its index, affecting its execution order. Requires a defined concurrency limit to take effect.
 
 For example, this can be used to prioritize a promise function to run earlier.
 
@@ -254,13 +254,13 @@ import PQueue from 'p-queue';
 const queue = new PQueue({concurrency: 1});
 
 queue.add(async () => '🦄', {priority: 1});
-queue.add(async () => '🦀', {priority: 0, id: '🦀'});
+queue.add(async () => '🦀', {priority: 0, index: '🦀'});
 queue.add(async () => '🦄', {priority: 1});
 queue.add(async () => '🦄', {priority: 1});
 
 queue.setPriority('🦀', 2);
 ```
-In this case, the promise function with id: '🦀' runs second.
+In this case, the promise function with index: '🦀' runs second.
 
 You can also deprioritize a promise function to delay its execution:
 
@@ -270,13 +270,13 @@ import PQueue from 'p-queue';
 const queue = new PQueue({concurrency: 1});
 
 queue.add(async () => '🦄', {priority: 1});
-queue.add(async () => '🦀', {priority: 1, id: '🦀'});
+queue.add(async () => '🦀', {priority: 1, index: '🦀'});
 queue.add(async () => '🦄');
 queue.add(async () => '🦄', {priority: 0});
 
 queue.setPriority('🦀', -1);
 ```
-Here, the promise function with id: '🦀' executes last.
+Here, the promise function with index: '🦀' executes last.
 
 #### .pending
 
