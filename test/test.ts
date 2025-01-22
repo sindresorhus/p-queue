@@ -6,7 +6,7 @@ import inRange from 'in-range';
 import timeSpan from 'time-span';
 import randomInt from 'random-int';
 import pDefer from 'p-defer';
-import PQueue, {AbortError} from '../source/index.js';
+import PQueue from '../source/index.js';
 
 const fixture = Symbol('fixture');
 
@@ -1133,4 +1133,165 @@ test('aborting multiple jobs at the same time', async t => {
 	await t.throwsAsync(task1, {instanceOf: DOMException});
 	await t.throwsAsync(task2, {instanceOf: DOMException});
 	t.like(queue, {size: 0, pending: 0});
+});
+
+test('.setPriority() - execute a promise before planned', async t => {
+	const result: string[] = [];
+	const queue = new PQueue({concurrency: 1});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐌');
+	}, {id: '🐌'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦆');
+	}, {id: '🦆'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐢');
+	}, {id: '🐢'});
+	queue.setPriority('🐢', 1);
+	await queue.onIdle();
+	t.deepEqual(result, ['🐌', '🐢', '🦆']);
+});
+
+test('.setPriority() - execute a promise after planned', async t => {
+	const result: string[] = [];
+	const queue = new PQueue({concurrency: 1});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐌');
+	}, {id: '🐌'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦆');
+	}, {id: '🦆'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦆');
+	}, {id: '🦆'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐢');
+	}, {id: '🐢'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦆');
+	}, {id: '🦆'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦆');
+	}, {id: '🦆'});
+	queue.setPriority('🐢', -1);
+	await queue.onIdle();
+	t.deepEqual(result, ['🐌', '🦆', '🦆', '🦆', '🦆', '🐢']);
+});
+
+test('.setPriority() - execute a promise before planned - concurrency 2', async t => {
+	const result: string[] = [];
+	const queue = new PQueue({concurrency: 2});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐌');
+	}, {id: '🐌'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦆');
+	}, {id: '🦆'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐢');
+	}, {id: '🐢'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('⚡️');
+	}, {id: '⚡️'});
+	queue.setPriority('⚡️', 1);
+	await queue.onIdle();
+	t.deepEqual(result, ['🐌', '🦆', '⚡️', '🐢']);
+});
+
+test('.setPriority() - execute a promise before planned - concurrency 3', async t => {
+	const result: string[] = [];
+	const queue = new PQueue({concurrency: 3});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐌');
+	}, {id: '🐌'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦆');
+	}, {id: '🦆'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐢');
+	}, {id: '🐢'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('⚡️');
+	}, {id: '⚡️'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦀');
+	}, {id: '🦀'});
+	queue.setPriority('🦀', 1);
+	await queue.onIdle();
+	t.deepEqual(result, ['🐌', '🦆', '🐢', '🦀', '⚡️']);
+});
+
+test('.setPriority() - execute a multiple promise before planned, with variable priority', async t => {
+	const result: string[] = [];
+	const queue = new PQueue({concurrency: 2});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐌');
+	}, {id: '🐌'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦆');
+	}, {id: '🦆'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐢');
+	}, {id: '🐢'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('⚡️');
+	}, {id: '⚡️'});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦀');
+	}, {id: '🦀'});
+	queue.setPriority('⚡️', 1);
+	queue.setPriority('🦀', 2);
+	await queue.onIdle();
+	t.deepEqual(result, ['🐌', '🦆', '🦀', '⚡️', '🐢']);
+});
+
+test('.setPriority() - execute a promise before planned - concurrency 3 and unspecified `id`', async t => {
+	const result: string[] = [];
+	const queue = new PQueue({concurrency: 3});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐌');
+	});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦆');
+	});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🐢');
+	});
+	queue.add(async () => {
+		await delay(400);
+		result.push('⚡️');
+	});
+	queue.add(async () => {
+		await delay(400);
+		result.push('🦀');
+	});
+	queue.setPriority('5', 1);
+	await queue.onIdle();
+	t.deepEqual(result, ['🐌', '🦆', '🐢', '🦀', '⚡️']);
 });

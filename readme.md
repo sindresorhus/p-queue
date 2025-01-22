@@ -139,6 +139,12 @@ Default: `0`
 
 Priority of operation. Operations with greater priority will be scheduled first.
 
+##### id
+
+Type `string`
+
+Unique identifier for the promise function, used to update its priority before execution. If not specified, it is auto-assigned an incrementing BigInt starting from `1n`.
+
 ##### signal
 
 [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) for cancellation of the operation. When aborted, it will be removed from the queue and the `queue.add()` call will reject with an [error](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/reason). If the operation is already running, the signal will need to be handled by the operation itself.
@@ -237,6 +243,44 @@ console.log(queue.sizeBy({priority: 1}));
 console.log(queue.sizeBy({priority: 0}));
 //=> 1
 ```
+
+#### .setPriority(id, priority)
+
+Updates the priority of a promise function by its id, affecting its execution order. Requires a defined concurrency limit to take effect.
+
+For example, this can be used to prioritize a promise function to run earlier.
+
+```js
+import PQueue from 'p-queue';
+
+const queue = new PQueue({concurrency: 1});
+
+queue.add(async () => '🦄', {priority: 1});
+queue.add(async () => '🦀', {priority: 0, id: '🦀'});
+queue.add(async () => '🦄', {priority: 1});
+queue.add(async () => '🦄', {priority: 1});
+
+queue.setPriority('🦀', 2);
+```
+
+In this case, the promise function with `id: '🦀'` runs second.
+
+You can also deprioritize a promise function to delay its execution:
+
+```js
+import PQueue from 'p-queue';
+
+const queue = new PQueue({concurrency: 1});
+
+queue.add(async () => '🦄', {priority: 1});
+queue.add(async () => '🦀', {priority: 1, id: '🦀'});
+queue.add(async () => '🦄');
+queue.add(async () => '🦄', {priority: 0});
+
+queue.setPriority('🦀', -1);
+```
+
+Here, the promise function with `id: '🦀'` executes last.
 
 #### .pending
 
