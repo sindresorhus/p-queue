@@ -1,19 +1,38 @@
-import {EventEmitter} from 'eventemitter3';
-import pTimeout, {TimeoutError} from 'p-timeout';
-import {type Queue, type RunFunction} from './queue.js';
-import PriorityQueue from './priority-queue.js';
-import {type QueueAddOptions, type Options, type TaskOptions} from './options.js';
+import { EventEmitter } from "eventemitter3";
+import pTimeout, { TimeoutError } from "p-timeout";
+import { type Queue, type RunFunction } from "./queue.js";
+import PriorityQueue from "./priority-queue.js";
+import {
+	type QueueAddOptions,
+	type Options,
+	type TaskOptions,
+	Truthy,
+	Falsy,
+	BooleanTypeReturn,
+} from "./options.js";
 
 type Task<TaskResultType> =
 	| ((options: TaskOptions) => PromiseLike<TaskResultType>)
 	| ((options: TaskOptions) => TaskResultType);
 
-type EventName = 'active' | 'idle' | 'empty' | 'add' | 'next' | 'completed' | 'error';
+type EventName =
+	| "active"
+	| "idle"
+	| "empty"
+	| "add"
+	| "next"
+	| "completed"
+	| "error";
 
 /**
 Promise queue with concurrency control.
 */
-export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = QueueAddOptions> extends EventEmitter<EventName> { // eslint-disable-line @typescript-eslint/naming-convention, unicorn/prefer-event-target
+export default class PQueue<
+	T extends Truthy | Falsy,
+	QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue,
+	EnqueueOptionsType extends QueueAddOptions<T> = QueueAddOptions<T>
+> extends EventEmitter<EventName> {
+	// eslint-disable-line @typescript-eslint/naming-convention, unicorn/prefer-event-target
 	readonly #carryoverConcurrencyCount: boolean;
 
 	readonly #isIntervalIgnored: boolean;
@@ -54,7 +73,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	timeout?: number;
 
 	// TODO: The `throwOnTimeout` option should affect the return types of `add()` and `addAll()`
-	constructor(options?: Options<QueueType, EnqueueOptionsType>) {
+	constructor(options?: Options<QueueType, EnqueueOptionsType, T>) {
 		super();
 
 		// eslint-disable-next-line @typescript-eslint/consistent-type-assertions
@@ -66,18 +85,33 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			autoStart: true,
 			queueClass: PriorityQueue,
 			...options,
-		} as Options<QueueType, EnqueueOptionsType>;
+		} as Options<QueueType, EnqueueOptionsType, T>;
 
-		if (!(typeof options.intervalCap === 'number' && options.intervalCap >= 1)) {
-			throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${options.intervalCap?.toString() ?? ''}\` (${typeof options.intervalCap})`);
+		if (
+			!(typeof options.intervalCap === "number" && options.intervalCap >= 1)
+		) {
+			throw new TypeError(
+				`Expected \`intervalCap\` to be a number from 1 and up, got \`${
+					options.intervalCap?.toString() ?? ""
+				}\` (${typeof options.intervalCap})`
+			);
 		}
 
-		if (options.interval === undefined || !(Number.isFinite(options.interval) && options.interval >= 0)) {
-			throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${options.interval?.toString() ?? ''}\` (${typeof options.interval})`);
+		if (
+			options.interval === undefined ||
+			!(Number.isFinite(options.interval) && options.interval >= 0)
+		) {
+			throw new TypeError(
+				`Expected \`interval\` to be a finite number >= 0, got \`${
+					options.interval?.toString() ?? ""
+				}\` (${typeof options.interval})`
+			);
 		}
 
 		this.#carryoverConcurrencyCount = options.carryoverConcurrencyCount!;
-		this.#isIntervalIgnored = options.intervalCap === Number.POSITIVE_INFINITY || options.interval === 0;
+		this.#isIntervalIgnored =
+			options.intervalCap === Number.POSITIVE_INFINITY ||
+			options.interval === 0;
 		this.#intervalCap = options.intervalCap;
 		this.#interval = options.interval;
 		this.#queue = new options.queueClass!();
@@ -99,7 +133,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	#next(): void {
 		this.#pending--;
 		this.#tryToStartAnother();
-		this.emit('next');
+		this.emit("next");
 	}
 
 	#onResumeInterval(): void {
@@ -116,16 +150,15 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			if (delay < 0) {
 				// Act as the interval was done
 				// We don't need to resume it here because it will be resumed on line 160
-				this.#intervalCount = (this.#carryoverConcurrencyCount) ? this.#pending : 0;
+				this.#intervalCount = this.#carryoverConcurrencyCount
+					? this.#pending
+					: 0;
 			} else {
 				// Act as the interval is pending
 				if (this.#timeoutId === undefined) {
-					this.#timeoutId = setTimeout(
-						() => {
-							this.#onResumeInterval();
-						},
-						delay,
-					);
+					this.#timeoutId = setTimeout(() => {
+						this.#onResumeInterval();
+					}, delay);
 				}
 
 				return true;
@@ -145,10 +178,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 			this.#intervalId = undefined;
 
-			this.emit('empty');
+			this.emit("empty");
 
 			if (this.#pending === 0) {
-				this.emit('idle');
+				this.emit("idle");
 			}
 
 			return false;
@@ -162,7 +195,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					return false;
 				}
 
-				this.emit('active');
+				this.emit("active");
 				job();
 
 				if (canInitializeInterval) {
@@ -181,12 +214,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			return;
 		}
 
-		this.#intervalId = setInterval(
-			() => {
-				this.#onInterval();
-			},
-			this.#interval,
-		);
+		this.#intervalId = setInterval(() => {
+			this.#onInterval();
+		}, this.#interval);
 
 		this.#intervalEnd = Date.now() + this.#interval;
 	}
@@ -214,8 +244,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	set concurrency(newConcurrency: number) {
-		if (!(typeof newConcurrency === 'number' && newConcurrency >= 1)) {
-			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${newConcurrency}\` (${typeof newConcurrency})`);
+		if (!(typeof newConcurrency === "number" && newConcurrency >= 1)) {
+			throw new TypeError(
+				`Expected \`concurrency\` to be a number from 1 and up, got \`${newConcurrency}\` (${typeof newConcurrency})`
+			);
 		}
 
 		this.#concurrency = newConcurrency;
@@ -225,9 +257,13 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	async #throwOnAbort(signal: AbortSignal): Promise<never> {
 		return new Promise((_resolve, reject) => {
-			signal.addEventListener('abort', () => {
-				reject(signal.reason);
-			}, {once: true});
+			signal.addEventListener(
+				"abort",
+				() => {
+					reject(signal.reason);
+				},
+				{ once: true }
+			);
 		});
 	}
 
@@ -274,9 +310,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	/**
 	Adds a sync or async task to the queue. Always returns a promise.
 	*/
-	async add<TaskResultType>(function_: Task<TaskResultType>, options: {throwOnTimeout: true} & Exclude<EnqueueOptionsType, 'throwOnTimeout'>): Promise<TaskResultType>;
-	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<TaskResultType | void>;
-	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType | void> {
+	async add<TaskResultType>(function_: Task<TaskResultType>, options: { throwOnTimeout: true } & Exclude<EnqueueOptionsType,"throwOnTimeout">): Promise<TaskResultType>;
+	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<BooleanTypeReturn<T, TaskResultType, void>>;
+	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<BooleanTypeReturn<T, TaskResultType, void>> {
 		// In case `id` is not defined.
 		options.id ??= (this.#idAssigner++).toString();
 
@@ -294,19 +330,24 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				try {
 					options.signal?.throwIfAborted();
 
-					let operation = function_({signal: options.signal});
+					let operation = function_({ signal: options.signal });
 
 					if (options.timeout) {
-						operation = pTimeout(Promise.resolve(operation), {milliseconds: options.timeout});
+						operation = pTimeout(Promise.resolve(operation), {
+							milliseconds: options.timeout,
+						});
 					}
 
 					if (options.signal) {
-						operation = Promise.race([operation, this.#throwOnAbort(options.signal)]);
+						operation = Promise.race([
+							operation,
+							this.#throwOnAbort(options.signal),
+						]);
 					}
 
 					const result = await operation;
 					resolve(result);
-					this.emit('completed', result);
+					this.emit("completed", result);
 				} catch (error: unknown) {
 					if (error instanceof TimeoutError && !options.throwOnTimeout) {
 						resolve();
@@ -314,13 +355,13 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					}
 
 					reject(error);
-					this.emit('error', error);
+					this.emit("error", error);
 				} finally {
 					this.#next();
 				}
 			}, options);
 
-			this.emit('add');
+			this.emit("add");
 
 			this.#tryToStartAnother();
 		});
@@ -333,17 +374,21 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
-		options?: {throwOnTimeout: true} & Partial<Exclude<EnqueueOptionsType, 'throwOnTimeout'>>,
+		options?: { throwOnTimeout: true } & Partial<
+			Exclude<EnqueueOptionsType, "throwOnTimeout">
+		>
 	): Promise<TaskResultsType[]>;
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
-		options?: Partial<EnqueueOptionsType>,
+		options?: Partial<EnqueueOptionsType>
 	): Promise<Array<TaskResultsType | void>>;
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
-		options?: Partial<EnqueueOptionsType>,
+		options?: Partial<EnqueueOptionsType>
 	): Promise<Array<TaskResultsType | void>> {
-		return Promise.all(functions.map(async function_ => this.add(function_, options)));
+		return Promise.all(
+			functions.map(async (function_) => this.add(function_, options))
+		);
 	}
 
 	/**
@@ -385,7 +430,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			return;
 		}
 
-		await this.#onEvent('empty');
+		await this.#onEvent("empty");
 	}
 
 	/**
@@ -401,7 +446,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			return;
 		}
 
-		await this.#onEvent('next', () => this.#queue.size < limit);
+		await this.#onEvent("next", () => this.#queue.size < limit);
 	}
 
 	/**
@@ -415,11 +460,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			return;
 		}
 
-		await this.#onEvent('idle');
+		await this.#onEvent("idle");
 	}
 
 	async #onEvent(event: EventName, filter?: () => boolean): Promise<void> {
-		return new Promise(resolve => {
+		return new Promise((resolve) => {
 			const listener = () => {
 				if (filter && !filter()) {
 					return;
@@ -465,5 +510,5 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 }
 
-export type {Queue} from './queue.js';
-export {type QueueAddOptions, type Options} from './options.js';
+export type { Queue } from "./queue.js";
+export { type QueueAddOptions, type Options } from "./options.js";
