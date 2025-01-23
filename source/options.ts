@@ -1,6 +1,15 @@
-import {type Queue, type RunFunction} from './queue.js';
+import { type Queue, type RunFunction } from "./queue.js";
 
-type TimeoutOptions = {
+export type Falsy = false;
+export type Truthy = true;
+
+export type BooleanTypeReturn<
+	T extends Falsy | Truthy,
+	TruthyReturn,
+	FalsyReturn
+> = T extends Truthy ? TruthyReturn : FalsyReturn;
+
+type TimeoutOptions<T extends Falsy | Truthy> = {
 	/**
 	Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
 	*/
@@ -11,10 +20,14 @@ type TimeoutOptions = {
 
 	@default false
 	*/
-	throwOnTimeout?: boolean;
+	throwOnTimeout?: T;
 };
 
-export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOptions extends QueueAddOptions> = {
+export type Options<
+	QueueType extends Queue<RunFunction, QueueOptions>,
+	QueueOptions extends QueueAddOptions<Throw>,
+	Throw extends Falsy | Truthy
+> = {
 	/**
 	Concurrency limit.
 
@@ -60,9 +73,9 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOpt
 	@default false
 	*/
 	readonly carryoverConcurrencyCount?: boolean;
-} & TimeoutOptions;
+} & TimeoutOptions<Throw>;
 
-export type QueueAddOptions = {
+export type QueueAddOptions<Throw extends Falsy | Truthy> = {
 	/**
 	Priority of operation. Operations with greater priority will be scheduled first.
 
@@ -74,7 +87,8 @@ export type QueueAddOptions = {
 	Unique identifier for the promise function, used to update its priority before execution. If not specified, it is auto-assigned an incrementing BigInt starting from `1n`.
 	*/
 	id?: string;
-} & TaskOptions & TimeoutOptions;
+} & TaskOptions &
+	TimeoutOptions<Throw>;
 
 export type TaskOptions = {
 	/**
