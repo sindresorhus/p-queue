@@ -30,7 +30,7 @@ Promise queue with concurrency control.
 export default class PQueue<
 	T extends Truthy | Falsy,
 	QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue,
-	EnqueueOptionsType extends QueueAddOptions<T> = QueueAddOptions<T>
+	EnqueueOptionsType extends QueueAddOptions<T> = QueueAddOptions<T>,
 > extends EventEmitter<EventName> {
 	// eslint-disable-line @typescript-eslint/naming-convention, unicorn/prefer-event-target
 	readonly #carryoverConcurrencyCount: boolean;
@@ -93,7 +93,7 @@ export default class PQueue<
 			throw new TypeError(
 				`Expected \`intervalCap\` to be a number from 1 and up, got \`${
 					options.intervalCap?.toString() ?? ""
-				}\` (${typeof options.intervalCap})`
+				}\` (${typeof options.intervalCap})`,
 			);
 		}
 
@@ -104,7 +104,7 @@ export default class PQueue<
 			throw new TypeError(
 				`Expected \`interval\` to be a finite number >= 0, got \`${
 					options.interval?.toString() ?? ""
-				}\` (${typeof options.interval})`
+				}\` (${typeof options.interval})`,
 			);
 		}
 
@@ -246,7 +246,7 @@ export default class PQueue<
 	set concurrency(newConcurrency: number) {
 		if (!(typeof newConcurrency === "number" && newConcurrency >= 1)) {
 			throw new TypeError(
-				`Expected \`concurrency\` to be a number from 1 and up, got \`${newConcurrency}\` (${typeof newConcurrency})`
+				`Expected \`concurrency\` to be a number from 1 and up, got \`${newConcurrency}\` (${typeof newConcurrency})`,
 			);
 		}
 
@@ -262,7 +262,7 @@ export default class PQueue<
 				() => {
 					reject(signal.reason);
 				},
-				{ once: true }
+				{ once: true },
 			);
 		});
 	}
@@ -310,9 +310,21 @@ export default class PQueue<
 	/**
 	Adds a sync or async task to the queue. Always returns a promise.
 	*/
-	async add<TaskResultType>(function_: Task<TaskResultType>, options: { throwOnTimeout: true } & Exclude<EnqueueOptionsType,"throwOnTimeout">): Promise<TaskResultType>;
-	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<BooleanTypeReturn<T, TaskResultType, void>>;
-	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<BooleanTypeReturn<T, TaskResultType, void>> {
+	async add<TaskResultType>(
+		function_: Task<TaskResultType>,
+		options: { throwOnTimeout: true } & Exclude<
+			EnqueueOptionsType,
+			"throwOnTimeout"
+		>,
+	): Promise<TaskResultType>;
+	async add<TaskResultType>(
+		function_: Task<TaskResultType>,
+		options?: Partial<EnqueueOptionsType>,
+	): Promise<BooleanTypeReturn<T, TaskResultType, void>>;
+	async add<TaskResultType>(
+		function_: Task<TaskResultType>,
+		options: Partial<EnqueueOptionsType> = {},
+	): Promise<BooleanTypeReturn<T, TaskResultType, void>> {
 		// In case `id` is not defined.
 		options.id ??= (this.#idAssigner++).toString();
 
@@ -376,18 +388,18 @@ export default class PQueue<
 		functions: ReadonlyArray<Task<TaskResultsType>>,
 		options?: { throwOnTimeout: true } & Partial<
 			Exclude<EnqueueOptionsType, "throwOnTimeout">
-		>
-	): Promise<TaskResultsType[]>;
+		>,
+	): Promise<BooleanTypeReturn<T, TaskResultsType, void>[]>;
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
-		options?: Partial<EnqueueOptionsType>
-	): Promise<Array<TaskResultsType | void>>;
+		options?: Partial<EnqueueOptionsType>,
+	): Promise<BooleanTypeReturn<T, TaskResultsType, void>[]>;
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
-		options?: Partial<EnqueueOptionsType>
-	): Promise<Array<TaskResultsType | void>> {
+		options?: Partial<EnqueueOptionsType>,
+	): Promise<BooleanTypeReturn<T, TaskResultsType, void>[]> {
 		return Promise.all(
-			functions.map(async (function_) => this.add(function_, options))
+			functions.map(async (function_) => this.add(function_, options)),
 		);
 	}
 
