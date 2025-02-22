@@ -8,6 +8,34 @@ For servers, you probably want a Redis-backed [job queue](https://github.com/sin
 
 Note that the project is feature complete. We are happy to review pull requests, but we don't plan any further development. We are also not answering email support questions.
 
+---
+
+<br>
+<div align="center">
+	<p>
+		<p>
+			<sup>
+				<a href="https://github.com/sponsors/sindresorhus">Sindre's open source work is supported by the community</a><br>Special thanks to:
+			</sup>
+		</p>
+		<br>
+		<br>
+		<a href="https://fetchfox.ai?ref=sindre">
+			<div>
+				<img src="https://sindresorhus.com/assets/thanks/fetchfox-logo.svg" height="200"/>
+			</div>
+			<b>Scrape anything with FetchFox</b>
+			<div>
+				<sup>FetchFox is an AI powered scraping tool that lets you scrape data from any website</sup>
+			</div>
+		</a>
+	</p>
+	<br>
+	<br>
+</div>
+
+---
+
 ## Install
 
 ```sh
