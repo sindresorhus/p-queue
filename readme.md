@@ -65,8 +65,8 @@ const queue = new PQueue({concurrency: 1});
 })();
 
 (async () => {
-	const task = await getUnicornTask();
-	await queue.add(task);
+	const taskPromise = getUnicornTask();
+	await queue.add(taskPromise);
 	console.log('Done: Unicorn task');
 })();
 ```
