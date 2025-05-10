@@ -63,12 +63,6 @@ const queue = new PQueue({concurrency: 1});
 	await queue.add(() => got('https://avajs.dev'));
 	console.log('Done: avajs.dev');
 })();
-
-(async () => {
-	const task = await getUnicornTask();
-	await queue.add(task);
-	console.log('Done: Unicorn task');
-})();
 ```
 
 ## API
