@@ -15,14 +15,7 @@ type Task<TaskResultType> =
 	| ((options: TaskOptions) => PromiseLike<TaskResultType>)
 	| ((options: TaskOptions) => TaskResultType);
 
-type EventName =
-	| 'active'
-	| 'idle'
-	| 'empty'
-	| 'add'
-	| 'next'
-	| 'completed'
-	| 'error';
+type EventName = 'active' | 'idle' | 'empty' | 'add' | 'next' | 'completed' | 'error';
 
 /**
 Promise queue with concurrency control.
@@ -86,9 +79,7 @@ export default class PQueue<
 			...options,
 		} as Options<QueueType, EnqueueOptionsType, T>;
 
-		if (
-			!(typeof options.intervalCap === 'number' && options.intervalCap >= 1)
-		) {
+		if (!(typeof options.intervalCap === 'number' && options.intervalCap >= 1)) {
 			throw new TypeError(
 				`Expected \`intervalCap\` to be a number from 1 and up, got \`${
 					options.intervalCap?.toString() ?? ''
@@ -96,21 +87,12 @@ export default class PQueue<
 			);
 		}
 
-		if (
-			options.interval === undefined
-			|| !(Number.isFinite(options.interval) && options.interval >= 0)
-		) {
-			throw new TypeError(
-				`Expected \`interval\` to be a finite number >= 0, got \`${
-					options.interval?.toString() ?? ''
-				}\` (${typeof options.interval})`,
-			);
+		if (options.interval === undefined || !(Number.isFinite(options.interval) && options.interval >= 0)) {
+			throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${options.interval?.toString() ?? ''}\` (${typeof options.interval})`);
 		}
 
 		this.#carryoverConcurrencyCount = options.carryoverConcurrencyCount!;
-		this.#isIntervalIgnored
-			= options.intervalCap === Number.POSITIVE_INFINITY
-			|| options.interval === 0;
+		this.#isIntervalIgnored = options.intervalCap === Number.POSITIVE_INFINITY || options.interval === 0;
 		this.#intervalCap = options.intervalCap;
 		this.#interval = options.interval;
 		this.#queue = new options.queueClass!();
