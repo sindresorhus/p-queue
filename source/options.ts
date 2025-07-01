@@ -1,4 +1,4 @@
-import { type Queue, type RunFunction } from "./queue.js";
+import {type Queue, type RunFunction} from './queue.js';
 
 export type Falsy = false;
 export type Truthy = true;
@@ -6,7 +6,7 @@ export type Truthy = true;
 export type BooleanTypeReturn<
 	T extends Falsy | Truthy,
 	TruthyReturn,
-	FalsyReturn
+	FalsyReturn,
 > = T extends Truthy ? TruthyReturn : FalsyReturn;
 
 type TimeoutOptions<T extends Falsy | Truthy> = {
@@ -26,7 +26,7 @@ type TimeoutOptions<T extends Falsy | Truthy> = {
 export type Options<
 	QueueType extends Queue<RunFunction, QueueOptions>,
 	QueueOptions extends QueueAddOptions<Throw>,
-	Throw extends Falsy | Truthy
+	Throw extends Falsy | Truthy,
 > = {
 	/**
 	Concurrency limit.
@@ -88,7 +88,7 @@ export type QueueAddOptions<Throw extends Falsy | Truthy> = {
 	*/
 	id?: string;
 } & TaskOptions &
-	TimeoutOptions<Throw>;
+TimeoutOptions<Throw>;
 
 export type TaskOptions = {
 	/**
