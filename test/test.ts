@@ -1,5 +1,4 @@
 /* eslint-disable no-new */
-import EventEmitter from 'eventemitter3';
 import test from 'ava';
 import delay from 'delay';
 import inRange from 'in-range';
@@ -833,7 +832,7 @@ test('clear interval on pause', async t => {
 
 test('should be an event emitter', t => {
 	const queue = new PQueue();
-	t.true(queue instanceof EventEmitter);
+	t.true(queue instanceof EventTarget);
 });
 
 test('should emit active event per item', async t => {
@@ -841,7 +840,7 @@ test('should emit active event per item', async t => {
 	const queue = new PQueue();
 
 	let eventCount = 0;
-	queue.on('active', () => {
+	queue.addEventListener('active', () => {
 		eventCount++;
 	});
 
@@ -858,7 +857,7 @@ test('should emit idle event when idle', async t => {
 	const queue = new PQueue({concurrency: 1});
 
 	let timesCalled = 0;
-	queue.on('idle', () => {
+	queue.addEventListener('idle', () => {
 		timesCalled++;
 	});
 
@@ -897,7 +896,7 @@ test('should emit empty event when empty', async t => {
 	const queue = new PQueue({concurrency: 1});
 
 	let timesCalled = 0;
-	queue.on('empty', () => {
+	queue.addEventListener('empty', () => {
 		timesCalled++;
 	});
 
@@ -929,7 +928,7 @@ test('should emit add event when adding task', async t => {
 	const queue = new PQueue({concurrency: 1});
 
 	let timesCalled = 0;
-	queue.on('add', () => {
+	queue.addEventListener('add', () => {
 		timesCalled++;
 	});
 
@@ -973,7 +972,7 @@ test('should emit next event when completing task', async t => {
 	const queue = new PQueue({concurrency: 1});
 
 	let timesCalled = 0;
-	queue.on('next', () => {
+	queue.addEventListener('next', () => {
 		timesCalled++;
 	});
 
@@ -1018,10 +1017,10 @@ test('should emit completed / error events', async t => {
 
 	let errorEvents = 0;
 	let completedEvents = 0;
-	queue.on('error', () => {
+	queue.addEventListener('error', () => {
 		errorEvents++;
 	});
-	queue.on('completed', () => {
+	queue.addEventListener('completed', () => {
 		completedEvents++;
 	});
 
