@@ -1122,13 +1122,14 @@ test('aborted jobs do not use interval cap', async t => {
 		interval: 100,
 		intervalCap: 1,
 	});
+
 	const controller = new AbortController();
 
-	for (let i = 0; i < 5; i++) {
-		queue.add(() => null, {signal: controller.signal}).catch(() => null);
+	for (let index = 0; index < 5; index++) {
+		queue.add(() => {}, {signal: controller.signal}).catch(() => {});
 	}
 
-	queue.add(() => null);
+	queue.add(() => {});
 
 	controller.abort();
 	await delay(150);
