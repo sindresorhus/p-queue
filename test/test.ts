@@ -1126,10 +1126,10 @@ test('aborted jobs do not use interval cap', async t => {
 	const controller = new AbortController();
 
 	for (let index = 0; index < 5; index++) {
-		queue.add(() => {}, {signal: controller.signal}).catch(() => {});
+		queue.add(() => {}, {signal: controller.signal}).catch(() => {}); // eslint-disable-line @typescript-eslint/no-empty-function
 	}
 
-	queue.add(() => {});
+	queue.add(() => {}); // eslint-disable-line @typescript-eslint/no-empty-function
 
 	controller.abort();
 	await delay(150);
