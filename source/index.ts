@@ -289,10 +289,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		return new Promise((resolve, reject) => {
 			this.#queue.enqueue(async () => {
 				this.#pending++;
-				this.#intervalCount++;
 
 				try {
 					options.signal?.throwIfAborted();
+					this.#intervalCount++;
 
 					let operation = function_({signal: options.signal});
 

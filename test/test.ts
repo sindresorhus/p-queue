@@ -1116,6 +1116,26 @@ test('should pass AbortSignal instance to job', async t => {
 	}, {signal: controller.signal});
 });
 
+test('aborted jobs do not use interval cap', async t => {
+	const queue = new PQueue({
+		concurrency: 1,
+		interval: 100,
+		intervalCap: 1,
+	});
+
+	const controller = new AbortController();
+
+	for (let index = 0; index < 5; index++) {
+		queue.add(() => {}, {signal: controller.signal}).catch(() => {}); // eslint-disable-line @typescript-eslint/no-empty-function
+	}
+
+	queue.add(() => {}); // eslint-disable-line @typescript-eslint/no-empty-function
+
+	controller.abort();
+	await delay(150);
+	t.is(queue.size, 0);
+});
+
 test('aborting multiple jobs at the same time', async t => {
 	const queue = new PQueue({concurrency: 1});
 
