@@ -1155,6 +1155,51 @@ test('aborting multiple jobs at the same time', async t => {
 	t.like(queue, {size: 0, pending: 0});
 });
 
+test('pending promises counted fast enough', async t => {
+	const queue = new PQueue({autoStart: false, concurrency: 2});
+
+	let hasThirdRun = false;
+
+	queue.add(async () => delay(1000));
+	queue.add(async () => delay(1000));
+	queue.add(async () => {
+		hasThirdRun = true;
+	});
+
+	queue.start();
+
+	await delay(100);
+
+	t.false(hasThirdRun);
+});
+
+test('pending promises with abortions counted fast enough', async t => {
+	const queue = new PQueue({autoStart: false, concurrency: 2});
+
+	const controller = new AbortController();
+
+	let hasThirdRun = false;
+
+	queue.add(async () => delay(1000));
+	queue.add(async () => delay(1000));
+	const abortedPromise = queue.add(async () => delay(1000), {signal: controller.signal});
+	queue.add(async () => {
+		hasThirdRun = true;
+	});
+
+	controller.abort();
+	queue.start();
+
+	await delay(100);
+
+	t.false(hasThirdRun);
+	await t.throwsAsync(abortedPromise, {instanceOf: DOMException});
+
+	await delay(100);
+
+	t.true(hasThirdRun);
+});
+
 test('.setPriority() - execute a promise before planned', async t => {
 	const result: string[] = [];
 	const queue = new PQueue({concurrency: 1});
