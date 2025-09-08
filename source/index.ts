@@ -24,11 +24,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	readonly #interval: number;
 
-	#intervalEnd = 0;
-
 	#intervalId?: NodeJS.Timeout;
-
-	#timeoutId?: NodeJS.Timeout;
 
 	#queue: QueueType;
 
@@ -88,63 +84,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		this.#isPaused = options.autoStart === false;
 	}
 
-	get #doesIntervalAllowAnother(): boolean {
-		return this.#isIntervalIgnored || this.#intervalCount < this.#intervalCap;
-	}
-
-	get #doesConcurrentAllowAnother(): boolean {
-		return this.#pending < this.#concurrency;
-	}
-
-	#next(): void {
-		this.#pending--;
-		this.#tryToStartAnother();
-		this.emit('next');
-	}
-
-	#onResumeInterval(): void {
-		this.#onInterval();
-		this.#initializeIntervalIfNeeded();
-		this.#timeoutId = undefined;
-	}
-
-	get #isIntervalPaused(): boolean {
-		const now = Date.now();
-
-		if (this.#intervalId === undefined) {
-			const delay = this.#intervalEnd - now;
-			if (delay < 0) {
-				// Act as the interval was done
-				// We don't need to resume it here because it will be resumed on line 160
-				this.#intervalCount = (this.#carryoverConcurrencyCount) ? this.#pending : 0;
-			} else {
-				// Act as the interval is pending
-				if (this.#timeoutId === undefined) {
-					this.#timeoutId = setTimeout(
-						() => {
-							this.#onResumeInterval();
-						},
-						delay,
-					);
-				}
-
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	#tryToStartAnother(): boolean {
+	#tryNext(): boolean {
 		if (this.#queue.size === 0) {
-			// We can clear the interval ("pause")
-			// Because we can redo it later ("resume")
-			if (this.#intervalId) {
-				clearInterval(this.#intervalId);
-			}
-
-			this.#intervalId = undefined;
-
 			this.emit('empty');
 
 			if (this.#pending === 0) {
@@ -154,51 +95,28 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			return false;
 		}
 
-		if (!this.#isPaused) {
-			const canInitializeInterval = !this.#isIntervalPaused;
-			if (this.#doesIntervalAllowAnother && this.#doesConcurrentAllowAnother) {
-				const job = this.#queue.dequeue();
-				if (!job) {
-					return false;
-				}
+		if (!this.#isPaused && (this.#isIntervalIgnored || this.#intervalCount < this.#intervalCap) && this.#pending < this.#concurrency && this.#queue.size > 0) {
+			const job = this.#queue.dequeue()!;
+			this.emit('active');
+			job();
 
-				this.emit('active');
-				job();
+			if (!this.#intervalId && !this.#isIntervalIgnored) {
+				setInterval(() => {
+					if (this.#intervalCount === 0 && this.#pending === 0 && this.#intervalId) {
+						clearInterval(this.#intervalId);
+						this.#intervalId = undefined;
+					}
 
-				if (canInitializeInterval) {
-					this.#initializeIntervalIfNeeded();
-				}
+					this.#intervalCount = this.#carryoverConcurrencyCount ? this.#pending : 0;
+				}, this.#interval)
 
-				return true;
+				this.#processQueue();
 			}
+
+			return true;
 		}
 
 		return false;
-	}
-
-	#initializeIntervalIfNeeded(): void {
-		if (this.#isIntervalIgnored || this.#intervalId !== undefined) {
-			return;
-		}
-
-		this.#intervalId = setInterval(
-			() => {
-				this.#onInterval();
-			},
-			this.#interval,
-		);
-
-		this.#intervalEnd = Date.now() + this.#interval;
-	}
-
-	#onInterval(): void {
-		if (this.#intervalCount === 0 && this.#pending === 0 && this.#intervalId) {
-			clearInterval(this.#intervalId);
-			this.#intervalId = undefined;
-		}
-
-		this.#intervalCount = this.#carryoverConcurrencyCount ? this.#pending : 0;
-		this.#processQueue();
 	}
 
 	/**
@@ -206,7 +124,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	#processQueue(): void {
 		// eslint-disable-next-line no-empty
-		while (this.#tryToStartAnother()) {}
+		while (this.#tryNext()) {}
 	}
 
 	get concurrency(): number {
@@ -287,42 +205,57 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		};
 
 		return new Promise((resolve, reject) => {
-			this.#queue.enqueue(async () => {
+			this.#queue.enqueue(() => {
 				this.#pending++;
 
 				try {
 					options.signal?.throwIfAborted();
-					this.#intervalCount++;
-
-					let operation = function_({signal: options.signal});
-
-					if (options.timeout) {
-						operation = pTimeout(Promise.resolve(operation), {milliseconds: options.timeout});
-					}
-
-					if (options.signal) {
-						operation = Promise.race([operation, this.#throwOnAbort(options.signal)]);
-					}
-
-					const result = await operation;
-					resolve(result);
-					this.emit('completed', result);
-				} catch (error: unknown) {
-					if (error instanceof TimeoutError && !options.throwOnTimeout) {
-						resolve();
-						return;
-					}
-
+				} catch (error) {
 					reject(error);
 					this.emit('error', error);
-				} finally {
-					this.#next();
+
+					this.#pending--;
+					this.emit('next');
+					this.#tryNext();
+
+					return Promise.resolve();
 				}
+
+				this.#intervalCount++;
+
+				return (async () => {
+					try {
+						let operation = function_({signal: options.signal});
+
+						if (options.timeout) {
+							operation = pTimeout(Promise.resolve(operation), {milliseconds: options.timeout});
+						}
+
+						if (options.signal) {
+							operation = Promise.race([operation, this.#throwOnAbort(options.signal)]);
+						}
+
+						const result = await operation;
+						resolve(result);
+						this.emit('completed', result);
+					} catch (error: unknown) {
+						if (error instanceof TimeoutError && !options.throwOnTimeout) {
+							resolve();
+						} else {
+							reject(error);
+							this.emit('error', error);
+						}
+					}
+
+					this.#pending--;
+					this.emit('next');
+					this.#tryNext();
+				})()
 			}, options);
 
 			this.emit('add');
 
-			this.#tryToStartAnother();
+			this.#tryNext();
 		});
 	}
 
