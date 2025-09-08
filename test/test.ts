@@ -1200,6 +1200,88 @@ test('pending promises with abortions counted fast enough', async t => {
 	t.true(hasThirdRun);
 });
 
+test('intervalCap', async t => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 2,
+	});
+
+	let hasThirdRun = false;
+
+	queue.add(async () => '🧜‍♂️');
+	queue.add(async () => '🧜‍♂️');
+	queue.add(async () => {
+		hasThirdRun = true;
+	});
+
+	await delay(100);
+
+	t.false(hasThirdRun);
+
+	await delay(1500);
+
+	t.true(hasThirdRun);
+});
+
+test('consumed interval is remembered between idle states', async t => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 2,
+	});
+
+	await queue.add(async () => '🧜‍♂️');
+
+	await delay(300);
+
+	let hasThirdRun = false;
+
+	queue.add(async () => {
+		await delay(200);
+		return '🧜‍♂️';
+	});
+	queue.add(async () => {
+		hasThirdRun = true;
+	});
+
+	await delay(50);
+
+	t.false(hasThirdRun);
+
+	await delay(1500);
+
+	t.true(hasThirdRun);
+});
+
+test('consumed interval is updated on time, even between idle states', async t => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 2,
+	});
+
+	await queue.addAll([
+		async () => {
+			await delay(500);
+			return '🧜‍♂️';
+		},
+		async () => {
+			await delay(500);
+			return '🧜‍♂️';
+		},
+	]);
+
+	await delay(600);
+
+	let hasThirdRun = false;
+
+	queue.add(async () => {
+		hasThirdRun = true;
+	});
+
+	await delay(50);
+
+	t.true(hasThirdRun);
+});
+
 test('.setPriority() - execute a promise before planned', async t => {
 	const result: string[] = [];
 	const queue = new PQueue({concurrency: 1});
