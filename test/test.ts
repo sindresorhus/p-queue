@@ -43,10 +43,11 @@ test('.add() - concurrency: 1', async t => {
 	const end = timeSpan();
 	const queue = new PQueue({concurrency: 1});
 
-	const mapper = async ([value, ms]: readonly number[]) => queue.add(async () => {
-		await delay(ms!);
-		return value!;
-	});
+	const mapper = async ([value, ms]: readonly number[]) =>
+		queue.add(async () => {
+			await delay(ms!);
+			return value!;
+		});
 
 	// eslint-disable-next-line unicorn/no-array-callback-reference
 	t.deepEqual(await Promise.all(input.map(mapper)), [10, 20, 30]);
@@ -58,13 +59,17 @@ test('.add() - concurrency: 5', async t => {
 	const queue = new PQueue({concurrency});
 	let running = 0;
 
-	const input = Array.from({length: 100}).fill(0).map(async () => queue.add(async () => {
-		running++;
-		t.true(running <= concurrency);
-		t.true(queue.pending <= concurrency);
-		await delay(randomInt(30, 200));
-		running--;
-	}));
+	const input = Array.from({length: 100})
+		.fill(0)
+		.map(async () =>
+			queue.add(async () => {
+				running++;
+				t.true(running <= concurrency);
+				t.true(queue.pending <= concurrency);
+				await delay(randomInt(30, 200));
+				running--;
+			}),
+		);
 
 	await Promise.all(input);
 });
@@ -74,20 +79,24 @@ test('.add() - update concurrency', async t => {
 	const queue = new PQueue({concurrency});
 	let running = 0;
 
-	const input = Array.from({length: 100}).fill(0).map(async (_value, index) => queue.add(async () => {
-		running++;
+	const input = Array.from({length: 100})
+		.fill(0)
+		.map(async (_value, index) =>
+			queue.add(async () => {
+				running++;
 
-		t.true(running <= concurrency);
-		t.true(queue.pending <= concurrency);
+				t.true(running <= concurrency);
+				t.true(queue.pending <= concurrency);
 
-		await delay(randomInt(30, 200));
-		running--;
+				await delay(randomInt(30, 200));
+				running--;
 
-		if (index % 30 === 0) {
-			queue.concurrency = --concurrency;
-			t.is(queue.concurrency, concurrency);
-		}
-	}));
+				if (index % 30 === 0) {
+					queue.concurrency = --concurrency;
+					t.is(queue.concurrency, concurrency);
+				}
+			}),
+		);
 
 	await Promise.all(input);
 });
@@ -148,10 +157,12 @@ test('.add() - timeout without throwing', async t => {
 test.failing('.add() - timeout with throwing', async t => {
 	const result: string[] = [];
 	const queue = new PQueue({timeout: 300, throwOnTimeout: true});
-	await t.throwsAsync(queue.add(async () => {
-		await delay(400);
-		result.push('🐌');
-	}));
+	await t.throwsAsync(
+		queue.add(async () => {
+			await delay(400);
+			result.push('🐌');
+		}),
+	);
 	queue.add(async () => {
 		await delay(200);
 		result.push('🦆');
@@ -164,7 +175,11 @@ test('.add() - change timeout in between', async t => {
 	const result: string[] = [];
 	const initialTimeout = 50;
 	const newTimeout = 200;
-	const queue = new PQueue({timeout: initialTimeout, throwOnTimeout: false, concurrency: 2});
+	const queue = new PQueue({
+		timeout: initialTimeout,
+		throwOnTimeout: false,
+		concurrency: 2,
+	});
 	queue.add(async () => {
 		const {timeout} = queue;
 		t.deepEqual(timeout, initialTimeout);
@@ -316,7 +331,7 @@ test('enforce number in options.concurrency', t => {
 test('enforce number in queue.concurrency', t => {
 	t.throws(
 		() => {
-			(new PQueue()).concurrency = 0;
+			new PQueue().concurrency = 0;
 		},
 		{instanceOf: TypeError},
 	);
@@ -324,21 +339,21 @@ test('enforce number in queue.concurrency', t => {
 	t.throws(
 		() => {
 			// @ts-expect-error Testing
-			(new PQueue()).concurrency = undefined;
+			new PQueue().concurrency = undefined;
 		},
 		{instanceOf: TypeError},
 	);
 
 	t.notThrows(() => {
-		(new PQueue()).concurrency = 1;
+		new PQueue().concurrency = 1;
 	});
 
 	t.notThrows(() => {
-		(new PQueue()).concurrency = 10;
+		new PQueue().concurrency = 10;
 	});
 
 	t.notThrows(() => {
-		(new PQueue()).concurrency = Number.POSITIVE_INFINITY;
+		new PQueue().concurrency = Number.POSITIVE_INFINITY;
 	});
 });
 
@@ -496,11 +511,9 @@ test.failing('.add() - handle task throwing error', async t => {
 
 	queue.add(() => 'sync 1');
 	await t.throwsAsync(
-		queue.add(
-			() => {
-				throw new Error('broken');
-			},
-		),
+		queue.add(() => {
+			throw new Error('broken');
+		}),
 		{message: 'broken'},
 	);
 	queue.add(() => 'sync 2');
@@ -514,11 +527,9 @@ test('.add() - handle task promise failure', async t => {
 	const queue = new PQueue({concurrency: 1});
 
 	await t.throwsAsync(
-		queue.add(
-			async () => {
-				throw new Error('broken');
-			},
-		),
+		queue.add(async () => {
+			throw new Error('broken');
+		}),
 		{message: 'broken'},
 	);
 
@@ -534,7 +545,7 @@ test('.add() - handle task promise failure', async t => {
 test('.addAll() sync/async mixed tasks', async t => {
 	const queue = new PQueue();
 
-	const functions: Array<() => (string | Promise<void> | Promise<unknown>)> = [
+	const functions: Array<() => string | Promise<void> | Promise<unknown>> = [
 		() => 'sync 1',
 		async () => delay(2000),
 		() => 'sync 2',
@@ -564,14 +575,11 @@ test('should resolve empty when size is zero', async t => {
 	queue.start();
 
 	// Pause at 0.5 second
-	setTimeout(
-		async () => {
-			queue.pause();
-			await delay(10);
-			queue.start();
-		},
-		500,
-	);
+	setTimeout(async () => {
+		queue.pause();
+		await delay(10);
+		queue.start();
+	}, 500);
 
 	await queue.onIdle();
 });
@@ -1073,25 +1081,44 @@ test('should emit completed / error events', async t => {
 test('should verify timeout overrides passed to add', async t => {
 	const queue = new PQueue({timeout: 200, throwOnTimeout: true});
 
-	await t.throwsAsync(queue.add(async () => {
-		await delay(400);
-	}));
+	await t.throwsAsync(
+		queue.add(async () => {
+			await delay(400);
+		}),
+	);
 
-	await t.notThrowsAsync(queue.add(async () => {
-		await delay(400);
-	}, {throwOnTimeout: false}));
+	await t.notThrowsAsync(
+		queue.add(
+			async () => {
+				await delay(400);
+			},
+			{throwOnTimeout: false},
+		),
+	);
 
-	await t.notThrowsAsync(queue.add(async () => {
-		await delay(400);
-	}, {timeout: 600}));
+	await t.notThrowsAsync(
+		queue.add(
+			async () => {
+				await delay(400);
+			},
+			{timeout: 600},
+		),
+	);
 
-	await t.notThrowsAsync(queue.add(async () => {
-		await delay(100);
-	}));
+	await t.notThrowsAsync(
+		queue.add(async () => {
+			await delay(100);
+		}),
+	);
 
-	await t.throwsAsync(queue.add(async () => {
-		await delay(100);
-	}, {timeout: 50}));
+	await t.throwsAsync(
+		queue.add(
+			async () => {
+				await delay(100);
+			},
+			{timeout: 50},
+		),
+	);
 
 	await queue.onIdle();
 });
@@ -1101,19 +1128,25 @@ test('should skip an aborted job', async t => {
 	const controller = new AbortController();
 
 	controller.abort();
-	// eslint-disable-next-line @typescript-eslint/no-empty-function
-	await t.throwsAsync(queue.add(() => {}, {signal: controller.signal}), {
-		instanceOf: DOMException,
-	});
+
+	await t.throwsAsync(
+		queue.add(() => {}, {signal: controller.signal}),
+		{
+			instanceOf: DOMException,
+		},
+	);
 });
 
 test('should pass AbortSignal instance to job', async t => {
 	const queue = new PQueue();
 	const controller = new AbortController();
 
-	await queue.add(async ({signal}) => {
-		t.is(controller.signal, signal!);
-	}, {signal: controller.signal});
+	await queue.add(
+		async ({signal}) => {
+			t.is(controller.signal, signal!);
+		},
+		{signal: controller.signal},
+	);
 });
 
 test('aborted jobs do not use interval cap', async t => {
@@ -1142,8 +1175,12 @@ test('aborting multiple jobs at the same time', async t => {
 	const controller1 = new AbortController();
 	const controller2 = new AbortController();
 
-	const task1 = queue.add(async () => new Promise(() => {}), {signal: controller1.signal}); // eslint-disable-line @typescript-eslint/no-empty-function
-	const task2 = queue.add(async () => new Promise(() => {}), {signal: controller2.signal}); // eslint-disable-line @typescript-eslint/no-empty-function
+	const task1 = queue.add(async () => new Promise(() => {}), {
+		signal: controller1.signal,
+	});
+	const task2 = queue.add(async () => new Promise(() => {}), {
+		signal: controller2.signal,
+	});
 
 	setTimeout(() => {
 		controller1.abort();
@@ -1285,18 +1322,27 @@ test('consumed interval is updated on time, even between idle states', async t =
 test('.setPriority() - execute a promise before planned', async t => {
 	const result: string[] = [];
 	const queue = new PQueue({concurrency: 1});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🐌');
-	}, {id: '🐌'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🦆');
-	}, {id: '🦆'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🐢');
-	}, {id: '🐢'});
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🐌');
+		},
+		{id: '🐌'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🦆');
+		},
+		{id: '🦆'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🐢');
+		},
+		{id: '🐢'},
+	);
 	queue.setPriority('🐢', 1);
 	await queue.onIdle();
 	t.deepEqual(result, ['🐌', '🐢', '🦆']);
@@ -1305,30 +1351,48 @@ test('.setPriority() - execute a promise before planned', async t => {
 test('.setPriority() - execute a promise after planned', async t => {
 	const result: string[] = [];
 	const queue = new PQueue({concurrency: 1});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🐌');
-	}, {id: '🐌'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🦆');
-	}, {id: '🦆'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🦆');
-	}, {id: '🦆'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🐢');
-	}, {id: '🐢'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🦆');
-	}, {id: '🦆'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🦆');
-	}, {id: '🦆'});
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🐌');
+		},
+		{id: '🐌'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🦆');
+		},
+		{id: '🦆'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🦆');
+		},
+		{id: '🦆'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🐢');
+		},
+		{id: '🐢'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🦆');
+		},
+		{id: '🦆'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🦆');
+		},
+		{id: '🦆'},
+	);
 	queue.setPriority('🐢', -1);
 	await queue.onIdle();
 	t.deepEqual(result, ['🐌', '🦆', '🦆', '🦆', '🦆', '🐢']);
@@ -1337,22 +1401,34 @@ test('.setPriority() - execute a promise after planned', async t => {
 test('.setPriority() - execute a promise before planned - concurrency 2', async t => {
 	const result: string[] = [];
 	const queue = new PQueue({concurrency: 2});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🐌');
-	}, {id: '🐌'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🦆');
-	}, {id: '🦆'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🐢');
-	}, {id: '🐢'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('⚡️');
-	}, {id: '⚡️'});
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🐌');
+		},
+		{id: '🐌'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🦆');
+		},
+		{id: '🦆'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🐢');
+		},
+		{id: '🐢'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('⚡️');
+		},
+		{id: '⚡️'},
+	);
 	queue.setPriority('⚡️', 1);
 	await queue.onIdle();
 	t.deepEqual(result, ['🐌', '🦆', '⚡️', '🐢']);
@@ -1361,26 +1437,41 @@ test('.setPriority() - execute a promise before planned - concurrency 2', async 
 test('.setPriority() - execute a promise before planned - concurrency 3', async t => {
 	const result: string[] = [];
 	const queue = new PQueue({concurrency: 3});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🐌');
-	}, {id: '🐌'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🦆');
-	}, {id: '🦆'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🐢');
-	}, {id: '🐢'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('⚡️');
-	}, {id: '⚡️'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🦀');
-	}, {id: '🦀'});
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🐌');
+		},
+		{id: '🐌'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🦆');
+		},
+		{id: '🦆'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🐢');
+		},
+		{id: '🐢'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('⚡️');
+		},
+		{id: '⚡️'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🦀');
+		},
+		{id: '🦀'},
+	);
 	queue.setPriority('🦀', 1);
 	await queue.onIdle();
 	t.deepEqual(result, ['🐌', '🦆', '🐢', '🦀', '⚡️']);
@@ -1389,26 +1480,41 @@ test('.setPriority() - execute a promise before planned - concurrency 3', async 
 test('.setPriority() - execute a multiple promise before planned, with variable priority', async t => {
 	const result: string[] = [];
 	const queue = new PQueue({concurrency: 2});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🐌');
-	}, {id: '🐌'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🦆');
-	}, {id: '🦆'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🐢');
-	}, {id: '🐢'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('⚡️');
-	}, {id: '⚡️'});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🦀');
-	}, {id: '🦀'});
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🐌');
+		},
+		{id: '🐌'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🦆');
+		},
+		{id: '🦆'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🐢');
+		},
+		{id: '🐢'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('⚡️');
+		},
+		{id: '⚡️'},
+	);
+	queue.add(
+		async () => {
+			await delay(400);
+			result.push('🦀');
+		},
+		{id: '🦀'},
+	);
 	queue.setPriority('⚡️', 1);
 	queue.setPriority('🦀', 2);
 	await queue.onIdle();
