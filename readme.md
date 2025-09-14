@@ -365,10 +365,9 @@ queue.add(() => Promise.resolve('hello, world!'));
 
 #### error
 
-Emitted if an item throws an error.
+Emitted if an item throws an error. The promise returned by `add()` is still rejected, so you must handle both.
 
 ```js
-import delay from 'delay';
 import PQueue from 'p-queue';
 
 const queue = new PQueue({concurrency: 2});
@@ -377,7 +376,10 @@ queue.on('error', error => {
 	console.error(error);
 });
 
-queue.add(() => Promise.reject(new Error('error')));
+// Handle the promise to prevent unhandled rejection
+queue.add(() => Promise.reject(new Error('error'))).catch(() => {
+	// Error already handled by event listener
+});
 ```
 
 #### empty
