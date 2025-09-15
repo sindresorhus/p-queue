@@ -185,6 +185,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			if (this.#doesIntervalAllowAnother && this.#doesConcurrentAllowAnother) {
 				const job = this.#queue.dequeue()!;
 
+				// Increment interval count immediately to prevent race conditions
+				if (!this.#isIntervalIgnored) {
+					this.#intervalCount++;
+				}
+
 				this.emit('active');
 				this.#lastExecutionTime = Date.now();
 				job();
@@ -314,8 +319,18 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				this.#pending++;
 
 				try {
-					options.signal?.throwIfAborted();
-					this.#intervalCount++;
+					// Check abort signal - if aborted, need to decrement the counter
+					// that was incremented in tryToStartAnother
+					try {
+						options.signal?.throwIfAborted();
+					} catch (error) {
+						// Decrement the counter that was already incremented
+						if (!this.#isIntervalIgnored) {
+							this.#intervalCount--;
+						}
+
+						throw error;
+					}
 
 					let operation = function_({signal: options.signal});
 

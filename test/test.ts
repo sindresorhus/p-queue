@@ -1354,10 +1354,10 @@ test('interval should be maintained when using await between adds (issue #182)',
 	});
 
 	// Check intervals between tasks
-	for (let i = 1; i < timestamps.length; i++) {
-		const interval = timestamps[i] - timestamps[i - 1];
+	for (let index = 1; index < timestamps.length; index++) {
+		const interval = timestamps[index] - timestamps[index - 1];
 		// Allow 10ms tolerance for timing
-		t.true(interval >= 90, `Interval between task ${i} and ${i + 1} was ${interval}ms, expected >= 90ms`);
+		t.true(interval >= 90, `Interval between task ${index} and ${index + 1} was ${interval}ms, expected >= 90ms`);
 	}
 });
 
@@ -1393,9 +1393,9 @@ test('interval maintained when queue becomes empty multiple times', async t => {
 	});
 
 	// Check all intervals
-	for (let i = 1; i < timestamps.length; i++) {
-		const interval = timestamps[i] - timestamps[i - 1];
-		t.true(interval >= 90, `Interval between task ${i} and ${i + 1} was ${interval}ms, expected >= 90ms`);
+	for (let index = 1; index < timestamps.length; index++) {
+		const interval = timestamps[index] - timestamps[index - 1];
+		t.true(interval >= 90, `Interval between task ${index} and ${index + 1} was ${interval}ms, expected >= 90ms`);
 	}
 });
 
@@ -1614,8 +1614,8 @@ test('process exits cleanly after interval tasks complete', async t => {
 
 	// Execute tasks that complete quickly with long interval
 	const tasks = [];
-	for (let i = 0; i < 4; i++) {
-		tasks.push(queue.add(() => `result-${i}`));
+	for (let index = 0; index < 4; index++) {
+		tasks.push(queue.add(() => `result-${index}`));
 	}
 
 	await Promise.all(tasks);
@@ -1624,4 +1624,33 @@ test('process exits cleanly after interval tasks complete', async t => {
 	// Test that no timers are hanging by checking process can exit naturally
 	// This ensures both intervalId and timeoutId are cleared when idle
 	t.pass();
+});
+
+test('intervalCap should be respected with high concurrency (issue #126)', async t => {
+	const queue = new PQueue({
+		concurrency: 5000,
+		intervalCap: 1000,
+		interval: 1000,
+		carryoverConcurrencyCount: true,
+	});
+
+	const results: number[] = [];
+	const startTime = Date.now();
+
+	// Add 5000 tasks that complete immediately
+	const promises = [];
+	for (let index = 0; index < 5000; index++) {
+		promises.push(queue.add(async () => {
+			results.push(Date.now() - startTime);
+		}));
+	}
+
+	await Promise.all(promises);
+
+	// Check that no more than intervalCap tasks started in the first interval
+	const firstInterval = results.filter(timestamp => timestamp < 1000);
+	t.true(firstInterval.length <= 1000, `Expected ≤1000 tasks in first interval, got ${firstInterval.length}`);
+
+	// Check that tasks actually completed (basic sanity check)
+	t.is(results.length, 5000, 'All tasks should complete');
 });
