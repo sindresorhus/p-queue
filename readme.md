@@ -46,7 +46,7 @@ npm install p-queue
 
 ## Usage
 
-Here we run only one promise at the time. For example, set `concurrency` to 4 to run four promises at the same time.
+Here we run only one promise at a time. For example, set `concurrency` to 4 to run four promises at the same time.
 
 ```js
 import PQueue from 'p-queue';

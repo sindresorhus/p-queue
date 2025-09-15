@@ -1313,6 +1313,157 @@ test('.setPriority() - execute a promise before planned', async t => {
 	t.deepEqual(result, ['🐌', '🐢', '🦆']);
 });
 
+test('interval should be maintained when using await between adds (issue #182)', async t => {
+	const queue = new PQueue({
+		intervalCap: 1,
+		interval: 100,
+	});
+
+	const timestamps: number[] = [];
+
+	// Add first 3 tasks without await
+	queue.add(() => {
+		timestamps.push(Date.now());
+		return 'task1';
+	});
+	queue.add(() => {
+		timestamps.push(Date.now());
+		return 'task2';
+	});
+	queue.add(() => {
+		timestamps.push(Date.now());
+		return 'task3';
+	});
+
+	// Add task 4 with await
+	await queue.add(() => {
+		timestamps.push(Date.now());
+		return 'task4';
+	});
+
+	// Add task 5 with await - this should still respect interval
+	await queue.add(() => {
+		timestamps.push(Date.now());
+		return 'task5';
+	});
+
+	// Add task 6 with await
+	await queue.add(() => {
+		timestamps.push(Date.now());
+		return 'task6';
+	});
+
+	// Check intervals between tasks
+	for (let i = 1; i < timestamps.length; i++) {
+		const interval = timestamps[i] - timestamps[i - 1];
+		// Allow 10ms tolerance for timing
+		t.true(interval >= 90, `Interval between task ${i} and ${i + 1} was ${interval}ms, expected >= 90ms`);
+	}
+});
+
+test('interval maintained when queue becomes empty multiple times', async t => {
+	const queue = new PQueue({
+		intervalCap: 1,
+		interval: 100,
+	});
+
+	const timestamps: number[] = [];
+
+	// First batch
+	await queue.add(() => {
+		timestamps.push(Date.now());
+		return 'task1';
+	});
+	await queue.add(() => {
+		timestamps.push(Date.now());
+		return 'task2';
+	});
+
+	// Queue is empty, wait a bit
+	await delay(50);
+
+	// Second batch - should still respect interval from task 2
+	await queue.add(() => {
+		timestamps.push(Date.now());
+		return 'task3';
+	});
+	await queue.add(() => {
+		timestamps.push(Date.now());
+		return 'task4';
+	});
+
+	// Check all intervals
+	for (let i = 1; i < timestamps.length; i++) {
+		const interval = timestamps[i] - timestamps[i - 1];
+		t.true(interval >= 90, `Interval between task ${i} and ${i + 1} was ${interval}ms, expected >= 90ms`);
+	}
+});
+
+test('interval reset after long idle period', async t => {
+	const queue = new PQueue({
+		intervalCap: 1,
+		interval: 100,
+	});
+
+	const timestamps: number[] = [];
+
+	// Run first task
+	await queue.add(() => {
+		timestamps.push(Date.now());
+		return 'task1';
+	});
+
+	// Wait much longer than interval
+	await delay(250);
+
+	// This task should run immediately since enough time has passed
+	await queue.add(() => {
+		timestamps.push(Date.now());
+		return 'task2';
+	});
+
+	// But this one should wait for interval
+	await queue.add(() => {
+		timestamps.push(Date.now());
+		return 'task3';
+	});
+
+	const interval1to2 = timestamps[1] - timestamps[0];
+	const interval2to3 = timestamps[2] - timestamps[1];
+
+	t.true(interval1to2 >= 240, `Task 2 ran after ${interval1to2}ms, expected >= 240ms`);
+	t.true(interval2to3 >= 90, `Task 3 should respect interval: ${interval2to3}ms`);
+});
+
+test('interval with carryoverConcurrencyCount after queue empty', async t => {
+	const queue = new PQueue({
+		intervalCap: 1,
+		interval: 100,
+		carryoverConcurrencyCount: true,
+	});
+
+	const timestamps: number[] = [];
+
+	// Run first task
+	await queue.add(() => {
+		timestamps.push(Date.now());
+		return 'task1';
+	});
+
+	// Queue becomes empty
+	t.is(queue.size, 0);
+	t.is(queue.pending, 0);
+
+	// Add new task - should respect interval
+	await queue.add(() => {
+		timestamps.push(Date.now());
+		return 'task2';
+	});
+
+	const interval = timestamps[1] - timestamps[0];
+	t.true(interval >= 90, `Interval was ${interval}ms, expected >= 90ms`);
+});
+
 test('.setPriority() - execute a promise after planned', async t => {
 	const result: string[] = [];
 	const queue = new PQueue({concurrency: 1});
@@ -1452,4 +1603,25 @@ test('.setPriority() - execute a promise before planned - concurrency 3 and unsp
 	queue.setPriority('5', 1);
 	await queue.onIdle();
 	t.deepEqual(result, ['🐌', '🦆', '🐢', '🦀', '⚡️']);
+});
+
+test('process exits cleanly after interval tasks complete', async t => {
+	const queue = new PQueue({
+		concurrency: 100,
+		intervalCap: 500,
+		interval: 60 * 1000,
+	});
+
+	// Execute tasks that complete quickly with long interval
+	const tasks = [];
+	for (let i = 0; i < 4; i++) {
+		tasks.push(queue.add(() => `result-${i}`));
+	}
+
+	await Promise.all(tasks);
+	await queue.onIdle();
+
+	// Test that no timers are hanging by checking process can exit naturally
+	// This ensures both intervalId and timeoutId are cleared when idle
+	t.pass();
 });

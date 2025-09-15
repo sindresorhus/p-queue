@@ -26,6 +26,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	#intervalEnd = 0;
 
+	#lastExecutionTime = 0;
+
 	#intervalId?: NodeJS.Timeout;
 
 	#timeoutId?: NodeJS.Timeout;
@@ -114,20 +116,23 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		if (this.#intervalId === undefined) {
 			const delay = this.#intervalEnd - now;
 			if (delay < 0) {
-				// Act as the interval was done
-				// We don't need to resume it here because it will be resumed on line 160
+				// If the interval has expired while idle, check if we should enforce the interval
+				// from the last task execution. This ensures proper spacing between tasks even
+				// when the queue becomes empty and then new tasks are added.
+				if (this.#lastExecutionTime > 0) {
+					const timeSinceLastExecution = now - this.#lastExecutionTime;
+					if (timeSinceLastExecution < this.#interval) {
+						// Not enough time has passed since the last task execution
+						this.#createIntervalTimeout(this.#interval - timeSinceLastExecution);
+						return true;
+					}
+				}
+
+				// Enough time has passed or no previous execution, allow execution
 				this.#intervalCount = (this.#carryoverConcurrencyCount) ? this.#pending : 0;
 			} else {
 				// Act as the interval is pending
-				if (this.#timeoutId === undefined) {
-					this.#timeoutId = setTimeout(
-						() => {
-							this.#onResumeInterval();
-						},
-						delay,
-					);
-				}
-
+				this.#createIntervalTimeout(delay);
 				return true;
 			}
 		}
@@ -135,19 +140,40 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		return false;
 	}
 
+	#createIntervalTimeout(delay: number): void {
+		if (this.#timeoutId !== undefined) {
+			return;
+		}
+
+		this.#timeoutId = setTimeout(() => {
+			this.#onResumeInterval();
+		}, delay);
+	}
+
+	#clearIntervalTimer(): void {
+		if (this.#intervalId) {
+			clearInterval(this.#intervalId);
+			this.#intervalId = undefined;
+		}
+	}
+
+	#clearTimeoutTimer(): void {
+		if (this.#timeoutId) {
+			clearTimeout(this.#timeoutId);
+			this.#timeoutId = undefined;
+		}
+	}
+
 	#tryToStartAnother(): boolean {
 		if (this.#queue.size === 0) {
 			// We can clear the interval ("pause")
 			// Because we can redo it later ("resume")
-			if (this.#intervalId) {
-				clearInterval(this.#intervalId);
-			}
-
-			this.#intervalId = undefined;
-
+			this.#clearIntervalTimer();
 			this.emit('empty');
 
 			if (this.#pending === 0) {
+				// Clear timeout as well when completely idle
+				this.#clearTimeoutTimer();
 				this.emit('idle');
 			}
 
@@ -160,6 +186,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				const job = this.#queue.dequeue()!;
 
 				this.emit('active');
+				this.#lastExecutionTime = Date.now();
 				job();
 
 				if (canInitializeInterval) {
@@ -190,8 +217,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	#onInterval(): void {
 		if (this.#intervalCount === 0 && this.#pending === 0 && this.#intervalId) {
-			clearInterval(this.#intervalId);
-			this.#intervalId = undefined;
+			this.#clearIntervalTimer();
 		}
 
 		this.#intervalCount = this.#carryoverConcurrencyCount ? this.#pending : 0;
