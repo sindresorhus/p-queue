@@ -119,6 +119,17 @@ test('.sizeBy() - priority', async t => {
 	t.is(queue.sizeBy({priority: 0}), 0);
 });
 
+test('.add() - priority defaults to 0 when undefined', async t => {
+	const result: string[] = [];
+	const queue = new PQueue({concurrency: 1});
+	queue.add(async () => result.push('first'), {priority: undefined});
+	queue.add(async () => result.push('second'), {priority: undefined});
+	queue.add(async () => result.push('priority'), {priority: 1});
+	queue.add(async () => result.push('third'), {priority: undefined});
+	await queue.onEmpty();
+	t.deepEqual(result, ['first', 'priority', 'second', 'third']);
+});
+
 test('.add() - timeout without throwing', async t => {
 	const result: string[] = [];
 	const queue = new PQueue({timeout: 300, throwOnTimeout: false});

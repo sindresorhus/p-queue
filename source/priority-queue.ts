@@ -10,18 +10,18 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 	readonly #queue: Array<PriorityQueueOptions & {run: RunFunction}> = [];
 
 	enqueue(run: RunFunction, options?: Partial<PriorityQueueOptions>): void {
-		options = {
-			priority: 0,
-			...options,
-		};
+		const {
+			priority = 0,
+			id,
+		} = options ?? {};
 
 		const element = {
-			priority: options.priority,
-			id: options.id,
+			priority,
+			id,
 			run,
 		};
 
-		if (this.size === 0 || this.#queue[this.size - 1]!.priority! >= options.priority!) {
+		if (this.size === 0 || this.#queue[this.size - 1]!.priority! >= priority) {
 			this.#queue.push(element);
 			return;
 		}
