@@ -562,6 +562,23 @@ const queue = new PQueue({queueClass: QueueClass});
 
 They are just different constraints. The `concurrency` option limits how many things run at the same time. The `intervalCap` option limits how many things run in total during the interval (over time).
 
+#### How do I cancel or remove a queued task?
+
+Use `AbortSignal` for targeted cancellation. Aborting removes a waiting task and rejects the `.add()` promise. For bulk operations, use `queue.clear()` or share one `AbortController` across tasks.
+
+```js
+import PQueue from 'p-queue';
+
+const queue = new PQueue();
+const controller = new AbortController();
+
+const promise = queue.add(({signal}) => doWork({signal}), {signal: controller.signal});
+
+controller.abort(); // Cancels if still queued; running tasks must handle `signal` themselves
+```
+
+Direct removal methods are not provided as they would leak internals and risk dangling promises.
+
 ## Maintainers
 
 - [Sindre Sorhus](https://github.com/sindresorhus)
