@@ -579,6 +579,35 @@ controller.abort(); // Cancels if still queued; running tasks must handle `signa
 
 Direct removal methods are not provided as they would leak internals and risk dangling promises.
 
+#### How do I get results in the order they were added?
+
+This package executes tasks in priority order, but doesn't guarantee completion order. If you need results in the order they were added, use `Promise.all()`, which maintains the order of the input array:
+
+```js
+import PQueue from 'p-queue';
+
+const queue = new PQueue({concurrency: 4});
+
+const tasks = [
+	() => fetchData(1), // May finish third
+	() => fetchData(2), // May finish first
+	() => fetchData(3), // May finish second
+];
+
+const results = await Promise.all(
+	tasks.map(task => queue.add(task))
+);
+// results = [result1, result2, result3] ✅ Always in input order
+
+// Or more concisely:
+const urls = ['url1', 'url2', 'url3'];
+const results = await Promise.all(
+	urls.map(url => queue.add(() => fetch(url)))
+);
+```
+
+If you don't need `p-queue`'s advanced features, consider using [`p-map`](https://github.com/sindresorhus/p-map), which is specifically designed for this use case.
+
 ## Maintainers
 
 - [Sindre Sorhus](https://github.com/sindresorhus)
