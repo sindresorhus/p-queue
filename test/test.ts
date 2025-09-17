@@ -1654,3 +1654,30 @@ test('intervalCap should be respected with high concurrency (issue #126)', async
 	// Check that tasks actually completed (basic sanity check)
 	t.is(results.length, 5000, 'All tasks should complete');
 });
+
+test('should not cause stack overflow with many aborted tasks', async t => {
+	const queue = new PQueue({concurrency: 1});
+	const controller = new AbortController();
+
+	// Add many tasks exactly like in issue #217
+	const taskCount = 10_000;
+	const promises: Array<Promise<any>> = [];
+
+	for (let index = 0; index < taskCount; index++) {
+		const promise = queue.add(() => 1 + 1, {signal: controller.signal}).catch(() => {
+			// Expected abort error
+		});
+
+		promises.push(promise);
+	}
+
+	// Abort all tasks immediately
+	controller.abort();
+
+	// This should not cause a stack overflow
+	await Promise.all(promises);
+
+	// Verify queue state
+	t.is(queue.pending, 0);
+	t.is(queue.size, 0);
+});

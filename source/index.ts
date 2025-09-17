@@ -354,7 +354,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					reject(error);
 					this.emit('error', error);
 				} finally {
-					this.#next();
+					// Use queueMicrotask to prevent deep recursion while maintaining timing
+					queueMicrotask(() => {
+						this.#next();
+					});
 				}
 			}, options);
 
