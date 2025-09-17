@@ -1,12 +1,12 @@
 import Benchmark, {type Deferred, type Event} from 'benchmark';
 import PQueue from './source/index.js';
 
-const suite = new Benchmark.Suite();
+const suite = new Benchmark.Suite() as Benchmark.Suite;
 
 // Benchmark typings aren't up to date, let's help out manually
 type Resolvable = Deferred & {resolve: () => void};
 
-suite
+(suite as any)
 	.add('baseline', {
 		defer: true,
 
@@ -57,11 +57,11 @@ suite
 		},
 	})
 	.on('cycle', (event: Event) => {
-		console.log(String(event.target));
+		console.log(String(event.target as any));
 	})
-	.on('complete', function () {
+	.on('complete', function (this: any) {
 		// @ts-expect-error benchmark typings incorrect
-		console.log(`Fastest is ${(this as Benchmark.Suite).filter('fastest').map('name') as string}`);
+		console.log(`Fastest is ${this.filter('fastest').map('name') as string}`);
 	})
 	.run({
 		async: true,
