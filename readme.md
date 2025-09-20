@@ -608,6 +608,36 @@ const results = await Promise.all(
 
 If you don't need `p-queue`'s advanced features, consider using [`p-map`](https://github.com/sindresorhus/p-map), which is specifically designed for this use case.
 
+#### How do I stream results as they complete in order?
+
+For progressive results that maintain input order, use [`pMapIterable`](https://github.com/sindresorhus/p-map#pmapiterable) from `p-map`:
+
+```js
+import {pMapIterable} from 'p-map';
+
+// Stream results in order as they complete
+for await (const result of pMapIterable(items, fetchItem, {concurrency: 4})) {
+	console.log(result); // Results arrive in input order
+}
+```
+
+You can combine it with `p-queue` when you need priorities or a shared concurrency cap:
+
+```js
+import PQueue from 'p-queue';
+import {pMapIterable} from 'p-map';
+
+// Let p-queue handle concurrency
+const queue = new PQueue({concurrency: 4});
+
+for await (const result of pMapIterable(
+	items,
+	item => queue.add(() => fetchItem(item), {priority: item.priority})
+)) {
+	console.log(result); // Still in input order
+}
+```
+
 ## Maintainers
 
 - [Sindre Sorhus](https://github.com/sindresorhus)
