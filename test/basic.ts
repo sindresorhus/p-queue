@@ -273,6 +273,253 @@ test('.onIdle() - no pending', async () => {
 	assert.equal(await queue.onIdle(), undefined);
 });
 
+test('.onPendingZero() - resolves immediately when pending === 0', async () => {
+	const queue = new PQueue();
+	assert.equal(queue.pending, 0);
+	// eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+	assert.equal(await queue.onPendingZero(), undefined);
+});
+
+test('.onPendingZero() - waits for running tasks to finish', async () => {
+	const queue = new PQueue({concurrency: 2});
+
+	queue.add(async () => delay(100));
+	queue.add(async () => delay(100));
+	queue.add(async () => delay(100));
+	queue.add(async () => delay(100));
+
+	assert.equal(queue.size, 2);
+	assert.equal(queue.pending, 2);
+
+	await queue.onPendingZero();
+	assert.equal(queue.pending, 0);
+	// Queue may still have items
+	assert.equal(queue.size, 0);
+});
+
+test('.onPendingZero() - works while paused with queued items', async () => {
+	const queue = new PQueue({concurrency: 2});
+
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	assert.equal(queue.size, 2);
+	assert.equal(queue.pending, 2);
+
+	queue.pause();
+
+	// OnPendingZero should still resolve when running tasks finish
+	await queue.onPendingZero();
+	assert.equal(queue.pending, 0);
+	// Queued items remain since queue is paused
+	assert.equal(queue.size, 2);
+});
+
+test('.onPendingZero() - multiple concurrent waiters all resolve', async () => {
+	const queue = new PQueue({concurrency: 1});
+
+	queue.add(async () => delay(50));
+
+	const promise1 = queue.onPendingZero();
+	const promise2 = queue.onPendingZero();
+	const promise3 = queue.onPendingZero();
+
+	await Promise.all([promise1, promise2, promise3]);
+	assert.equal(queue.pending, 0);
+});
+
+test('.onPendingZero() - resolves even if tasks throw errors', async () => {
+	const queue = new PQueue({concurrency: 2});
+
+	// Add task that will throw error and handle it
+	const errorTask = (async () => {
+		try {
+			await queue.add(async () => {
+				await delay(50);
+				throw new Error('Task failed');
+			});
+		} catch {
+			// Expected error - ignore
+		}
+	})();
+
+	queue.add(async () => delay(50));
+
+	assert.equal(queue.pending, 2);
+
+	await queue.onPendingZero();
+	assert.equal(queue.pending, 0);
+
+	// Ensure error task completes
+	await errorTask;
+});
+
+test('.onPendingZero() - works after clear()', async () => {
+	const queue = new PQueue({concurrency: 1});
+
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	assert.equal(queue.pending, 1);
+	assert.equal(queue.size, 2);
+
+	// Clear removes queued items but not running ones
+	queue.clear();
+	assert.equal(queue.pending, 1);
+	assert.equal(queue.size, 0);
+
+	await queue.onPendingZero();
+	assert.equal(queue.pending, 0);
+});
+
+test('.onPendingZero() - integration with pause/start', async () => {
+	const queue = new PQueue({concurrency: 2});
+	const results: number[] = [];
+
+	queue.add(async () => {
+		await delay(100);
+		results.push(1);
+	});
+	queue.add(async () => {
+		await delay(100);
+		results.push(2);
+	});
+	queue.add(async () => {
+		await delay(50);
+		results.push(3);
+	});
+
+	assert.equal(queue.pending, 2);
+	assert.equal(queue.size, 1);
+
+	queue.pause();
+	await queue.onPendingZero();
+
+	// First 2 tasks should be done
+	assert.deepEqual(results, [1, 2]);
+	assert.equal(queue.pending, 0);
+	assert.equal(queue.size, 1);
+
+	queue.start();
+	await queue.onIdle();
+
+	assert.deepEqual(results, [1, 2, 3]);
+});
+
+test('.onPendingZero() - adding tasks while waiting', async () => {
+	const queue = new PQueue({concurrency: 2});
+
+	queue.add(async () => delay(100));
+	queue.add(async () => delay(100));
+
+	const pendingZeroPromise = queue.onPendingZero();
+
+	// Add more tasks while waiting - they should not block onPendingZero
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	assert.equal(queue.size, 2);
+
+	await pendingZeroPromise;
+	assert.equal(queue.pending, 0);
+	// New tasks should have started
+	assert.equal(queue.size, 0);
+});
+
+test('.onPendingZero() - rapid sequential calls', async () => {
+	const queue = new PQueue({concurrency: 1});
+
+	queue.add(async () => delay(50));
+
+	const promise1 = queue.onPendingZero();
+	await promise1;
+
+	// Immediate second call should resolve immediately
+	const startTime = Date.now();
+	await queue.onPendingZero();
+	const elapsed = Date.now() - startTime;
+
+	assert.ok(elapsed < 10, 'Should resolve immediately when pending is 0');
+});
+
+test('.onPendingZero() - high concurrency', async () => {
+	const queue = new PQueue({concurrency: 100});
+	const taskCount = 200;
+
+	for (let i = 0; i < taskCount; i++) {
+		queue.add(async () => delay(10));
+	}
+
+	assert.equal(queue.pending, 100);
+	assert.equal(queue.size, 100);
+
+	queue.pause();
+
+	await queue.onPendingZero();
+	assert.equal(queue.pending, 0);
+	assert.equal(queue.size, 100);
+});
+
+test('.onPendingZero() - starts with empty queue', async () => {
+	const queue = new PQueue({concurrency: 2});
+
+	// Should resolve immediately when queue starts empty
+	await queue.onPendingZero();
+	assert.equal(queue.pending, 0);
+
+	// Add tasks and immediately call onPendingZero
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	const pendingZeroPromise = queue.onPendingZero();
+	assert.equal(queue.pending, 2);
+
+	await pendingZeroPromise;
+	assert.equal(queue.pending, 0);
+});
+
+test('.onPendingZero() - works with onEmpty and onIdle', async () => {
+	const queue = new PQueue({concurrency: 2});
+	const events: string[] = [];
+
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	queue.pause();
+
+	const onEmptyPromise = (async () => {
+		await queue.onEmpty();
+		events.push('empty');
+	})();
+
+	const onPendingZeroPromise = (async () => {
+		await queue.onPendingZero();
+		events.push('pendingZero');
+	})();
+
+	const onIdlePromise = (async () => {
+		await queue.onIdle();
+		events.push('idle');
+	})();
+
+	// Wait for running tasks to finish
+	await onPendingZeroPromise;
+
+	// PendingZero should fire first since queue is paused
+	assert.deepEqual(events, ['pendingZero']);
+
+	queue.start();
+	await Promise.all([onEmptyPromise, onIdlePromise]);
+
+	// Empty fires when queue is empty, idle when all done
+	assert.deepEqual(events, ['pendingZero', 'empty', 'idle']);
+});
+
 test('.clear()', () => {
 	const queue = new PQueue({concurrency: 2});
 	queue.add(async () => delay(20_000));
