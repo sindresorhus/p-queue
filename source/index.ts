@@ -8,7 +8,7 @@ type Task<TaskResultType> =
 	| ((options: TaskOptions) => PromiseLike<TaskResultType>)
 	| ((options: TaskOptions) => TaskResultType);
 
-type EventName = 'active' | 'idle' | 'empty' | 'add' | 'next' | 'completed' | 'error' | 'pendingZero';
+type EventName = 'active' | 'idle' | 'empty' | 'add' | 'next' | 'completed' | 'error' | 'pendingZero' | 'rateLimit' | 'rateLimitCleared';
 
 /**
 Promise queue with concurrency control.
@@ -21,6 +21,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	#intervalCount = 0;
 
 	readonly #intervalCap: number;
+
+	#rateLimitedInInterval = false;
+	#rateLimitFlushScheduled = false;
 
 	readonly #interval: number;
 
@@ -84,8 +87,15 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		this.#queue = new options.queueClass!();
 		this.#queueClass = options.queueClass!;
 		this.concurrency = options.concurrency!;
+
+		if (options.timeout !== undefined && !(Number.isFinite(options.timeout) && options.timeout > 0)) {
+			throw new TypeError(`Expected \`timeout\` to be a positive finite number, got \`${options.timeout}\` (${typeof options.timeout})`);
+		}
+
 		this.timeout = options.timeout;
 		this.#isPaused = options.autoStart === false;
+
+		this.#setupRateLimitTracking();
 	}
 
 	get #doesIntervalAllowAnother(): boolean {
@@ -108,7 +118,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	#onResumeInterval(): void {
-		this.#onInterval();
+		this.#onInterval(); // Already schedules update
 		this.#initializeIntervalIfNeeded();
 		this.#timeoutId = undefined;
 	}
@@ -183,6 +193,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			return false;
 		}
 
+		let taskStarted = false;
+
 		if (!this.#isPaused) {
 			const canInitializeInterval = !this.#isIntervalPaused;
 			if (this.#doesIntervalAllowAnother && this.#doesConcurrentAllowAnother) {
@@ -191,6 +203,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				// Increment interval count immediately to prevent race conditions
 				if (!this.#isIntervalIgnored) {
 					this.#intervalCount++;
+					this.#scheduleRateLimitUpdate();
 				}
 
 				this.emit('active');
@@ -201,11 +214,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					this.#initializeIntervalIfNeeded();
 				}
 
-				return true;
+				taskStarted = true;
 			}
 		}
 
-		return false;
+		return taskStarted;
 	}
 
 	#initializeIntervalIfNeeded(): void {
@@ -229,7 +242,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		}
 
 		this.#intervalCount = this.#carryoverConcurrencyCount ? this.#pending : 0;
+
 		this.#processQueue();
+		this.#scheduleRateLimitUpdate();
 	}
 
 	/**
@@ -299,6 +314,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	Here, the promise function with `id: '🦀'` executes last.
 	*/
 	setPriority(id: string, priority: number) {
+		if (typeof priority !== 'number' || !Number.isFinite(priority)) {
+			throw new TypeError(`Expected \`priority\` to be a finite number, got \`${priority}\` (${typeof priority})`);
+		}
+
 		this.#queue.setPriority(id, priority);
 	}
 
@@ -405,6 +424,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	clear(): void {
 		this.#queue = new this.#queueClass();
+		// Force synchronous update since clear() should have immediate effect
+		this.#updateRateLimitState();
 	}
 
 	/**
@@ -464,6 +485,28 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		await this.#onEvent('pendingZero');
 	}
 
+	/**
+	@returns A promise that settles when the queue becomes rate-limited due to intervalCap.
+	*/
+	async onRateLimit(): Promise<void> {
+		if (this.isRateLimited) {
+			return;
+		}
+
+		await this.#onEvent('rateLimit');
+	}
+
+	/**
+	@returns A promise that settles when the queue is no longer rate-limited.
+	*/
+	async onRateLimitCleared(): Promise<void> {
+		if (!this.isRateLimited) {
+			return;
+		}
+
+		await this.#onEvent('rateLimitCleared');
+	}
+
 	async #onEvent(event: EventName, filter?: () => boolean): Promise<void> {
 		return new Promise(resolve => {
 			const listener = () => {
@@ -508,6 +551,57 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	get isPaused(): boolean {
 		return this.#isPaused;
+	}
+
+	#setupRateLimitTracking(): void {
+		// Only schedule updates when rate limiting is enabled
+		if (this.#isIntervalIgnored) {
+			return;
+		}
+
+		// Wire up to lifecycle events that affect rate limit state
+		// Only 'add' and 'next' can actually change rate limit state
+		this.on('add', () => {
+			if (this.#queue.size > 0) {
+				this.#scheduleRateLimitUpdate();
+			}
+		});
+
+		this.on('next', () => {
+			this.#scheduleRateLimitUpdate();
+		});
+	}
+
+	#scheduleRateLimitUpdate(): void {
+		// Skip if rate limiting is not enabled or already scheduled
+		if (this.#isIntervalIgnored || this.#rateLimitFlushScheduled) {
+			return;
+		}
+
+		this.#rateLimitFlushScheduled = true;
+		queueMicrotask(() => {
+			this.#rateLimitFlushScheduled = false;
+			this.#updateRateLimitState();
+		});
+	}
+
+	#updateRateLimitState(): void {
+		const previous = this.#rateLimitedInInterval;
+		const shouldBeRateLimited = !this.#isIntervalIgnored
+			&& this.#intervalCount >= this.#intervalCap
+			&& this.#queue.size > 0;
+
+		if (shouldBeRateLimited !== previous) {
+			this.#rateLimitedInInterval = shouldBeRateLimited;
+			this.emit(shouldBeRateLimited ? 'rateLimit' : 'rateLimitCleared');
+		}
+	}
+
+	/**
+	Whether the queue is currently rate-limited due to intervalCap.
+	*/
+	get isRateLimited(): boolean {
+		return this.#rateLimitedInInterval;
 	}
 }
 

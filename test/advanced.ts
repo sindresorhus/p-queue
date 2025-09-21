@@ -831,6 +831,264 @@ test('intervalCap should be respected with high concurrency (issue #126)', async
 	assert.equal(results.length, 5000, 'All tasks should complete');
 });
 
+test('isRateLimited property', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 2,
+	});
+
+	// Initially not rate limited
+	assert.equal(queue.isRateLimited, false);
+
+	// Add 2 tasks to hit the cap
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	// Should be rate limited after 2 tasks start
+	await delay(10);
+	assert.equal(queue.isRateLimited, false); // No tasks in queue yet
+
+	// Add a third task that will be queued
+	queue.add(async () => delay(50));
+	await delay(10);
+	assert.equal(queue.isRateLimited, true); // Now rate limited with queued task
+
+	// Wait for interval to reset
+	await delay(1100);
+	assert.equal(queue.isRateLimited, false);
+});
+
+test('rate-limit event emission', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 2,
+	});
+
+	const events: string[] = [];
+	queue.on('rateLimit', () => events.push('rateLimit'));
+	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+
+	// Add tasks to trigger rate limiting
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50)); // This one should cause rate limiting
+
+	await delay(100);
+	assert.deepEqual(events, ['rateLimit']);
+
+	// Wait for interval to reset
+	await delay(1100);
+	assert.deepEqual(events, ['rateLimit', 'rateLimitCleared']);
+});
+
+test('onRateLimit() promise helper', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 1,
+	});
+
+	// Should resolve immediately when already rate limited
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50)); // Queued, causing rate limit
+	await delay(10);
+
+	const startTime = Date.now();
+	await queue.onRateLimit();
+	const elapsed = Date.now() - startTime;
+	assert.ok(elapsed < 50, 'Should resolve immediately when already rate limited');
+
+	// Should wait when not rate limited
+	const newQueue = new PQueue({
+		interval: 1000,
+		intervalCap: 1,
+	});
+
+	const rateLimitPromise = newQueue.onRateLimit();
+	newQueue.add(async () => delay(50));
+	newQueue.add(async () => delay(50)); // This should trigger rate limit
+
+	await rateLimitPromise; // Should resolve when rate limit is hit
+});
+
+test('onRateLimitCleared() promise helper', async () => {
+	const queue = new PQueue({
+		interval: 500,
+		intervalCap: 1,
+	});
+
+	// Should resolve immediately when not rate limited
+	const startTime = Date.now();
+	await queue.onRateLimitCleared();
+	const elapsed = Date.now() - startTime;
+	assert.ok(elapsed < 50, 'Should resolve immediately when not rate limited');
+
+	// Should wait when rate limited
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50)); // Queued, causing rate limit
+	await delay(10);
+
+	const clearPromise = queue.onRateLimitCleared();
+	await clearPromise; // Should resolve when rate limit clears after interval
+});
+
+test('rate-limit works with pause/start', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 1,
+	});
+
+	const events: string[] = [];
+	queue.on('rateLimit', () => events.push('rateLimit'));
+	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50)); // Queued
+	await delay(10);
+
+	// Should be rate limited
+	assert.equal(queue.isRateLimited, true);
+	assert.deepEqual(events, ['rateLimit']);
+
+	// Pause queue - should still be rate limited
+	queue.pause();
+	assert.equal(queue.isRateLimited, true);
+	assert.equal(queue.isPaused, true);
+
+	// Wait for interval to reset
+	await delay(1100);
+	assert.equal(queue.isRateLimited, false); // Rate limit cleared even when paused
+	assert.equal(queue.isPaused, true);
+	assert.deepEqual(events, ['rateLimit', 'rateLimitCleared']);
+
+	queue.start();
+	await queue.onIdle();
+});
+
+test('rate-limit with high concurrency', async () => {
+	const queue = new PQueue({
+		concurrency: 10,
+		interval: 500,
+		intervalCap: 3,
+	});
+
+	const events: string[] = [];
+	queue.on('rateLimit', () => events.push('rateLimit'));
+	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+
+	// Add many tasks quickly
+	for (let index = 0; index < 10; index++) {
+		queue.add(async () => delay(50));
+	}
+
+	await delay(100);
+	assert.ok(events.length > 0);
+	assert.equal(events[0], 'rateLimit');
+
+	// Wait for all tasks to complete and rate limit to clear
+	await queue.onIdle();
+	// Should have multiple rate-limit events (one per interval) and one rate-limit-cleared at the end
+	assert.ok(events.length >= 2);
+	assert.equal(events.at(-1), 'rateLimitCleared');
+});
+
+test('rate-limit with queue.clear() while rate-limited', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 1,
+	});
+
+	const events: string[] = [];
+	queue.on('rateLimit', () => events.push('rateLimit'));
+	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	await delay(10);
+	assert.equal(queue.isRateLimited, true);
+	assert.equal(events.length, 1);
+	assert.equal(events[0], 'rateLimit');
+
+	// Clear the queue while rate-limited
+	queue.clear();
+
+	// Should no longer be rate-limited since queue is empty
+	assert.equal(queue.isRateLimited, false);
+	assert.equal(queue.size, 0);
+
+	// Should emit rate-limit-cleared since we transitioned
+	assert.equal(events.length, 2);
+	assert.equal(events[1], 'rateLimitCleared');
+
+	await queue.onIdle();
+});
+
+test('rate-limit events fire only once per transition', async () => {
+	const queue = new PQueue({
+		interval: 500,
+		intervalCap: 2,
+	});
+
+	const events: string[] = [];
+	let rateLimitCount = 0;
+	let clearCount = 0;
+
+	queue.on('rateLimit', () => {
+		rateLimitCount++;
+		events.push(`rate-limit-${rateLimitCount}`);
+	});
+
+	queue.on('rateLimitCleared', () => {
+		clearCount++;
+		events.push(`cleared-${clearCount}`);
+	});
+
+	// Add tasks to trigger rate limit
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	await delay(100);
+	// Should have exactly one rate-limit event
+	assert.equal(rateLimitCount, 1);
+
+	await queue.onIdle();
+	// Should have exactly one clear event
+	assert.equal(clearCount, 1);
+});
+
+test('rate-limit with interval boundary conditions', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 2,
+	});
+
+	const events: string[] = [];
+	queue.on('rateLimit', () => events.push('rateLimit'));
+
+	// Add exactly intervalCap tasks
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	await delay(10);
+	// Should not be rate-limited with exactly intervalCap tasks
+	assert.equal(queue.isRateLimited, false);
+	assert.equal(events.length, 0);
+
+	// Add one more to exceed cap
+	queue.add(async () => delay(50));
+
+	await delay(10);
+	// Now should be rate-limited
+	assert.equal(queue.isRateLimited, true);
+	assert.equal(events.length, 1);
+
+	await queue.onIdle();
+});
+
 test('should not cause stack overflow with many aborted tasks', async () => {
 	const queue = new PQueue({concurrency: 1});
 	const controller = new AbortController();
@@ -857,4 +1115,799 @@ test('should not cause stack overflow with many aborted tasks', async () => {
 	// Verify queue state
 	assert.equal(queue.pending, 0);
 	assert.equal(queue.size, 0);
+});
+
+test('rate-limit with carryoverConcurrencyCount behavior', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 2,
+		carryoverConcurrencyCount: true,
+		concurrency: 2, // Allow 2 concurrent tasks
+	});
+
+	const events: string[] = [];
+	queue.on('rateLimit', () => events.push('rateLimit'));
+	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+
+	// Add enough tasks to exceed intervalCap and have items in queue
+	queue.add(async () => delay(100)); // Long task to ensure queue builds up
+	queue.add(async () => delay(100)); // Long task to ensure queue builds up
+	queue.add(async () => delay(50)); // This should be queued
+	queue.add(async () => delay(50)); // This should be queued
+
+	await delay(10);
+	// Should be rate-limited because intervalCount >= intervalCap (2) and queue.size > 0
+	assert.equal(queue.isRateLimited, true);
+	assert.equal(events.length, 1);
+	assert.equal(events[0], 'rateLimit');
+
+	// Wait for all tasks to complete
+	await queue.onIdle();
+
+	// Should have rate-limit-cleared event
+	assert.equal(queue.isRateLimited, false);
+	assert.equal(events.length, 2);
+	assert.equal(events[1], 'rateLimitCleared');
+});
+
+test('rate-limit with aborted tasks', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 2,
+	});
+
+	const events: string[] = [];
+	queue.on('rateLimit', () => events.push('rateLimit'));
+	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+
+	const controller = new AbortController();
+
+	// Add tasks - some will be aborted
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+	// eslint-disable-next-line promise/prefer-await-to-then, @typescript-eslint/no-empty-function
+	queue.add(async () => delay(50), {signal: controller.signal}).catch(() => {}); // Will be aborted
+	// eslint-disable-next-line promise/prefer-await-to-then, @typescript-eslint/no-empty-function
+	queue.add(async () => delay(50), {signal: controller.signal}).catch(() => {}); // Will be aborted
+	queue.add(async () => delay(50)); // Normal task
+
+	await delay(10);
+	// Should be rate-limited due to queue size > 0 and intervalCount >= intervalCap
+	assert.equal(queue.isRateLimited, true);
+	assert.equal(events.length, 1);
+	assert.equal(events[0], 'rateLimit');
+
+	// Abort some tasks
+	controller.abort();
+
+	// Rate-limit state should still be accurate despite aborted tasks
+	await delay(10);
+	assert.equal(queue.isRateLimited, true); // Still rate-limited due to remaining task
+
+	// Wait for all tasks to complete
+	await queue.onIdle();
+
+	// Should properly transition to not rate-limited
+	assert.equal(queue.isRateLimited, false);
+	assert.equal(events.length, 2);
+	assert.equal(events[1], 'rateLimitCleared');
+});
+
+test('rate-limit with error-throwing tasks', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 2,
+	});
+
+	const events: string[] = [];
+	const errors: any[] = [];
+	queue.on('rateLimit', () => events.push('rateLimit'));
+	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+	queue.on('error', error => errors.push(error));
+
+	// Add tasks - some will throw errors
+	queue.add(async () => delay(50));
+
+	// Add error task and handle it
+	const errorTask = (async () => {
+		try {
+			await queue.add(async () => {
+				await delay(50);
+				throw new Error('Task failed');
+			});
+		} catch {
+			// Expected error - ignore
+		}
+	})();
+
+	queue.add(async () => delay(50)); // This should still execute despite previous error
+
+	await delay(10);
+	// Should be rate-limited
+	assert.equal(queue.isRateLimited, true);
+	assert.equal(events.length, 1);
+	assert.equal(events[0], 'rateLimit');
+
+	// Wait for all tasks to complete (including error ones)
+	await Promise.all([queue.onIdle(), errorTask]);
+
+	// Should have received error event
+	assert.equal(errors.length, 1);
+	assert.equal(errors[0].message, 'Task failed');
+
+	// Rate-limit state should still be accurate despite task errors
+	assert.equal(queue.isRateLimited, false);
+	assert.equal(events.length, 2);
+	assert.equal(events[1], 'rateLimitCleared');
+});
+
+test('rate-limit state remains stable within intervals', async () => {
+	const queue = new PQueue({
+		interval: 200, // Shorter interval for faster test
+		intervalCap: 2,
+		concurrency: 2,
+	});
+
+	const stateChanges: boolean[] = [];
+	let previousState = queue.isRateLimited;
+
+	// Monitor state changes
+	const monitorState = () => {
+		const currentState = queue.isRateLimited;
+		if (currentState !== previousState) {
+			stateChanges.push(currentState);
+			previousState = currentState;
+		}
+	};
+
+	// Add tasks rapidly to trigger rate limiting
+	for (let index = 0; index < 8; index++) {
+		queue.add(async () => {
+			await delay(5);
+			monitorState(); // Check state during task execution
+		});
+		monitorState(); // Check state after adding task
+	}
+
+	// Monitor state frequently during execution
+	const interval = setInterval(monitorState, 2);
+
+	await queue.onIdle();
+	clearInterval(interval);
+
+	// Before our fix, this would have been 8+ rapid changes (true/false/true/false...)
+	// With our fix, should be at most 3 logical transitions (false -> true -> false)
+	assert.ok(stateChanges.length <= 3, `Too many state changes (flickering): ${stateChanges.length}, changes: ${JSON.stringify(stateChanges)}`);
+
+	// Should have been rate-limited at some point
+	assert.ok(stateChanges.includes(true), 'Should have been rate-limited');
+
+	// Should end in non-rate-limited state
+	assert.equal(queue.isRateLimited, false);
+});
+
+test('rate-limit microtask batching - multiple events in same tick', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 2,
+	});
+
+	const events: string[] = [];
+	queue.on('rateLimit', () => events.push('rateLimit'));
+	queue.on('rateLimitCleared', () => events.push('cleared'));
+
+	// Add multiple tasks in rapid succession
+	queue.add(async () => delay(10));
+	queue.add(async () => delay(10));
+	queue.add(async () => delay(10));
+	queue.add(async () => delay(10));
+
+	// Let microtask queue flush
+	await delay(0);
+
+	// Should trigger rate limit once despite multiple adds
+	assert.equal(queue.isRateLimited, true);
+	assert.equal(events.filter(event => event === 'rateLimit').length, 1, 'Should only emit rate-limit once');
+
+	await queue.onIdle();
+});
+
+test('rate-limit clear() racing with scheduled update', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 1,
+	});
+
+	const events: string[] = [];
+	queue.on('rateLimit', () => events.push('rateLimit'));
+	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+
+	// Add tasks to trigger rate limit
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	// Clear immediately (before microtask fires)
+	queue.clear();
+
+	// State should be cleared immediately
+	assert.equal(queue.isRateLimited, false, 'Should not be rate-limited immediately after clear');
+	assert.equal(queue.size, 0, 'Queue should be empty after clear');
+
+	// Add new task immediately after clear
+	queue.add(async () => delay(10));
+
+	await queue.onIdle();
+
+	// Should have handled the race condition gracefully
+	assert.ok(events.filter(event => event === 'rateLimit').length <= 1, 'Should not have duplicate rate-limit events');
+});
+
+test('rate-limit with dynamic concurrency changes', async () => {
+	const queue = new PQueue({
+		concurrency: 1,
+		interval: 500,
+		intervalCap: 2,
+	});
+
+	const events: string[] = [];
+	queue.on('rateLimit', () => events.push('rateLimit'));
+	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+
+	// Add tasks
+	for (let i = 0; i < 5; i++) {
+		queue.add(async () => delay(50));
+	}
+
+	await delay(150); // Let first two tasks start
+	assert.equal(queue.isRateLimited, true, 'Should be rate-limited with intervalCap=2');
+
+	// Increase concurrency while rate-limited
+	queue.concurrency = 5;
+
+	// Should still respect interval cap despite higher concurrency
+	assert.equal(queue.isRateLimited, true, 'Should still be rate-limited after concurrency increase');
+
+	// Wait for all tasks to complete
+	await queue.onIdle();
+	assert.equal(queue.isRateLimited, false);
+	assert.ok(events.includes('rateLimit'), 'Should have emitted rate-limit event');
+});
+
+test('rate-limit with setPriority() while rate-limited', async () => {
+	const queue = new PQueue({
+		concurrency: 1,
+		interval: 500,
+		intervalCap: 1,
+	});
+
+	const results: string[] = [];
+	const events: string[] = [];
+	queue.on('rateLimit', () => events.push('rateLimit'));
+	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+
+	// Add tasks with different priorities and IDs
+	queue.add(async () => {
+		results.push('first');
+		return delay(10);
+	});
+
+	queue.add(async () => {
+		results.push('low');
+		return delay(10);
+	}, {priority: 0, id: 'low'});
+
+	queue.add(async () => {
+		results.push('high');
+		return delay(10);
+	}, {priority: 1, id: 'high'});
+
+	queue.add(async () => {
+		results.push('medium');
+		return delay(10);
+	}, {priority: 0.5, id: 'medium'});
+
+	await delay(50); // Let first task start
+	assert.equal(queue.isRateLimited, true);
+
+	// Change priority of queued task while rate-limited
+	queue.setPriority('low', 2);
+
+	// Rate limit state should remain stable
+	assert.equal(queue.isRateLimited, true, 'Should remain rate-limited after priority change');
+
+	await queue.onIdle();
+
+	// First task executes first, then tasks by priority order
+	assert.equal(results[0], 'first');
+	assert.equal(results[1], 'low', 'Low task with elevated priority should run second');
+	assert.equal(results[2], 'high');
+	assert.equal(results[3], 'medium');
+});
+
+test('rate-limit multiple concurrent onRateLimit() calls', async () => {
+	const queue = new PQueue({
+		interval: 500,
+		intervalCap: 1,
+	});
+
+	// Create multiple concurrent waiters before rate limit
+	const promises = [
+		queue.onRateLimit(),
+		queue.onRateLimit(),
+		queue.onRateLimit(),
+	];
+
+	// Trigger rate limit
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	// All promises should resolve when rate limited
+	const results = await Promise.allSettled(promises);
+	assert.ok(results.every(r => r.status === 'fulfilled'), 'All promises should resolve');
+	assert.equal(queue.isRateLimited, true);
+
+	await queue.onIdle();
+});
+
+test('rate-limit when all queued tasks are aborted', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 1,
+	});
+
+	const events: string[] = [];
+	queue.on('rateLimit', () => events.push('rateLimit'));
+	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+
+	const controller = new AbortController();
+
+	// Add one running task
+	queue.add(async () => delay(50));
+
+	// Add abortable queued tasks
+	const abortable1 = queue.add(async () => delay(50), {signal: controller.signal});
+	const abortable2 = queue.add(async () => delay(50), {signal: controller.signal});
+
+	await delay(10);
+	assert.equal(queue.isRateLimited, true);
+	assert.equal(events[0], 'rateLimit');
+
+	// Abort all queued tasks
+	controller.abort();
+
+	await Promise.allSettled([abortable1, abortable2]);
+	await delay(10);
+
+	// Should clear rate limit when queue becomes empty due to aborts
+	assert.equal(queue.isRateLimited, false);
+	assert.equal(events[1], 'rateLimitCleared');
+
+	await queue.onIdle();
+});
+
+test('rate-limit rapid pause/start cycles', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 2,
+	});
+
+	const events: string[] = [];
+	queue.on('rateLimit', () => events.push('rateLimit'));
+	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+
+	// Add tasks
+	for (let i = 0; i < 4; i++) {
+		queue.add(async () => delay(50));
+	}
+
+	await delay(10);
+	assert.equal(queue.isRateLimited, true);
+
+	// Rapid pause/start cycles
+	const pauseStartDelays = [];
+	for (let i = 0; i < 5; i++) {
+		queue.pause();
+		assert.equal(queue.isPaused, true);
+		assert.equal(queue.isRateLimited, true, 'Should remain rate-limited when paused');
+
+		queue.start();
+		assert.equal(queue.isPaused, false);
+		assert.equal(queue.isRateLimited, true, 'Should remain rate-limited when started');
+
+		pauseStartDelays.push(delay(5));
+	}
+
+	await Promise.all(pauseStartDelays);
+
+	// Rate limit state should remain stable despite rapid pause/start
+	assert.equal(queue.isRateLimited, true);
+
+	// Should only have one rate-limit event despite multiple pause/start cycles
+	assert.equal(events.filter(event => event === 'rateLimit').length, 1);
+
+	await queue.onIdle();
+});
+
+test('rate-limit edge case with zero-interval', async () => {
+	const queue = new PQueue({
+		interval: 0, // Edge case: zero interval
+		intervalCap: 2,
+	});
+
+	const events: string[] = [];
+	queue.on('rateLimit', () => events.push('rateLimit'));
+	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+
+	// Add tasks
+	for (let i = 0; i < 5; i++) {
+		queue.add(async () => delay(10));
+	}
+
+	await queue.onIdle();
+
+	// With zero interval, rate limiting should be effectively disabled
+	assert.equal(queue.isRateLimited, false, 'Should never be rate-limited with zero interval');
+	assert.equal(events.length, 0, 'Should have no rate-limit events with zero interval');
+});
+
+test('rate-limit state consistency with sync microtask scheduling', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 1,
+	});
+
+	const isRateLimitedChecks: boolean[] = [];
+
+	// Add task to start interval
+	queue.add(async () => {
+		// Check state during execution
+		isRateLimitedChecks.push(queue.isRateLimited);
+		return delay(10);
+	});
+
+	// Add multiple tasks synchronously
+	queue.add(async () => {
+		isRateLimitedChecks.push(queue.isRateLimited);
+		return delay(10);
+	});
+
+	// Check state immediately (before microtask)
+	const beforeMicrotask = queue.isRateLimited;
+
+	// Let microtask queue flush
+	await delay(0);
+
+	// Check state after microtask
+	const afterMicrotask = queue.isRateLimited;
+
+	await queue.onIdle();
+
+	// State should be consistent
+	assert.equal(beforeMicrotask, false, 'Should not be rate-limited before microtask');
+	assert.equal(afterMicrotask, true, 'Should be rate-limited after microtask');
+	assert.ok(isRateLimitedChecks.every(check => typeof check === 'boolean'), 'State should be boolean');
+});
+
+test('rate-limit with queue manipulation during rate-limit event', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 1,
+	});
+
+	let eventFired = false;
+	queue.on('rateLimit', () => {
+		eventFired = true;
+		// Manipulate queue during event
+		queue.add(async () => delay(10));
+	});
+
+	// Trigger rate limit
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	await delay(10);
+
+	assert.equal(eventFired, true);
+	assert.equal(queue.isRateLimited, true);
+	assert.equal(queue.size, 2, 'Should have added task during event');
+
+	await queue.onIdle();
+});
+
+test('onRateLimit() with microtask race condition', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 1,
+	});
+
+	// Add tasks that will trigger rate limit
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	// Immediately call onRateLimit() before microtask runs
+	const rateLimitPromise = queue.onRateLimit();
+
+	// At this point, isRateLimited should still be false
+	// because the microtask hasn't run yet
+	assert.equal(queue.isRateLimited, false, 'Should not be rate-limited before microtask');
+
+	// Wait for the promise to resolve
+	await rateLimitPromise;
+
+	// Now it should be rate-limited
+	assert.equal(queue.isRateLimited, true, 'Should be rate-limited after promise resolves');
+
+	await queue.onIdle();
+});
+
+test('onRateLimitCleared() with microtask race condition', async () => {
+	const queue = new PQueue({
+		interval: 500,
+		intervalCap: 1,
+	});
+
+	// First, get into a rate-limited state
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	await delay(10); // Let microtask run to set rate-limited state
+	assert.equal(queue.isRateLimited, true);
+
+	// Now clear the queue (synchronous update)
+	queue.clear();
+
+	// Should immediately not be rate-limited
+	assert.equal(queue.isRateLimited, false);
+
+	// OnRateLimitCleared() should resolve immediately
+	const startTime = Date.now();
+	await queue.onRateLimitCleared();
+	const elapsed = Date.now() - startTime;
+
+	assert.ok(elapsed < 10, 'Should resolve immediately when not rate-limited');
+});
+
+test('onRateLimit() called during state transition', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 2,
+	});
+
+	// Add first task
+	queue.add(async () => delay(50));
+
+	// Add second task (at cap but not over)
+	queue.add(async () => delay(50));
+
+	// This will trigger rate limit
+	queue.add(async () => delay(50));
+
+	// Call onRateLimit immediately
+	const promise = queue.onRateLimit();
+
+	// Should resolve when microtask updates state
+	await promise;
+	assert.equal(queue.isRateLimited, true);
+
+	await queue.onIdle();
+});
+
+test('onRateLimit/onRateLimitCleared rapid transitions', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 1,
+	});
+
+	const events: string[] = [];
+
+	// Set up promise before adding tasks
+	const rateLimitPromise = queue.onRateLimit();
+
+	// Add tasks to trigger rate limit
+	queue.add(async () => delay(20));
+	queue.add(async () => delay(20));
+
+	// Wait for rate limit
+	await rateLimitPromise;
+	events.push('rate-limited');
+
+	// Now wait for it to clear
+	const clearPromise = queue.onRateLimitCleared();
+
+	// Should clear after interval
+	await clearPromise;
+	events.push('cleared');
+
+	// Verify events happened in order
+	assert.deepEqual(events, ['rate-limited', 'cleared']);
+
+	await queue.onIdle();
+});
+
+test('onRateLimit() never resolves if queue is cleared', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 1,
+	});
+
+	// Set up promise waiting for rate limit
+	const rateLimitPromise = queue.onRateLimit();
+
+	// Add tasks that would trigger rate limit
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	// Clear immediately before microtask runs
+	queue.clear();
+
+	// Check if promise is still pending after some time
+	const timeoutPromise = delay(100);
+	const result = await Promise.race([
+		rateLimitPromise,
+		timeoutPromise,
+	]);
+
+	// If timeout wins, result will be undefined
+	assert.equal(result, undefined, 'onRateLimit should not resolve if queue is cleared');
+	assert.equal(queue.isRateLimited, false, 'Should not be rate-limited after clear');
+});
+
+test('backlog drains before interval reset - triggers rate-limit-cleared', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 1,
+	});
+
+	const events: string[] = [];
+	queue.on('rateLimit', () => events.push('rateLimit'));
+	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+
+	// Add tasks to trigger rate limit
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	await delay(10);
+	assert.equal(queue.isRateLimited, true);
+	assert.equal(events[0], 'rateLimit');
+
+	// Wait for all tasks to complete (backlog drains)
+	await queue.onIdle();
+
+	// Should have cleared due to empty queue, not interval reset
+	assert.equal(queue.isRateLimited, false);
+	assert.equal(events[1], 'rateLimitCleared');
+	assert.equal(queue.size, 0, 'Queue should be empty');
+});
+
+test('abort before start rolls back interval count', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 1,
+	});
+
+	const controller = new AbortController();
+
+	// Add normal task first
+	queue.add(async () => delay(50));
+
+	// Add abortable task that will be aborted before execution
+	// eslint-disable-next-line promise/prefer-await-to-then
+	const abortPromise = queue.add(async () => delay(50), {signal: controller.signal}).catch(() => 'aborted');
+
+	// Abort immediately before execution
+	controller.abort();
+
+	// Wait for abort to be processed
+	await abortPromise;
+
+	// Add another task - should not be rate-limited if count was rolled back
+	queue.add(async () => delay(50));
+
+	await delay(100); // Let microtask run
+
+	// With intervalCap=1, if abort didn't roll back count, we'd be rate-limited
+	// But abort should roll back, so we shouldn't be rate-limited
+	assert.equal(queue.isRateLimited, false, 'Should not be rate-limited due to count rollback');
+
+	await queue.onIdle();
+});
+
+test('carryover mode with no backlog does not report limited', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 2,
+		carryoverConcurrencyCount: true,
+	});
+
+	// Start some tasks
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	await delay(10);
+
+	// Even though we hit intervalCap, no backlog means not rate-limited
+	assert.equal(queue.isRateLimited, false, 'Should not be rate-limited with no queue backlog');
+
+	await queue.onIdle();
+});
+
+test('clear() triggers immediate state drop while rate-limited', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 1,
+	});
+
+	const events: string[] = [];
+	queue.on('rateLimit', () => events.push('rateLimit'));
+	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+
+	// Add tasks to trigger rate limit
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	await delay(10);
+	assert.equal(queue.isRateLimited, true);
+	assert.equal(events[0], 'rateLimit');
+
+	// Clear should immediately drop rate-limited state
+	queue.clear();
+
+	// State should change immediately (synchronous)
+	assert.equal(queue.isRateLimited, false, 'Should immediately not be rate-limited after clear');
+	assert.equal(queue.size, 0, 'Queue should be empty');
+
+	// Should have emitted rate-limit-cleared event
+	await delay(10); // Let microtask run
+	assert.equal(events[1], 'rateLimitCleared');
+});
+
+test('setPriority validates input', async () => {
+	const queue = new PQueue({concurrency: 1});
+
+	// Pause queue to prevent task from completing
+	queue.pause();
+
+	queue.add(async () => delay(50), {id: 'test'});
+
+	// Should throw on invalid priority
+	assert.throws(() => {
+		queue.setPriority('test', Number.NaN);
+	}, /Expected `priority` to be a finite number/);
+
+	assert.throws(() => {
+		queue.setPriority('test', Number.POSITIVE_INFINITY);
+	}, /Expected `priority` to be a finite number/);
+
+	// Should work with valid priority
+	assert.doesNotThrow(() => {
+		queue.setPriority('test', 5);
+	});
+
+	// Clean up
+	queue.clear();
+});
+
+test('timeout validation in constructor', () => {
+	// Should throw on invalid timeout
+	assert.throws(() => {
+		// eslint-disable-next-line no-new
+		new PQueue({timeout: -1});
+	}, /Expected `timeout` to be a positive finite number/);
+
+	assert.throws(() => {
+		// eslint-disable-next-line no-new
+		new PQueue({timeout: Number.NaN});
+	}, /Expected `timeout` to be a positive finite number/);
+
+	assert.throws(() => {
+		// eslint-disable-next-line no-new
+		new PQueue({timeout: Number.POSITIVE_INFINITY});
+	}, /Expected `timeout` to be a positive finite number/);
+
+	// Should work with valid timeout
+	assert.doesNotThrow(() => {
+		// eslint-disable-next-line no-new
+		new PQueue({timeout: 1000});
+	});
 });

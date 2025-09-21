@@ -241,6 +241,36 @@ await queue.onPendingZero();
 // All running tasks have finished, though the queue may still have items
 ```
 
+#### .onRateLimit()
+
+Returns a promise that settles when the queue becomes rate-limited due to `intervalCap`. If the queue is already rate-limited, the promise resolves immediately.
+
+Useful for implementing backpressure to prevent memory issues when producers are faster than consumers.
+
+```js
+const queue = new PQueue({intervalCap: 5, interval: 1000});
+
+// Add many tasks
+for (let index = 0; index < 10; index++) {
+	queue.add(() => someTask());
+}
+
+await queue.onRateLimit();
+console.log('Queue is now rate-limited - time for maintenance tasks');
+```
+
+#### .onRateLimitCleared()
+
+Returns a promise that settles when the queue is no longer rate-limited. If the queue is not currently rate-limited, the promise resolves immediately.
+
+```js
+const queue = new PQueue({intervalCap: 5, interval: 1000});
+
+// Wait for rate limiting to be cleared
+await queue.onRateLimitCleared();
+console.log('Rate limit cleared - can add more tasks');
+```
+
 #### .onSizeLessThan(limit)
 
 Returns a promise that settles when the queue size is less than the given limit: `queue.size < limit`.
@@ -328,6 +358,10 @@ Number of running items (no longer in the queue).
 #### .isPaused
 
 Whether the queue is currently paused.
+
+#### .isRateLimited
+
+Whether the queue is currently rate-limited due to `intervalCap`. Returns `true` when the number of tasks executed in the current interval has reached the `intervalCap` and there are still tasks waiting to be processed.
 
 ## Events
 
@@ -463,6 +497,56 @@ await job2;
 await queue.add(() => delay(600));
 //=> 'Task is completed.  Size: 0  Pending: 1'
 //=> 'Task is completed.  Size: 0  Pending: 0'
+```
+
+#### rateLimit
+
+Emitted when the queue becomes rate-limited due to `intervalCap`. This happens when the maximum number of tasks allowed per interval has been reached.
+
+Useful for implementing backpressure to prevent memory issues when producers are faster than consumers.
+
+```js
+import delay from 'delay';
+import PQueue from 'p-queue';
+
+const queue = new PQueue({
+	intervalCap: 2,
+	interval: 1000
+});
+
+queue.on('rateLimit', () => {
+	console.log('Queue is rate-limited - processing backlog or maintenance tasks');
+});
+
+// Add 3 tasks - third one triggers rate limiting
+queue.add(() => delay(100));
+queue.add(() => delay(100));
+queue.add(() => delay(100));
+```
+
+#### rateLimitCleared
+
+Emitted when the queue is no longer rate-limited—either because the interval reset and new tasks can start, or because the backlog was drained.
+
+```js
+import delay from 'delay';
+import PQueue from 'p-queue';
+
+const queue = new PQueue({
+	intervalCap: 1,
+	interval: 1000
+});
+
+queue.on('rateLimit', () => {
+	console.log('Rate limited - waiting for interval to reset');
+});
+
+queue.on('rateLimitCleared', () => {
+	console.log('Rate limit cleared - can process more tasks');
+});
+
+queue.add(() => delay(100));
+queue.add(() => delay(100)); // This triggers rate limiting
 ```
 
 ## Advanced example
