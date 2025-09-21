@@ -236,6 +236,18 @@ The difference with `.onEmpty` is that `.onIdle` guarantees that all work from t
 > [!NOTE]
 > The promise returned by `.onIdle()` resolves **once** when the queue becomes idle. If you want to be notified every time the queue becomes idle, use the `idle` event instead: `queue.on('idle', () => {})`.
 
+#### .onPendingZero()
+
+Returns a promise that settles when all currently running tasks have completed; `queue.pending === 0`.
+
+The difference with `.onIdle` is that `.onPendingZero` only waits for currently running tasks to finish, ignoring queued tasks. This is useful when you want to drain in-flight tasks before mutating shared state.
+
+```js
+queue.pause();
+await queue.onPendingZero();
+// All running tasks have finished, though the queue may still have items
+```
+
 #### .onSizeLessThan(limit)
 
 Returns a promise that settles when the queue size is less than the given limit: `queue.size < limit`.
@@ -395,6 +407,12 @@ Useful if you for example add additional items at a later time.
 Emitted every time the queue becomes empty and all promises have completed; `queue.size === 0 && queue.pending === 0`.
 
 The difference with `empty` is that `idle` guarantees that all work from the queue has finished. `empty` merely signals that the queue is empty, but it could mean that some promises haven't completed yet.
+
+#### pendingZero
+
+Emitted every time the number of running tasks becomes zero; `queue.pending === 0`.
+
+The difference with `idle` is that `pendingZero` is emitted even when the queue still has items waiting to run, whereas `idle` requires both an empty queue and no pending tasks.
 
 ```js
 import delay from 'delay';
