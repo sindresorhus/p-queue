@@ -51,6 +51,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	/**
 	Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
 
+	The timeout begins when the operation is dequeued and starts execution, not while it's waiting in the queue.
+
 	Applies to each future operation.
 	*/
 	timeout?: number;

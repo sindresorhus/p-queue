@@ -3,6 +3,8 @@ import {type Queue, type RunFunction} from './queue.js';
 type TimeoutOptions = {
 	/**
 	Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
+
+	The timeout begins when the operation is dequeued and starts execution, not while it's waiting in the queue.
 	*/
 	timeout?: number;
 
