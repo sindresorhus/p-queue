@@ -310,7 +310,7 @@ test('.onPendingZero() - works while paused with queued items', async () => {
 
 	queue.pause();
 
-	// OnPendingZero should still resolve when running tasks finish
+	// `.onPendingZero()` should still resolve when running tasks finish
 	await queue.onPendingZero();
 	assert.equal(queue.pending, 0);
 	// Queued items remain since queue is paused
@@ -449,7 +449,7 @@ test('.onPendingZero() - high concurrency', async () => {
 	const queue = new PQueue({concurrency: 100});
 	const taskCount = 200;
 
-	for (let i = 0; i < taskCount; i++) {
+	for (let index = 0; index < taskCount; index++) {
 		queue.add(async () => delay(10));
 	}
 
@@ -470,7 +470,7 @@ test('.onPendingZero() - starts with empty queue', async () => {
 	await queue.onPendingZero();
 	assert.equal(queue.pending, 0);
 
-	// Add tasks and immediately call onPendingZero
+	// Add tasks and immediately call `.onPendingZero()`
 	queue.add(async () => delay(50));
 	queue.add(async () => delay(50));
 
@@ -510,7 +510,7 @@ test('.onPendingZero() - works with onEmpty and onIdle', async () => {
 	// Wait for running tasks to finish
 	await onPendingZeroPromise;
 
-	// PendingZero should fire first since queue is paused
+	// `pendingZero`` should fire first since queue is paused
 	assert.deepEqual(events, ['pendingZero']);
 
 	queue.start();
