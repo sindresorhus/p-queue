@@ -20,7 +20,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	#intervalCount = 0;
 
-	readonly #intervalCap: number;
+	#intervalCap: number;
 
 	#rateLimitedInInterval = false;
 	#rateLimitFlushScheduled = false;
@@ -58,6 +58,12 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	timeout?: number;
 
+	static #assertValidIntervalCap(value: unknown): asserts value is number {
+		if (!(typeof value === 'number' && value >= 1)) {
+			throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${value?.toString() ?? ''}\` (${typeof value})`);
+		}
+	}
+
 	constructor(options?: Options<QueueType, EnqueueOptionsType>) {
 		super();
 
@@ -72,9 +78,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			...options,
 		} as Options<QueueType, EnqueueOptionsType>;
 
-		if (!(typeof options.intervalCap === 'number' && options.intervalCap >= 1)) {
-			throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${options.intervalCap?.toString() ?? ''}\` (${typeof options.intervalCap})`);
-		}
+		PQueue.#assertValidIntervalCap(options.intervalCap);
 
 		if (options.interval === undefined || !(Number.isFinite(options.interval) && options.interval >= 0)) {
 			throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${options.interval?.toString() ?? ''}\` (${typeof options.interval})`);
@@ -96,6 +100,21 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		this.#isPaused = options.autoStart === false;
 
 		this.#setupRateLimitTracking();
+	}
+
+	get intervalCap(): number {
+		return this.#intervalCount;
+	}
+
+	set intervalCap(value: number) {
+		if (value === this.#intervalCap) {
+			return;
+		}
+
+		PQueue.#assertValidIntervalCap(value);
+
+		this.#intervalCap = value;
+		this.#processQueue();
 	}
 
 	get #doesIntervalAllowAnother(): boolean {

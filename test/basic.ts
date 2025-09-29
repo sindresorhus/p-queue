@@ -1095,3 +1095,230 @@ test('pause should work when throttled', async () => {
 
 	await delay(2500);
 });
+
+test('.intervalCap - changed when at rest', async () => {
+	const result: number[] = [];
+
+	const queue = new PQueue({
+		intervalCap: 1,
+		interval: 500,
+	});
+
+	queue.add(async () => {
+		result.push(1);
+	});
+	queue.add(async () => {
+		result.push(2);
+	});
+
+	await delay(300);
+
+	assert.deepEqual(result, [1]);
+
+	await delay(300);
+
+	assert.deepEqual(result, [1, 2]);
+
+	await delay(600);
+
+	queue.intervalCap = 2;
+
+	queue.add(async () => {
+		result.push(3);
+	});
+	queue.add(async () => {
+		result.push(4);
+	});
+
+	await delay(300);
+
+	assert.deepEqual(result, [1, 2, 3, 4]);
+});
+
+test('.intervalCap - changed while running, larger than full cap', async () => {
+	const result: number[] = [];
+
+	const queue = new PQueue({
+		intervalCap: 1,
+		interval: 500,
+	});
+
+	queue.add(async () => {
+		result.push(1);
+	});
+	queue.add(async () => {
+		result.push(2);
+	});
+
+	queue.intervalCap = 2;
+
+	await delay(300);
+
+	assert.deepEqual(result, [1, 2]);
+});
+
+test('.intervalCap - changed while running, larger than not full cap', async () => {
+	const result: number[] = [];
+
+	const queue = new PQueue({
+		intervalCap: 3,
+		interval: 500,
+	});
+
+	queue.add(async () => {
+		result.push(1);
+	});
+	queue.add(async () => {
+		result.push(2);
+	});
+
+	await delay(200);
+
+	assert.deepEqual(result, [1, 2]);
+
+	queue.intervalCap = 4;
+
+	queue.add(async () => {
+		result.push(3);
+	});
+
+	await delay(200);
+
+	assert.deepEqual(result, [1, 2, 3]);
+});
+
+test('.intervalCap - changed while running, smaller than full cap', async () => {
+	const result: number[] = [];
+
+	const queue = new PQueue({
+		intervalCap: 3,
+		interval: 500,
+	});
+
+	queue.add(async () => {
+		result.push(1);
+	});
+	queue.add(async () => {
+		await delay(300);
+		result.push(2);
+	});
+	queue.add(async () => {
+		result.push(3);
+	});
+
+	await delay(100);
+
+	assert.deepEqual(result, [1, 3]);
+
+	queue.intervalCap = 2;
+
+	queue.add(async () => {
+		result.push(4);
+	});
+
+	await delay(200);
+
+	assert.deepEqual(result, [1, 3, 2]);
+
+	await delay(300);
+
+	assert.deepEqual(result, [1, 3, 2, 4]);
+});
+
+test('.intervalCap - changed while running, smaller than not full cap and can run more', async () => {
+	const result: number[] = [];
+
+	const queue = new PQueue({
+		intervalCap: 4,
+		interval: 500,
+	});
+
+	queue.add(async () => {
+		result.push(1);
+	});
+	queue.add(async () => {
+		await delay(300);
+		result.push(2);
+	});
+
+	await delay(100);
+
+	assert.deepEqual(result, [1]);
+
+	queue.intervalCap = 3;
+
+	queue.add(async () => {
+		result.push(3);
+	});
+
+	await delay(200);
+	assert.deepEqual(result, [1, 3, 2]);
+});
+
+test('.intervalCap - changed while running, smaller than not full cap and cannot run more', async () => {
+	const result: number[] = [];
+
+	const queue = new PQueue({
+		intervalCap: 4,
+		interval: 500,
+	});
+
+	queue.add(async () => {
+		result.push(1);
+	});
+	queue.add(async () => {
+		await delay(200);
+		result.push(2);
+	});
+
+	await delay(100);
+
+	assert.deepEqual(result, [1]);
+
+	queue.intervalCap = 2;
+
+	queue.add(async () => {
+		result.push(3);
+	});
+
+	await delay(200);
+	assert.deepEqual(result, [1, 2]);
+
+	await delay(300);
+
+	assert.deepEqual(result, [1, 2, 3]);
+});
+
+test('.intervalCap - changed while running, larger than full cap and should run multiple more', async () => {
+	const result: number[] = [];
+
+	const queue = new PQueue({
+		intervalCap: 2,
+		interval: 500,
+	});
+
+	queue.add(async () => {
+		result.push(1);
+	});
+	queue.add(async () => {
+		result.push(2);
+	});
+	queue.add(async () => {
+		await delay(200);
+		result.push(3);
+	});
+	queue.add(async () => {
+		await delay(200);
+		result.push(4);
+	});
+
+	await delay(100);
+
+	assert.deepEqual(result, [1, 2]);
+
+	queue.intervalCap = 4;
+
+	await delay(300);
+
+	assert.deepEqual(result, [1, 2, 3, 4]);
+});
