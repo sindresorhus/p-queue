@@ -16,8 +16,6 @@ Promise queue with concurrency control.
 export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = QueueAddOptions> extends EventEmitter<EventName> { // eslint-disable-line @typescript-eslint/naming-convention
 	readonly #carryoverConcurrencyCount: boolean;
 
-	readonly #isIntervalIgnored: boolean;
-
 	#intervalCount = 0;
 
 	#intervalCap: number;
@@ -85,7 +83,6 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		}
 
 		this.#carryoverConcurrencyCount = options.carryoverConcurrencyCount!;
-		this.#isIntervalIgnored = options.intervalCap === Number.POSITIVE_INFINITY || options.interval === 0;
 		this.#intervalCap = options.intervalCap;
 		this.#interval = options.interval;
 		this.#queue = new options.queueClass!();
@@ -100,6 +97,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		this.#isPaused = options.autoStart === false;
 
 		this.#setupRateLimitTracking();
+	}
+
+	get #isIntervalIgnored(): boolean {
+		return this.#intervalCap === Number.POSITIVE_INFINITY || this.#interval === 0;
 	}
 
 	get intervalCap(): number {

@@ -1096,7 +1096,7 @@ test('pause should work when throttled', async () => {
 	await delay(2500);
 });
 
-test('.intervalCap - changed when at rest', async () => {
+test('.intervalCap - changed while not running', async () => {
 	const result: number[] = [];
 
 	const queue = new PQueue({
@@ -1321,4 +1321,55 @@ test('.intervalCap - changed while running, larger than full cap and should run 
 	await delay(300);
 
 	assert.deepEqual(result, [1, 2, 3, 4]);
+});
+
+test('.intervalCap - removed while not running', async () => {
+	const result: number[] = [];
+
+	const queue = new PQueue({
+		intervalCap: 1,
+		interval: 500,
+	});
+
+	queue.add(async () => {
+		result.push(1);
+	});
+	queue.add(async () => {
+		result.push(2);
+	});
+
+	await delay(100);
+
+	assert.deepEqual(result, [1]);
+
+	queue.intervalCap = Number.POSITIVE_INFINITY;
+
+	await delay(100);
+
+	assert.deepEqual(result, [1, 2]);
+});
+
+test('.intervalCap - removed while running', async () => {
+	const result: number[] = [];
+
+	const queue = new PQueue({
+		intervalCap: 1,
+		interval: 500,
+	});
+
+	queue.add(async () => {
+		await delay(200);
+		result.push(1);
+	});
+	queue.add(async () => {
+		result.push(2);
+	});
+
+	await delay(100);
+
+	queue.intervalCap = Number.POSITIVE_INFINITY;
+
+	await delay(200);
+
+	assert.deepEqual(result, [2, 1]);
 });
