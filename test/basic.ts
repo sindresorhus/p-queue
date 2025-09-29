@@ -6,6 +6,7 @@ import delay from 'delay';
 import timeSpan from 'time-span';
 import randomInt from 'random-int';
 import pDefer from 'p-defer';
+import {TimeoutError} from 'p-timeout';
 import PQueue from '../source/index.js';
 
 const fixture = Symbol('fixture');
@@ -131,65 +132,91 @@ test('.add() - priority defaults to 0 when undefined', async () => {
 	assert.deepEqual(result, ['first', 'priority', 'second', 'third']);
 });
 
-test('.add() - timeout without throwing', async () => {
-	const result: string[] = [];
-	const queue = new PQueue({timeout: 300, throwOnTimeout: false});
-	queue.add(async () => {
-		await delay(400);
-		result.push('🐌');
+test('.add() - timeout always throws', async () => {
+	const queue = new PQueue({timeout: 300});
+	const errors: unknown[] = [];
+
+	// Task that will timeout
+	await assert.rejects(
+		queue.add(async () => {
+			await delay(400);
+			return '🐌';
+		}),
+		TimeoutError,
+		'Task exceeding timeout should throw TimeoutError',
+	);
+
+	// Task that completes within timeout
+	const result = await queue.add(async () => {
+		await delay(200);
+		return '🦆';
 	});
-	queue.add(async () => {
-		await delay(250);
-		result.push('🦆');
-	});
-	queue.add(async () => {
-		await delay(310);
-		result.push('🐢');
-	});
-	queue.add(async () => {
-		await delay(100);
-		result.push('🐅');
-	});
-	queue.add(async () => {
-		result.push('⚡️');
-	});
+
+	assert.equal(result, '🦆', 'Task within timeout should complete normally');
+
+	// Test with very short timeout
+	await assert.rejects(
+		queue.add(async () => delay(100), {timeout: 10}),
+		TimeoutError,
+		'Short timeout should throw',
+	);
+
 	await queue.onIdle();
-	assert.deepEqual(result, ['⚡️', '🐅', '🦆']);
 });
 
-test.skip('.add() - timeout with throwing', async () => {
-	const result: string[] = [];
-	const queue = new PQueue({timeout: 300, throwOnTimeout: true});
-	await assert.rejects(queue.add(async () => {
-		await delay(400);
-		result.push('🐌');
-	}));
-	queue.add(async () => {
+test('.add() - timeout behavior', async () => {
+	const queue = new PQueue({timeout: 300});
+
+	// Test multiple timeouts
+	await assert.rejects(
+		queue.add(async () => {
+			await delay(400);
+			return '🐌';
+		}),
+		TimeoutError,
+	);
+
+	// Task that completes
+	const result = await queue.add(async () => {
 		await delay(200);
-		result.push('🦆');
+		return '🦆';
 	});
+	assert.equal(result, '🦆');
+
+	// Test timeout override
+	const longResult = await queue.add(async () => {
+		await delay(400);
+		return '🐢';
+	}, {timeout: 500});
+	assert.equal(longResult, '🐢', 'Task should complete with extended timeout');
+
 	await queue.onIdle();
-	assert.deepEqual(result, ['🦆']);
 });
 
 test('.add() - change timeout in between', async () => {
 	const result: string[] = [];
 	const initialTimeout = 50;
 	const newTimeout = 200;
-	const queue = new PQueue({timeout: initialTimeout, throwOnTimeout: false, concurrency: 2});
-	queue.add(async () => {
+	const queue = new PQueue({timeout: initialTimeout, concurrency: 2});
+
+	// This task will timeout with initial timeout of 50ms
+	await assert.rejects(queue.add(async () => {
 		const {timeout} = queue;
 		assert.equal(timeout, initialTimeout);
 		await delay(300);
 		result.push('🐌');
-	});
+	}), TimeoutError);
+
 	queue.timeout = newTimeout;
-	queue.add(async () => {
+
+	// This task will complete within the new timeout of 200ms
+	await queue.add(async () => {
 		const {timeout} = queue;
 		assert.equal(timeout, newTimeout);
 		await delay(100);
 		result.push('🐅');
 	});
+
 	await queue.onIdle();
 	assert.deepEqual(result, ['🐅']);
 });

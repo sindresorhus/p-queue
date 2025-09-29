@@ -262,15 +262,11 @@ test('should emit completed / error events', async () => {
 });
 
 test('should verify timeout overrides passed to add', async () => {
-	const queue = new PQueue({timeout: 200, throwOnTimeout: true});
+	const queue = new PQueue({timeout: 200});
 
 	await assert.rejects(queue.add(async () => {
 		await delay(400);
 	}));
-
-	await queue.add(async () => {
-		await delay(400);
-	}, {throwOnTimeout: false});
 
 	await queue.add(async () => {
 		await delay(400);
