@@ -739,6 +739,23 @@ for await (const result of pMapIterable(
 }
 ```
 
+#### How do I test code that uses `p-queue` with Jest fake timers?
+
+Jest fake timers don't work well with `p-queue` because it uses `queueMicrotask` internally.
+
+Workaround:
+
+```js
+const flushPromises = () => new Promise(resolve => setImmediate(resolve));
+
+jest.useFakeTimers();
+
+// ... your test code ...
+
+await jest.runAllTimersAsync();
+await flushPromises();
+```
+
 ## Maintainers
 
 - [Sindre Sorhus](https://github.com/sindresorhus)
