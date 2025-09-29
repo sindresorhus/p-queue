@@ -135,9 +135,13 @@ If `true`, specifies that any [pending](https://developer.mozilla.org/en-US/docs
 
 Adds a sync or async task to the queue.
 
-Returns a promise with the return value of `fn`.
+Returns a promise that settles when the task completes, not when it's added to the queue. The promise resolves with the return value of `fn`.
 
-Note: If your items can potentially throw an exception, you must handle those errors from the returned Promise or they may be reported as an unhandled Promise rejection and potentially cause your process to exit immediately.
+> [!IMPORTANT]
+> If you `await` this promise, you will wait for the task to finish running, which may defeat the purpose of using a queue for concurrency. See the [Usage](#usage) section for examples.
+
+> [!NOTE]
+> If your items can potentially throw an exception, you must handle those errors from the returned Promise or they may be reported as an unhandled Promise rejection and potentially cause your process to exit immediately.
 
 ##### fn
 
