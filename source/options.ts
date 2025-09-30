@@ -34,6 +34,8 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOpt
 	/**
 	The max number of runs in the given interval of time.
 
+	Can be changed later by setting `queue.intervalCap`. If changed in the middle of a running interval, the new cap applies immediately. If the new cap is lower than the used cap, the "debt" is not carried over into the next interval.
+
 	Minimum: `1`.
 
 	@default Infinity
