@@ -5,6 +5,21 @@ type TimeoutOptions = {
 	Per-operation timeout in milliseconds. Operations will throw a `TimeoutError` if they don't complete within the specified time.
 
 	The timeout begins when the operation is dequeued and starts execution, not while it's waiting in the queue.
+
+	@default undefined
+
+	Can be overridden per task using the `timeout` option in `.add()`:
+
+	@example
+	```
+	const queue = new PQueue({timeout: 5000});
+
+	// This task uses the global 5s timeout
+	await queue.add(() => fetchData());
+
+	// This task has a 10s timeout
+	await queue.add(() => slowTask(), {timeout: 10000});
+	```
 	*/
 	timeout?: number;
 };

@@ -85,11 +85,24 @@ Concurrency limit.
 
 ##### timeout
 
-Type: `number`
+Type: `number`\
+Default: `undefined`
 
 Per-operation timeout in milliseconds. Operations will throw a `TimeoutError` if they don't complete within the specified time.
 
 The timeout begins when the operation is dequeued and starts execution, not while it's waiting in the queue.
+
+Can be overridden per task using the `timeout` option in `.add()`:
+
+```js
+const queue = new PQueue({timeout: 5000});
+
+// This task uses the global 5s timeout
+await queue.add(() => fetchData());
+
+// This task has a 10s timeout
+await queue.add(() => slowTask(), {timeout: 10000});
+```
 
 ##### autoStart
 
@@ -356,6 +369,21 @@ Here, the promise function with `id: '🦀'` executes last.
 Number of running items (no longer in the queue).
 
 #### [.timeout](#timeout)
+
+Type: `number | undefined`
+
+Get or set the default timeout for all tasks. Can be changed at runtime.
+
+Operations will throw a `TimeoutError` if they don't complete within the specified time.
+
+The timeout begins when the operation is dequeued and starts execution, not while it's waiting in the queue.
+
+```js
+const queue = new PQueue({timeout: 5000});
+
+// Change timeout for all future tasks
+queue.timeout = 10000;
+```
 
 #### [.concurrency](#concurrency)
 
@@ -683,6 +711,51 @@ $ node example.js
 10. Pending promises: 1
 11. Resolved 🐙
 12. All work is done
+```
+
+## Handling timeouts
+
+You can set a timeout for all tasks or override it per task. When a task times out, a `TimeoutError` is thrown.
+
+```js
+import PQueue, {TimeoutError} from 'p-queue';
+
+// Set a global timeout for all tasks
+const queue = new PQueue({
+	concurrency: 2,
+	timeout: 5000, // 5 seconds
+});
+
+(async () => {
+	// This task will use the global timeout
+	try {
+		await queue.add(() => fetchData());
+	} catch (error) {
+		if (error instanceof TimeoutError) {
+			console.log('Task timed out after 5 seconds');
+		}
+	}
+})();
+
+(async () => {
+	// Override timeout for a specific task
+	try {
+		await queue.add(() => slowTask(), {
+			timeout: 10000, // 10 seconds for this task only
+		});
+	} catch (error) {
+		if (error instanceof TimeoutError) {
+			console.log('Slow task timed out after 10 seconds');
+		}
+	}
+})();
+
+(async () => {
+	// No timeout for this task
+	await queue.add(() => verySlowTask(), {
+		timeout: undefined,
+	});
+})();
 ```
 
 ## Custom QueueClass

@@ -58,11 +58,19 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}>();
 
 	/**
-	Per-operation timeout in milliseconds. Operations will throw a `TimeoutError` if they don't complete within the specified time.
+	Get or set the default timeout for all tasks. Can be changed at runtime.
+
+	Operations will throw a `TimeoutError` if they don't complete within the specified time.
 
 	The timeout begins when the operation is dequeued and starts execution, not while it's waiting in the queue.
 
-	Applies to each future operation.
+	@example
+	```
+	const queue = new PQueue({timeout: 5000});
+
+	// Change timeout for all future tasks
+	queue.timeout = 10000;
+	```
 	*/
 	timeout?: number;
 
@@ -709,3 +717,23 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 export type {Queue} from './queue.js';
 export {type QueueAddOptions, type Options} from './options.js';
+
+/**
+Error thrown when a task times out.
+
+@example
+```
+import PQueue, {TimeoutError} from 'p-queue';
+
+const queue = new PQueue({timeout: 1000});
+
+try {
+	await queue.add(() => someTask());
+} catch (error) {
+	if (error instanceof TimeoutError) {
+		console.log('Task timed out');
+	}
+}
+```
+*/
+export {TimeoutError} from 'p-timeout';
