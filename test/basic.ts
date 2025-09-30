@@ -1104,6 +1104,8 @@ test('.intervalCap - changed while not running', async () => {
 		interval: 500,
 	});
 
+	assert.equal(queue.intervalCap, 1);
+
 	queue.add(async () => {
 		result.push(1);
 	});
@@ -1122,6 +1124,7 @@ test('.intervalCap - changed while not running', async () => {
 	await delay(600);
 
 	queue.intervalCap = 2;
+	assert.equal(queue.intervalCap, 2);
 
 	queue.add(async () => {
 		result.push(3);
@@ -1143,6 +1146,8 @@ test('.intervalCap - changed while running, larger than full cap', async () => {
 		interval: 500,
 	});
 
+	assert.equal(queue.intervalCap, 1);
+
 	queue.add(async () => {
 		result.push(1);
 	});
@@ -1151,6 +1156,7 @@ test('.intervalCap - changed while running, larger than full cap', async () => {
 	});
 
 	queue.intervalCap = 2;
+	assert.equal(queue.intervalCap, 2);
 
 	await delay(300);
 
@@ -1164,6 +1170,7 @@ test('.intervalCap - changed while running, larger than not full cap', async () 
 		intervalCap: 3,
 		interval: 500,
 	});
+	assert.equal(queue.intervalCap, 3);
 
 	queue.add(async () => {
 		result.push(1);
@@ -1177,6 +1184,7 @@ test('.intervalCap - changed while running, larger than not full cap', async () 
 	assert.deepEqual(result, [1, 2]);
 
 	queue.intervalCap = 4;
+	assert.equal(queue.intervalCap, 4);
 
 	queue.add(async () => {
 		result.push(3);
@@ -1195,6 +1203,8 @@ test('.intervalCap - changed while running, smaller than full cap', async () => 
 		interval: 500,
 	});
 
+	assert.equal(queue.intervalCap, 3);
+
 	queue.add(async () => {
 		result.push(1);
 	});
@@ -1211,6 +1221,7 @@ test('.intervalCap - changed while running, smaller than full cap', async () => 
 	assert.deepEqual(result, [1, 3]);
 
 	queue.intervalCap = 2;
+	assert.equal(queue.intervalCap, 2);
 
 	queue.add(async () => {
 		result.push(4);
@@ -1233,6 +1244,8 @@ test('.intervalCap - changed while running, smaller than not full cap and can ru
 		interval: 500,
 	});
 
+	assert.equal(queue.intervalCap, 4);
+
 	queue.add(async () => {
 		result.push(1);
 	});
@@ -1246,6 +1259,7 @@ test('.intervalCap - changed while running, smaller than not full cap and can ru
 	assert.deepEqual(result, [1]);
 
 	queue.intervalCap = 3;
+	assert.equal(queue.intervalCap, 3);
 
 	queue.add(async () => {
 		result.push(3);
@@ -1263,6 +1277,8 @@ test('.intervalCap - changed while running, smaller than not full cap and cannot
 		interval: 500,
 	});
 
+	assert.equal(queue.intervalCap, 4);
+
 	queue.add(async () => {
 		result.push(1);
 	});
@@ -1276,6 +1292,7 @@ test('.intervalCap - changed while running, smaller than not full cap and cannot
 	assert.deepEqual(result, [1]);
 
 	queue.intervalCap = 2;
+	assert.equal(queue.intervalCap, 2);
 
 	queue.add(async () => {
 		result.push(3);
@@ -1297,6 +1314,8 @@ test('.intervalCap - changed while running, larger than full cap and should run 
 		interval: 500,
 	});
 
+	assert.equal(queue.intervalCap, 2);
+
 	queue.add(async () => {
 		result.push(1);
 	});
@@ -1317,6 +1336,7 @@ test('.intervalCap - changed while running, larger than full cap and should run 
 	assert.deepEqual(result, [1, 2]);
 
 	queue.intervalCap = 4;
+	assert.equal(queue.intervalCap, 4);
 
 	await delay(300);
 
@@ -1331,6 +1351,8 @@ test('.intervalCap - removed while not running', async () => {
 		interval: 500,
 	});
 
+	assert.equal(queue.intervalCap, 1);
+
 	queue.add(async () => {
 		result.push(1);
 	});
@@ -1343,6 +1365,7 @@ test('.intervalCap - removed while not running', async () => {
 	assert.deepEqual(result, [1]);
 
 	queue.intervalCap = Number.POSITIVE_INFINITY;
+	assert.equal(queue.intervalCap, Number.POSITIVE_INFINITY);
 
 	await delay(100);
 
@@ -1357,6 +1380,8 @@ test('.intervalCap - removed while running', async () => {
 		interval: 500,
 	});
 
+	assert.equal(queue.intervalCap, 1);
+
 	queue.add(async () => {
 		await delay(200);
 		result.push(1);
@@ -1368,6 +1393,7 @@ test('.intervalCap - removed while running', async () => {
 	await delay(100);
 
 	queue.intervalCap = Number.POSITIVE_INFINITY;
+	assert.equal(queue.intervalCap, Number.POSITIVE_INFINITY);
 
 	await delay(200);
 

@@ -104,7 +104,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	get intervalCap(): number {
-		return this.#intervalCount;
+		return this.#intervalCap;
 	}
 
 	set intervalCap(value: number) {
