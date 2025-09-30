@@ -798,6 +798,20 @@ const queue = new PQueue({queueClass: QueueClass});
 
 They are just different constraints. The `concurrency` option limits how many things run at the same time. The `intervalCap` option limits how many things run in total during the interval (over time).
 
+#### How do I limit queue size to prevent memory issues?
+
+Use `.onSizeLessThan()` to implement backpressure:
+
+```js
+const queue = new PQueue();
+
+// Wait for queue to have space before adding more
+await queue.onSizeLessThan(100);
+queue.add(() => someTask());
+```
+
+Note: `.size` counts queued items, while `.pending` counts running items. The total is `queue.size + queue.pending`.
+
 #### How do I cancel or remove a queued task?
 
 Use `AbortSignal` for targeted cancellation. Aborting removes a waiting task and rejects the `.add()` promise. For bulk operations, use `queue.clear()` or share one `AbortController` across tasks.
