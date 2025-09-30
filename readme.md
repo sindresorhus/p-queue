@@ -367,6 +367,68 @@ Whether the queue is currently paused.
 
 Whether the queue is currently rate-limited due to `intervalCap`. Returns `true` when the number of tasks executed in the current interval has reached the `intervalCap` and there are still tasks waiting to be processed.
 
+#### .isSaturated
+
+Whether the queue is saturated. Returns `true` when:
+- All concurrency slots are occupied and tasks are waiting, OR
+- The queue is rate-limited and tasks are waiting
+
+Useful for detecting backpressure and potential hanging tasks.
+
+```js
+import PQueue from 'p-queue';
+
+const queue = new PQueue({concurrency: 2});
+
+// Backpressure handling
+if (queue.isSaturated) {
+	console.log('Queue is saturated, waiting for capacity...');
+	await queue.onSizeLessThan(queue.concurrency);
+}
+
+// Monitoring for stuck tasks
+setInterval(() => {
+	if (queue.isSaturated) {
+		console.warn(`Queue saturated: ${queue.pending} running, ${queue.size} waiting`);
+	}
+}, 60000);
+```
+
+#### .runningTasks
+
+The tasks currently being executed. Each task includes its `id`, `priority`, `startTime`, and `timeout` (if set).
+
+Returns an array of task info objects.
+
+```js
+import PQueue from 'p-queue';
+
+const queue = new PQueue({concurrency: 2});
+
+// Add tasks with IDs for better debugging
+queue.add(() => fetchUser(123), {id: 'user-123'});
+queue.add(() => fetchPosts(456), {id: 'posts-456', priority: 1});
+
+// Check what's running
+console.log(queue.runningTasks);
+/*
+[
+	{
+		id: 'user-123',
+		priority: 0,
+		startTime: 1759253001716,
+		timeout: undefined
+	},
+	{
+		id: 'posts-456',
+		priority: 1,
+		startTime: 1759253001916,
+		timeout: undefined
+	}
+]
+*/
+```
+
 ## Events
 
 #### active
@@ -738,6 +800,77 @@ for await (const result of pMapIterable(
 	console.log(result); // Still in input order
 }
 ```
+
+#### How do I debug a queue that stops processing tasks?
+
+If your queue stops processing tasks after extended use, it's likely that some tasks are hanging indefinitely, exhausting the concurrency limit. Use the `.runningTasks` property to identify which specific tasks are stuck.
+
+Common causes:
+- Network requests without timeouts
+- Database queries that hang
+- File operations on unresponsive network drives
+- Unhandled promise rejections
+
+Debugging steps:
+
+```js
+// 1. Add timeouts to prevent hanging
+const queue = new PQueue({
+	concurrency: 2,
+	timeout: 30000 // 30 seconds
+});
+
+// 2. Always add IDs to tasks for debugging
+queue.add(() => processItem(item), {id: `item-${item.id}`});
+
+// 3. Monitor for stuck tasks using runningTasks
+setInterval(() => {
+	const now = Date.now();
+	const stuckTasks = queue.runningTasks.filter(task =>
+		now - task.startTime > 30000 // Running for over 30 seconds
+	);
+
+	if (stuckTasks.length > 0) {
+		console.error('Stuck tasks:', stuckTasks);
+		// Consider aborting or logging more details
+	}
+
+	// Detect saturation (potential hanging if persistent)
+	if (queue.isSaturated) {
+		console.warn(`Queue saturated: ${queue.pending} running, ${queue.size} waiting`);
+	}
+}, 60000);
+
+// 4. Track task lifecycle
+queue.on('completed', result => {
+	console.log('Task completed');
+});
+queue.on('error', error => {
+	console.error('Task failed:', error);
+});
+
+// 5. Wrap tasks with debugging
+const debugTask = async (fn, name) => {
+	const start = Date.now();
+	console.log(`Starting: ${name}`);
+	try {
+		const result = await fn();
+		console.log(`Completed: ${name} (${Date.now() - start}ms)`);
+		return result;
+	} catch (error) {
+		console.error(`Failed: ${name} (${Date.now() - start}ms)`, error);
+		throw error;
+	}
+};
+
+queue.add(() => debugTask(() => fetchData(), 'fetchData'), {id: 'fetchData'});
+```
+
+Prevention:
+- Always use timeouts for I/O operations
+- Ensure all async functions properly resolve or reject
+- Use the `timeout` option to enforce task time limits
+- Monitor `queue.size` and `queue.pending` in production
 
 #### How do I test code that uses `p-queue` with Jest fake timers?
 

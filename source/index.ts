@@ -49,6 +49,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	// Use to assign a unique identifier to a promise function, if not explicitly specified
 	#idAssigner = 1n;
 
+	// Track currently running tasks for debugging
+	readonly #runningTasks = new Map<symbol, {
+		id?: string;
+		priority: number;
+		startTime: number;
+		timeout?: number;
+	}>();
+
 	/**
 	Per-operation timeout in milliseconds. Operations will throw a `TimeoutError` if they don't complete within the specified time.
 
@@ -335,8 +343,19 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		};
 
 		return new Promise((resolve, reject) => {
+			// Create a unique symbol for tracking this task
+			const taskSymbol = Symbol(`task-${options.id}`);
+
 			this.#queue.enqueue(async () => {
 				this.#pending++;
+
+				// Track this running task
+				this.#runningTasks.set(taskSymbol, {
+					id: options.id,
+					priority: options.priority ?? 0, // Match priority-queue default
+					startTime: Date.now(),
+					timeout: options.timeout,
+				});
 
 				try {
 					// Check abort signal - if aborted, need to decrement the counter
@@ -349,13 +368,19 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 							this.#intervalCount--;
 						}
 
+						// Clean up tracking before throwing
+						this.#runningTasks.delete(taskSymbol);
+
 						throw error;
 					}
 
 					let operation = function_({signal: options.signal});
 
 					if (options.timeout) {
-						operation = pTimeout(Promise.resolve(operation), {milliseconds: options.timeout});
+						operation = pTimeout(Promise.resolve(operation), {
+							milliseconds: options.timeout,
+							message: `Task timed out after ${options.timeout}ms (queue has ${this.#pending} running, ${this.#queue.size} waiting)`,
+						});
 					}
 
 					if (options.signal) {
@@ -369,6 +394,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					reject(error);
 					this.emit('error', error);
 				} finally {
+					// Remove from running tasks
+					this.#runningTasks.delete(taskSymbol);
+
 					// Use queueMicrotask to prevent deep recursion while maintaining timing
 					queueMicrotask(() => {
 						this.#next();
@@ -424,6 +452,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	clear(): void {
 		this.#queue = new this.#queueClass();
+		// Note: We don't clear #runningTasks as those tasks are still running
+		// They will be removed when they complete in the finally block
 		// Force synchronous update since clear() should have immediate effect
 		this.#updateRateLimitState();
 	}
@@ -602,6 +632,76 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	get isRateLimited(): boolean {
 		return this.#rateLimitedInInterval;
+	}
+
+	/**
+	Whether the queue is saturated. Returns `true` when:
+	- All concurrency slots are occupied and tasks are waiting, OR
+	- The queue is rate-limited and tasks are waiting
+
+	Useful for detecting backpressure and potential hanging tasks.
+
+	```js
+	import PQueue from 'p-queue';
+
+	const queue = new PQueue({concurrency: 2});
+
+	// Backpressure handling
+	if (queue.isSaturated) {
+		console.log('Queue is saturated, waiting for capacity...');
+		await queue.onSizeLessThan(queue.concurrency);
+	}
+
+	// Monitoring for stuck tasks
+	setInterval(() => {
+		if (queue.isSaturated) {
+			console.warn(`Queue saturated: ${queue.pending} running, ${queue.size} waiting`);
+		}
+	}, 60000);
+	```
+	*/
+	get isSaturated(): boolean {
+		return (this.#pending === this.#concurrency && this.#queue.size > 0)
+			|| (this.isRateLimited && this.#queue.size > 0);
+	}
+
+	/**
+	The tasks currently being executed. Each task includes its `id`, `priority`, `startTime`, and `timeout` (if set).
+
+	Returns an array of task info objects.
+
+	```js
+	import PQueue from 'p-queue';
+
+	const queue = new PQueue({concurrency: 2});
+
+	// Add tasks with IDs for better debugging
+	queue.add(() => fetchUser(123), {id: 'user-123'});
+	queue.add(() => fetchPosts(456), {id: 'posts-456', priority: 1});
+
+	// Check what's running
+	console.log(queue.runningTasks);
+	// => [{
+	//   id: 'user-123',
+	//   priority: 0,
+	//   startTime: 1759253001716,
+	//   timeout: undefined
+	// }, {
+	//   id: 'posts-456',
+	//   priority: 1,
+	//   startTime: 1759253001916,
+	//   timeout: undefined
+	// }]
+	```
+	*/
+	get runningTasks(): ReadonlyArray<{
+		readonly id?: string;
+		readonly priority: number;
+		readonly startTime: number;
+		readonly timeout?: number;
+	}> {
+		// Return fresh array with fresh objects to prevent mutations
+		return [...this.#runningTasks.values()].map(task => ({...task}));
 	}
 }
 
