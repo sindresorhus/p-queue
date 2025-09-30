@@ -798,9 +798,9 @@ const queue = new PQueue({queueClass: QueueClass});
 
 They are just different constraints. The `concurrency` option limits how many things run at the same time. The `intervalCap` option limits how many things run in total during the interval (over time).
 
-#### How do I limit queue size to prevent memory issues?
+#### How do I implement backpressure?
 
-Use `.onSizeLessThan()` to implement backpressure:
+Use `.onSizeLessThan()` to prevent the queue from growing unbounded and causing memory issues when producers are faster than consumers:
 
 ```js
 const queue = new PQueue();
@@ -811,6 +811,8 @@ queue.add(() => someTask());
 ```
 
 Note: `.size` counts queued items, while `.pending` counts running items. The total is `queue.size + queue.pending`.
+
+You can also use `.onRateLimit()` for backpressure during rate limiting. See the [`.onRateLimit()`](#onratelimit) docs.
 
 #### How do I cancel or remove a queued task?
 
