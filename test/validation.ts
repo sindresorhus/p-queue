@@ -78,7 +78,7 @@ test('carryover mode with no backlog does not report limited', async () => {
 	const queue = new PQueue({
 		interval: 100,
 		intervalCap: 2,
-		carryoverConcurrencyCount: true,
+		carryoverIntervalCount: true,
 	});
 
 	let rateLimitEventFired = false;

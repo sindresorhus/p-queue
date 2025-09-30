@@ -611,11 +611,11 @@ test('interval reset after long idle period', async () => {
 	assert.ok(interval2to3 >= 90, `Task 3 should respect interval: ${interval2to3}ms`);
 });
 
-test('interval with carryoverConcurrencyCount after queue empty', async () => {
+test('interval with carryoverIntervalCount after queue empty', async () => {
 	const queue = new PQueue({
 		intervalCap: 1,
 		interval: 100,
-		carryoverConcurrencyCount: true,
+		carryoverIntervalCount: true,
 	});
 
 	const timestamps: number[] = [];
@@ -807,7 +807,7 @@ test('intervalCap should be respected with high concurrency (issue #126)', async
 		concurrency: 5000,
 		intervalCap: 1000,
 		interval: 1000,
-		carryoverConcurrencyCount: true,
+		carryoverIntervalCount: true,
 	});
 
 	const results: number[] = [];
@@ -1117,11 +1117,11 @@ test('should not cause stack overflow with many aborted tasks', async () => {
 	assert.equal(queue.size, 0);
 });
 
-test('rate-limit with carryoverConcurrencyCount behavior', async () => {
+test('rate-limit with carryoverIntervalCount behavior', async () => {
 	const queue = new PQueue({
 		interval: 1000,
 		intervalCap: 2,
-		carryoverConcurrencyCount: true,
+		carryoverIntervalCount: true,
 		concurrency: 2, // Allow 2 concurrent tasks
 	});
 

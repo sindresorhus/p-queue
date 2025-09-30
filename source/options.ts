@@ -54,6 +54,11 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOpt
 
 	@default false
 	*/
+	readonly carryoverIntervalCount?: boolean;
+
+	/**
+	@deprecated Renamed to `carryoverIntervalCount`.
+	*/
 	readonly carryoverConcurrencyCount?: boolean;
 } & TimeoutOptions;
 

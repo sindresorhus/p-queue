@@ -120,7 +120,7 @@ Minimum: `0`
 
 The length of time in milliseconds before the interval count resets. Must be finite.
 
-##### carryoverConcurrencyCount
+##### carryoverIntervalCount
 
 Type: `boolean`\
 Default: `false`

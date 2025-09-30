@@ -14,7 +14,7 @@ type EventName = 'active' | 'idle' | 'empty' | 'add' | 'next' | 'completed' | 'e
 Promise queue with concurrency control.
 */
 export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = QueueAddOptions> extends EventEmitter<EventName> { // eslint-disable-line @typescript-eslint/naming-convention
-	readonly #carryoverConcurrencyCount: boolean;
+	readonly #carryoverIntervalCount: boolean;
 
 	readonly #isIntervalIgnored: boolean;
 
@@ -71,7 +71,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 		// eslint-disable-next-line @typescript-eslint/consistent-type-assertions
 		options = {
-			carryoverConcurrencyCount: false,
+			carryoverIntervalCount: false,
 			intervalCap: Number.POSITIVE_INFINITY,
 			interval: 0,
 			concurrency: Number.POSITIVE_INFINITY,
@@ -88,7 +88,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${options.interval?.toString() ?? ''}\` (${typeof options.interval})`);
 		}
 
-		this.#carryoverConcurrencyCount = options.carryoverConcurrencyCount!;
+		// TODO: Remove this fallback in the next major version
+		// eslint-disable-next-line @typescript-eslint/no-deprecated
+		this.#carryoverIntervalCount = options.carryoverIntervalCount ?? options.carryoverConcurrencyCount ?? false;
 		this.#isIntervalIgnored = options.intervalCap === Number.POSITIVE_INFINITY || options.interval === 0;
 		this.#intervalCap = options.intervalCap;
 		this.#interval = options.interval;
@@ -150,7 +152,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				}
 
 				// Enough time has passed or no previous execution, allow execution
-				this.#intervalCount = (this.#carryoverConcurrencyCount) ? this.#pending : 0;
+				this.#intervalCount = (this.#carryoverIntervalCount) ? this.#pending : 0;
 			} else {
 				// Act as the interval is pending
 				this.#createIntervalTimeout(delay);
@@ -249,7 +251,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			this.#clearIntervalTimer();
 		}
 
-		this.#intervalCount = this.#carryoverConcurrencyCount ? this.#pending : 0;
+		this.#intervalCount = this.#carryoverIntervalCount ? this.#pending : 0;
 
 		this.#processQueue();
 		this.#scheduleRateLimitUpdate();

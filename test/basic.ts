@@ -874,12 +874,12 @@ test('.add() - throttled', async () => {
 	assert.deepEqual(result, [1, 2]);
 });
 
-test('.add() - throttled, carryoverConcurrencyCount false', async () => {
+test('.add() - throttled, carryoverIntervalCount false', async () => {
 	const result: number[] = [];
 
 	const queue = new PQueue({
 		intervalCap: 1,
-		carryoverConcurrencyCount: false,
+		carryoverIntervalCount: false,
 		interval: 500,
 		autoStart: false,
 	});
@@ -910,11 +910,11 @@ test('.add() - throttled, carryoverConcurrencyCount false', async () => {
 	assert.deepEqual(result, values);
 });
 
-test('.add() - throttled, carryoverConcurrencyCount true', async () => {
+test('.add() - throttled, carryoverIntervalCount true', async () => {
 	const result: number[] = [];
 
 	const queue = new PQueue({
-		carryoverConcurrencyCount: true,
+		carryoverIntervalCount: true,
 		intervalCap: 1,
 		interval: 500,
 		autoStart: false,
