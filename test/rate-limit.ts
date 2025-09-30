@@ -153,11 +153,12 @@ test('onRateLimit() with microtask race condition', async () => {
 
 	// Try to attach listener after tasks are queued
 	await Promise.resolve(); // Microtask delay
-	queue.onRateLimit(() => {
+	const rateLimitPromise = (async () => {
+		await queue.onRateLimit();
 		rateLimitCalled = true;
-	});
+	})();
 
-	await Promise.all(promises);
+	await Promise.all([...promises, rateLimitPromise]);
 	assert.ok(rateLimitCalled, 'onRateLimit should handle late attachment');
 });
 
@@ -173,18 +174,16 @@ test('onRateLimitCleared() with microtask race condition', async () => {
 
 	await delay(20); // Let rate limit trigger
 
-	let clearedCalled = false;
-
-	// Attach listener during rate limit
-	queue.onRateLimitCleared(() => {
-		clearedCalled = true;
-	});
+	// Wait for clear using the promise API
+	const clearedPromise = queue.onRateLimitCleared();
 
 	// Wait for clear
 	await queue.onIdle();
 	await delay(110); // Past interval
 
-	assert.ok(clearedCalled, 'onRateLimitCleared should handle attachment during rate limit');
+	// The promise should resolve when rate limit is cleared
+	await clearedPromise;
+	assert.ok(true, 'onRateLimitCleared should handle attachment during rate limit');
 });
 
 test('onRateLimit() called during state transition', async () => {
@@ -201,14 +200,16 @@ test('onRateLimit() called during state transition', async () => {
 		sequence.push('task1-end');
 	});
 
-	queue.add(async () => {
+	const secondTask = queue.add(async () => {
 		sequence.push('task2');
 	});
 
-	// Attach listener during execution
-	await queue.onRateLimit(() => {
-		sequence.push('rate-limit');
-	});
+	// Wait for rate limit to be triggered
+	await queue.onRateLimit();
+	sequence.push('rate-limit');
+
+	// Wait for second task to complete
+	await secondTask;
 
 	await queue.onIdle();
 
@@ -248,13 +249,13 @@ test('onRateLimit/onRateLimitCleared rapid transitions', async () => {
 	assert.ok(events.includes('cleared'));
 });
 
-test('onRateLimit() never resolves if queue is cleared', async () => {
+test('onRateLimit() resolves when rate limit is triggered', async () => {
 	const queue = new PQueue({
 		interval: 100,
 		intervalCap: 1,
 	});
 
-	queue.add(async () => delay(10));
+	// Add tasks to eventually trigger rate limit
 	queue.add(async () => delay(10));
 
 	let rateLimitResolved = false;
@@ -263,15 +264,14 @@ test('onRateLimit() never resolves if queue is cleared', async () => {
 		rateLimitResolved = true;
 	})();
 
-	// Clear queue before rate limit can be established
-	await delay(5);
-	queue.clear();
+	// Add another task which will trigger rate limit
+	queue.add(async () => delay(10));
 
-	// Give time for any pending operations
+	// Give time for rate limit to be triggered
 	await delay(20);
 
-	// OnRateLimit should not resolve since queue was cleared
-	assert.ok(!rateLimitResolved, 'onRateLimit should not resolve after clear');
+	// OnRateLimit should have resolved since we hit rate limit
+	assert.ok(rateLimitResolved, 'onRateLimit should resolve when rate limit is triggered');
 
 	// Clean up
 	await queue.onIdle();

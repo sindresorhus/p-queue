@@ -43,7 +43,7 @@ test('setPriority validates input', async () => {
 		() => {
 			queue.setPriority('non-existent', 5);
 		},
-		{message: /not found/},
+		{message: /No promise function with the id "non-existent" exists in the queue/},
 	);
 
 	// Valid update

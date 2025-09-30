@@ -777,19 +777,24 @@ test('.add() sync/async mixed tasks', async () => {
 	assert.equal(queue.pending, 0);
 });
 
-test.skip('.add() - handle task throwing error', async () => {
+test('.add() - handle task throwing error', async () => {
 	const queue = new PQueue({concurrency: 1});
 
-	queue.add(() => 'sync 1');
-	await assert.rejects(
-		queue.add(() => {
-			throw new Error('broken');
-		}),
-		{message: 'broken'},
-	);
-	queue.add(() => 'sync 2');
+	// Add multiple tasks before any complete
+	const task1 = queue.add(() => 'sync 1');
+	const task2 = queue.add(() => {
+		throw new Error('broken');
+	});
+	const task3 = queue.add(() => 'sync 2');
 
-	assert.equal(queue.size, 2);
+	// Wait for first task to complete
+	await task1;
+
+	// Second task should reject
+	await assert.rejects(task2, {message: 'broken'});
+
+	// Third task should still complete
+	await task3;
 
 	await queue.onIdle();
 });
