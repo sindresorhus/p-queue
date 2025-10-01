@@ -1100,3 +1100,125 @@ test('pause should work when throttled', async () => {
 
 	await delay(2500);
 });
+
+test('.onError() - rejects when task errors', async () => {
+	const queue = new PQueue({concurrency: 1});
+
+	queue.add(async () => delay(50));
+
+	// Set up onError listener first
+	const errorPromise = queue.onError();
+
+	// Add task that will fail
+	const task = queue.add(async () => {
+		throw new Error('Task failed');
+	});
+
+	await assert.rejects(
+		errorPromise,
+		{message: 'Task failed'},
+	);
+
+	// Clean up unhandled rejection
+	await Promise.allSettled([task]);
+});
+
+test('.onError() - captures first error in queue', async () => {
+	const queue = new PQueue({concurrency: 2});
+
+	// Set up onError listener first
+	const errorPromise = queue.onError();
+
+	// Add tasks
+	const task1 = queue.add(async () => {
+		await delay(100);
+		throw new Error('First error');
+	});
+
+	const task2 = queue.add(async () => {
+		await delay(200);
+		throw new Error('Second error');
+	});
+
+	// Set up cleanup
+	const cleanup = Promise.allSettled([task1, task2]);
+
+	// Wait for onError to reject with first error
+	await assert.rejects(
+		errorPromise,
+		{message: 'First error'},
+		'Should reject with first error',
+	);
+
+	// Ensure all tasks completed
+	await cleanup;
+});
+
+test('.onError() - works with Promise.race pattern', async () => {
+	const queue = new PQueue({concurrency: 2});
+
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(100));
+
+	const racePromise = Promise.race([
+		queue.onError(),
+		queue.onIdle(),
+	]);
+
+	const task = queue.add(async () => {
+		throw new Error('Failed task');
+	});
+	queue.add(async () => delay(150));
+
+	// Stop processing on first error
+	try {
+		await racePromise;
+		assert.fail('Should have thrown error');
+	} catch (error) {
+		assert.equal((error as Error).message, 'Failed task');
+		queue.pause(); // Stop processing remaining tasks
+	}
+
+	// Clean up unhandled rejection
+	await Promise.allSettled([task]);
+
+	assert.equal(queue.isPaused, true);
+});
+
+test('.onError() - multiple listeners', async () => {
+	const queue = new PQueue({concurrency: 1});
+
+	queue.add(async () => delay(50));
+
+	const error1 = queue.onError();
+	const error2 = queue.onError();
+
+	const task = queue.add(async () => {
+		throw new Error('Task error');
+	});
+
+	await assert.rejects(error1, {message: 'Task error'});
+	await assert.rejects(error2, {message: 'Task error'});
+
+	// Clean up unhandled rejection
+	await Promise.allSettled([task]);
+});
+
+test('.onError() - works when called before adding tasks', async () => {
+	const queue = new PQueue({concurrency: 1});
+
+	// Call onError() before adding any tasks
+	const errorPromise = queue.onError();
+
+	// Add a task that errors
+	const task = queue.add(async () => {
+		throw new Error('Early error');
+	});
+
+	await Promise.allSettled([task]);
+
+	await assert.rejects(
+		errorPromise,
+		{message: 'Early error'},
+	);
+});

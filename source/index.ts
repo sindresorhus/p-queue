@@ -547,6 +547,47 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		await this.#onEvent('rateLimitCleared');
 	}
 
+	/**
+	@returns A promise that rejects when any task in the queue errors.
+
+	Use with `Promise.race([queue.onError(), queue.onIdle()])` to fail fast on the first error while still resolving normally when the queue goes idle.
+
+	Important: The promise returned by `add()` still rejects. You must handle each `add()` promise (for example, `.catch(() => {})`) to avoid unhandled rejections.
+
+	@example
+	```
+	import PQueue from 'p-queue';
+
+	const queue = new PQueue({concurrency: 2});
+
+	queue.add(() => fetchData(1)).catch(() => {});
+	queue.add(() => fetchData(2)).catch(() => {});
+	queue.add(() => fetchData(3)).catch(() => {});
+
+	// Stop processing on first error
+	try {
+		await Promise.race([
+			queue.onError(),
+			queue.onIdle()
+		]);
+	} catch (error) {
+		queue.pause(); // Stop processing remaining tasks
+		console.error('Queue failed:', error);
+	}
+	```
+	*/
+	// eslint-disable-next-line @typescript-eslint/promise-function-async
+	async onError(): Promise<never> {
+		return new Promise<never>((_resolve, reject) => {
+			const handleError = (error: unknown) => {
+				this.off('error', handleError);
+				reject(error);
+			};
+
+			this.on('error', handleError);
+		});
+	}
+
 	async #onEvent(event: EventName, filter?: () => boolean): Promise<void> {
 		return new Promise(resolve => {
 			const listener = () => {

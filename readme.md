@@ -288,6 +288,36 @@ await queue.onRateLimitCleared();
 console.log('Rate limit cleared - can add more tasks');
 ```
 
+#### .onError()
+
+Returns a promise that rejects when any task in the queue errors.
+
+Use with `Promise.race([queue.onError(), queue.onIdle()])` to fail fast on the first error while still resolving normally when the queue goes idle.
+
+> [!IMPORTANT]
+> The promise returned by `add()` still rejects. You must handle each `add()` promise (for example, `.catch(() => {})`) to avoid unhandled rejections.
+
+```js
+import PQueue from 'p-queue';
+
+const queue = new PQueue({concurrency: 2});
+
+queue.add(() => fetchData(1)).catch(() => {});
+queue.add(() => fetchData(2)).catch(() => {});
+queue.add(() => fetchData(3)).catch(() => {});
+
+// Stop processing on first error
+try {
+	await Promise.race([
+		queue.onError(),
+		queue.onIdle()
+	]);
+} catch (error) {
+	queue.pause(); // Stop processing remaining tasks
+	console.error('Queue failed:', error);
+}
+```
+
 #### .onSizeLessThan(limit)
 
 Returns a promise that settles when the queue size is less than the given limit: `queue.size < limit`.
