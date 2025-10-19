@@ -46,7 +46,7 @@ npm install p-queue
 
 ## Usage
 
-Here we run only one promise at the time. For example, set `concurrency` to 4 to run four promises at the same time.
+Here we run only one promise at a time. For example, set `concurrency` to 4 to run four promises at the same time.
 
 ```js
 import PQueue from 'p-queue';
@@ -85,16 +85,24 @@ Concurrency limit.
 
 ##### timeout
 
-Type: `number`
+Type: `number`\
+Default: `undefined`
 
-Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
+Per-operation timeout in milliseconds. Operations will throw a `TimeoutError` if they don't complete within the specified time.
 
-##### throwOnTimeout
+The timeout begins when the operation is dequeued and starts execution, not while it's waiting in the queue.
 
-Type: `boolean`\
-Default: `false`
+Can be overridden per task using the `timeout` option in `.add()`:
 
-Whether or not a timeout is considered an exception.
+```js
+const queue = new PQueue({timeout: 5000});
+
+// This task uses the global 5s timeout
+await queue.add(() => fetchData());
+
+// This task has a 10s timeout
+await queue.add(() => slowTask(), {timeout: 10000});
+```
 
 ##### autoStart
 
@@ -125,7 +133,7 @@ Minimum: `0`
 
 The length of time in milliseconds before the interval count resets. Must be finite.
 
-##### carryoverConcurrencyCount
+##### carryoverIntervalCount
 
 Type: `boolean`\
 Default: `false`
@@ -140,9 +148,13 @@ If `true`, specifies that any [pending](https://developer.mozilla.org/en-US/docs
 
 Adds a sync or async task to the queue.
 
-Returns a promise with the return value of `fn`.
+Returns a promise that settles when the task completes, not when it's added to the queue. The promise resolves with the return value of `fn`.
 
-Note: If your items can potentially throw an exception, you must handle those errors from the returned Promise or they may be reported as an unhandled Promise rejection and potentially cause your process to exit immediately.
+> [!IMPORTANT]
+> If you `await` this promise, you will wait for the task to finish running, which may defeat the purpose of using a queue for concurrency. See the [Usage](#usage) section for examples.
+
+> [!NOTE]
+> If your items can potentially throw an exception, you must handle those errors from the returned Promise or they may be reported as an unhandled Promise rejection and potentially cause your process to exit immediately.
 
 ##### fn
 
@@ -222,11 +234,89 @@ Returns a promise that settles when the queue becomes empty.
 
 Can be called multiple times. Useful if you for example add additional items at a later time.
 
+> [!NOTE]
+> The promise returned by `.onEmpty()` resolves **once** when the queue becomes empty. If you want to be notified every time the queue becomes empty, use the `empty` event instead: `queue.on('empty', () => {})`.
+
 #### .onIdle()
 
 Returns a promise that settles when the queue becomes empty, and all promises have completed; `queue.size === 0 && queue.pending === 0`.
 
 The difference with `.onEmpty` is that `.onIdle` guarantees that all work from the queue has finished. `.onEmpty` merely signals that the queue is empty, but it could mean that some promises haven't completed yet.
+
+> [!NOTE]
+> The promise returned by `.onIdle()` resolves **once** when the queue becomes idle. If you want to be notified every time the queue becomes idle, use the `idle` event instead: `queue.on('idle', () => {})`.
+
+#### .onPendingZero()
+
+Returns a promise that settles when all currently running tasks have completed; `queue.pending === 0`.
+
+The difference with `.onIdle` is that `.onPendingZero` only waits for currently running tasks to finish, ignoring queued tasks. This is useful when you want to drain in-flight tasks before mutating shared state.
+
+```js
+queue.pause();
+await queue.onPendingZero();
+// All running tasks have finished, though the queue may still have items
+```
+
+#### .onRateLimit()
+
+Returns a promise that settles when the queue becomes rate-limited due to `intervalCap`. If the queue is already rate-limited, the promise resolves immediately.
+
+Useful for implementing backpressure to prevent memory issues when producers are faster than consumers.
+
+```js
+const queue = new PQueue({intervalCap: 5, interval: 1000});
+
+// Add many tasks
+for (let index = 0; index < 10; index++) {
+	queue.add(() => someTask());
+}
+
+await queue.onRateLimit();
+console.log('Queue is now rate-limited - time for maintenance tasks');
+```
+
+#### .onRateLimitCleared()
+
+Returns a promise that settles when the queue is no longer rate-limited. If the queue is not currently rate-limited, the promise resolves immediately.
+
+```js
+const queue = new PQueue({intervalCap: 5, interval: 1000});
+
+// Wait for rate limiting to be cleared
+await queue.onRateLimitCleared();
+console.log('Rate limit cleared - can add more tasks');
+```
+
+#### .onError()
+
+Returns a promise that rejects when any task in the queue errors.
+
+Use with `Promise.race([queue.onError(), queue.onIdle()])` to fail fast on the first error while still resolving normally when the queue goes idle.
+
+> [!IMPORTANT]
+> The promise returned by `add()` still rejects. You must handle each `add()` promise (for example, `.catch(() => {})`) to avoid unhandled rejections.
+
+```js
+import PQueue from 'p-queue';
+
+const queue = new PQueue({concurrency: 2});
+
+queue.add(() => fetchData(1)).catch(() => {});
+queue.add(() => fetchData(2)).catch(() => {});
+queue.add(() => fetchData(3)).catch(() => {});
+
+// Stop processing on first error
+try {
+	await Promise.race([
+		queue.onError(),
+		queue.onIdle()
+	]);
+} catch (error) {
+	queue.pause(); // Stop processing remaining tasks
+	console.error('Queue failed:', error);
+}
+```
 
 #### .onSizeLessThan(limit)
 
@@ -310,11 +400,92 @@ Number of running items (no longer in the queue).
 
 #### [.timeout](#timeout)
 
+Type: `number | undefined`
+
+Get or set the default timeout for all tasks. Can be changed at runtime.
+
+Operations will throw a `TimeoutError` if they don't complete within the specified time.
+
+The timeout begins when the operation is dequeued and starts execution, not while it's waiting in the queue.
+
+```js
+const queue = new PQueue({timeout: 5000});
+
+// Change timeout for all future tasks
+queue.timeout = 10000;
+```
+
 #### [.concurrency](#concurrency)
 
 #### .isPaused
 
 Whether the queue is currently paused.
+
+#### .isRateLimited
+
+Whether the queue is currently rate-limited due to `intervalCap`. Returns `true` when the number of tasks executed in the current interval has reached the `intervalCap` and there are still tasks waiting to be processed.
+
+#### .isSaturated
+
+Whether the queue is saturated. Returns `true` when:
+- All concurrency slots are occupied and tasks are waiting, OR
+- The queue is rate-limited and tasks are waiting
+
+Useful for detecting backpressure and potential hanging tasks.
+
+```js
+import PQueue from 'p-queue';
+
+const queue = new PQueue({concurrency: 2});
+
+// Backpressure handling
+if (queue.isSaturated) {
+	console.log('Queue is saturated, waiting for capacity...');
+	await queue.onSizeLessThan(queue.concurrency);
+}
+
+// Monitoring for stuck tasks
+setInterval(() => {
+	if (queue.isSaturated) {
+		console.warn(`Queue saturated: ${queue.pending} running, ${queue.size} waiting`);
+	}
+}, 60000);
+```
+
+#### .runningTasks
+
+The tasks currently being executed. Each task includes its `id`, `priority`, `startTime`, and `timeout` (if set).
+
+Returns an array of task info objects.
+
+```js
+import PQueue from 'p-queue';
+
+const queue = new PQueue({concurrency: 2});
+
+// Add tasks with IDs for better debugging
+queue.add(() => fetchUser(123), {id: 'user-123'});
+queue.add(() => fetchPosts(456), {id: 'posts-456', priority: 1});
+
+// Check what's running
+console.log(queue.runningTasks);
+/*
+[
+	{
+		id: 'user-123',
+		priority: 0,
+		startTime: 1759253001716,
+		timeout: undefined
+	},
+	{
+		id: 'posts-456',
+		priority: 1,
+		startTime: 1759253001916,
+		timeout: undefined
+	}
+]
+*/
+```
 
 ## Events
 
@@ -359,10 +530,9 @@ queue.add(() => Promise.resolve('hello, world!'));
 
 #### error
 
-Emitted if an item throws an error.
+Emitted if an item throws an error. The promise returned by `add()` is still rejected, so you must handle both.
 
 ```js
-import delay from 'delay';
 import PQueue from 'p-queue';
 
 const queue = new PQueue({concurrency: 2});
@@ -371,7 +541,10 @@ queue.on('error', error => {
 	console.error(error);
 });
 
-queue.add(() => Promise.reject(new Error('error')));
+// Handle the promise to prevent unhandled rejection
+queue.add(() => Promise.reject(new Error('error'))).catch(() => {
+	// Error already handled by event listener
+});
 ```
 
 #### empty
@@ -385,6 +558,12 @@ Useful if you for example add additional items at a later time.
 Emitted every time the queue becomes empty and all promises have completed; `queue.size === 0 && queue.pending === 0`.
 
 The difference with `empty` is that `idle` guarantees that all work from the queue has finished. `empty` merely signals that the queue is empty, but it could mean that some promises haven't completed yet.
+
+#### pendingZero
+
+Emitted every time the number of running tasks becomes zero; `queue.pending === 0`.
+
+The difference with `idle` is that `pendingZero` is emitted even when the queue still has items waiting to run, whereas `idle` requires both an empty queue and no pending tasks.
 
 ```js
 import delay from 'delay';
@@ -442,6 +621,56 @@ await job2;
 await queue.add(() => delay(600));
 //=> 'Task is completed.  Size: 0  Pending: 1'
 //=> 'Task is completed.  Size: 0  Pending: 0'
+```
+
+#### rateLimit
+
+Emitted when the queue becomes rate-limited due to `intervalCap`. This happens when the maximum number of tasks allowed per interval has been reached.
+
+Useful for implementing backpressure to prevent memory issues when producers are faster than consumers.
+
+```js
+import delay from 'delay';
+import PQueue from 'p-queue';
+
+const queue = new PQueue({
+	intervalCap: 2,
+	interval: 1000
+});
+
+queue.on('rateLimit', () => {
+	console.log('Queue is rate-limited - processing backlog or maintenance tasks');
+});
+
+// Add 3 tasks - third one triggers rate limiting
+queue.add(() => delay(100));
+queue.add(() => delay(100));
+queue.add(() => delay(100));
+```
+
+#### rateLimitCleared
+
+Emitted when the queue is no longer rate-limited—either because the interval reset and new tasks can start, or because the backlog was drained.
+
+```js
+import delay from 'delay';
+import PQueue from 'p-queue';
+
+const queue = new PQueue({
+	intervalCap: 1,
+	interval: 1000
+});
+
+queue.on('rateLimit', () => {
+	console.log('Rate limited - waiting for interval to reset');
+});
+
+queue.on('rateLimitCleared', () => {
+	console.log('Rate limit cleared - can process more tasks');
+});
+
+queue.add(() => delay(100));
+queue.add(() => delay(100)); // This triggers rate limiting
 ```
 
 ## Advanced example
@@ -514,6 +743,51 @@ $ node example.js
 12. All work is done
 ```
 
+## Handling timeouts
+
+You can set a timeout for all tasks or override it per task. When a task times out, a `TimeoutError` is thrown.
+
+```js
+import PQueue, {TimeoutError} from 'p-queue';
+
+// Set a global timeout for all tasks
+const queue = new PQueue({
+	concurrency: 2,
+	timeout: 5000, // 5 seconds
+});
+
+(async () => {
+	// This task will use the global timeout
+	try {
+		await queue.add(() => fetchData());
+	} catch (error) {
+		if (error instanceof TimeoutError) {
+			console.log('Task timed out after 5 seconds');
+		}
+	}
+})();
+
+(async () => {
+	// Override timeout for a specific task
+	try {
+		await queue.add(() => slowTask(), {
+			timeout: 10000, // 10 seconds for this task only
+		});
+	} catch (error) {
+		if (error instanceof TimeoutError) {
+			console.log('Slow task timed out after 10 seconds');
+		}
+	}
+})();
+
+(async () => {
+	// No timeout for this task
+	await queue.add(() => verySlowTask(), {
+		timeout: undefined,
+	});
+})();
+```
+
 ## Custom QueueClass
 
 For implementing more complex scheduling policies, you can provide a QueueClass in the options:
@@ -553,6 +827,186 @@ const queue = new PQueue({queueClass: QueueClass});
 #### How do the `concurrency` and `intervalCap` options affect each other?
 
 They are just different constraints. The `concurrency` option limits how many things run at the same time. The `intervalCap` option limits how many things run in total during the interval (over time).
+
+#### How do I implement backpressure?
+
+Use `.onSizeLessThan()` to prevent the queue from growing unbounded and causing memory issues when producers are faster than consumers:
+
+```js
+const queue = new PQueue();
+
+// Wait for queue to have space before adding more
+await queue.onSizeLessThan(100);
+queue.add(() => someTask());
+```
+
+Note: `.size` counts queued items, while `.pending` counts running items. The total is `queue.size + queue.pending`.
+
+You can also use `.onRateLimit()` for backpressure during rate limiting. See the [`.onRateLimit()`](#onratelimit) docs.
+
+#### How do I cancel or remove a queued task?
+
+Use `AbortSignal` for targeted cancellation. Aborting removes a waiting task and rejects the `.add()` promise. For bulk operations, use `queue.clear()` or share one `AbortController` across tasks.
+
+```js
+import PQueue from 'p-queue';
+
+const queue = new PQueue();
+const controller = new AbortController();
+
+const promise = queue.add(({signal}) => doWork({signal}), {signal: controller.signal});
+
+controller.abort(); // Cancels if still queued; running tasks must handle `signal` themselves
+```
+
+Direct removal methods are not provided as they would leak internals and risk dangling promises.
+
+#### How do I get results in the order they were added?
+
+This package executes tasks in priority order, but doesn't guarantee completion order. If you need results in the order they were added, use `Promise.all()`, which maintains the order of the input array:
+
+```js
+import PQueue from 'p-queue';
+
+const queue = new PQueue({concurrency: 4});
+
+const tasks = [
+	() => fetchData(1), // May finish third
+	() => fetchData(2), // May finish first
+	() => fetchData(3), // May finish second
+];
+
+const results = await Promise.all(
+	tasks.map(task => queue.add(task))
+);
+// results = [result1, result2, result3] ✅ Always in input order
+
+// Or more concisely:
+const urls = ['url1', 'url2', 'url3'];
+const results = await Promise.all(
+	urls.map(url => queue.add(() => fetch(url)))
+);
+```
+
+If you don't need `p-queue`'s advanced features, consider using [`p-map`](https://github.com/sindresorhus/p-map), which is specifically designed for this use case.
+
+#### How do I stream results as they complete in order?
+
+For progressive results that maintain input order, use [`pMapIterable`](https://github.com/sindresorhus/p-map#pmapiterable) from `p-map`:
+
+```js
+import {pMapIterable} from 'p-map';
+
+// Stream results in order as they complete
+for await (const result of pMapIterable(items, fetchItem, {concurrency: 4})) {
+	console.log(result); // Results arrive in input order
+}
+```
+
+You can combine it with `p-queue` when you need priorities or a shared concurrency cap:
+
+```js
+import PQueue from 'p-queue';
+import {pMapIterable} from 'p-map';
+
+// Let p-queue handle concurrency
+const queue = new PQueue({concurrency: 4});
+
+for await (const result of pMapIterable(
+	items,
+	item => queue.add(() => fetchItem(item), {priority: item.priority})
+)) {
+	console.log(result); // Still in input order
+}
+```
+
+#### How do I debug a queue that stops processing tasks?
+
+If your queue stops processing tasks after extended use, it's likely that some tasks are hanging indefinitely, exhausting the concurrency limit. Use the `.runningTasks` property to identify which specific tasks are stuck.
+
+Common causes:
+- Network requests without timeouts
+- Database queries that hang
+- File operations on unresponsive network drives
+- Unhandled promise rejections
+
+Debugging steps:
+
+```js
+// 1. Add timeouts to prevent hanging
+const queue = new PQueue({
+	concurrency: 2,
+	timeout: 30000 // 30 seconds
+});
+
+// 2. Always add IDs to tasks for debugging
+queue.add(() => processItem(item), {id: `item-${item.id}`});
+
+// 3. Monitor for stuck tasks using runningTasks
+setInterval(() => {
+	const now = Date.now();
+	const stuckTasks = queue.runningTasks.filter(task =>
+		now - task.startTime > 30000 // Running for over 30 seconds
+	);
+
+	if (stuckTasks.length > 0) {
+		console.error('Stuck tasks:', stuckTasks);
+		// Consider aborting or logging more details
+	}
+
+	// Detect saturation (potential hanging if persistent)
+	if (queue.isSaturated) {
+		console.warn(`Queue saturated: ${queue.pending} running, ${queue.size} waiting`);
+	}
+}, 60000);
+
+// 4. Track task lifecycle
+queue.on('completed', result => {
+	console.log('Task completed');
+});
+queue.on('error', error => {
+	console.error('Task failed:', error);
+});
+
+// 5. Wrap tasks with debugging
+const debugTask = async (fn, name) => {
+	const start = Date.now();
+	console.log(`Starting: ${name}`);
+	try {
+		const result = await fn();
+		console.log(`Completed: ${name} (${Date.now() - start}ms)`);
+		return result;
+	} catch (error) {
+		console.error(`Failed: ${name} (${Date.now() - start}ms)`, error);
+		throw error;
+	}
+};
+
+queue.add(() => debugTask(() => fetchData(), 'fetchData'), {id: 'fetchData'});
+```
+
+Prevention:
+- Always use timeouts for I/O operations
+- Ensure all async functions properly resolve or reject
+- Use the `timeout` option to enforce task time limits
+- Monitor `queue.size` and `queue.pending` in production
+
+#### How do I test code that uses `p-queue` with Jest fake timers?
+
+Jest fake timers don't work well with `p-queue` because it uses `queueMicrotask` internally.
+
+Workaround:
+
+```js
+const flushPromises = () => new Promise(resolve => setImmediate(resolve));
+
+jest.useFakeTimers();
+
+// ... your test code ...
+
+await jest.runAllTimersAsync();
+await flushPromises();
+```
 
 ## Maintainers
 

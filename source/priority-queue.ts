@@ -10,26 +10,23 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 	readonly #queue: Array<PriorityQueueOptions & {run: RunFunction}> = [];
 
 	enqueue(run: RunFunction, options?: Partial<PriorityQueueOptions>): void {
-		options = {
-			priority: 0,
-			...options,
-		};
+		const {
+			priority = 0,
+			id,
+		} = options ?? {};
 
 		const element = {
-			priority: options.priority,
-			id: options.id,
+			priority,
+			id,
 			run,
 		};
 
-		if (this.size === 0 || this.#queue[this.size - 1]!.priority! >= options.priority!) {
+		if (this.size === 0 || this.#queue[this.size - 1]!.priority! >= priority) {
 			this.#queue.push(element);
 			return;
 		}
 
-		const index = lowerBound(
-			this.#queue, element,
-			(a: Readonly<PriorityQueueOptions>, b: Readonly<PriorityQueueOptions>) => b.priority! - a.priority!,
-		);
+		const index = lowerBound(this.#queue, element, (a: Readonly<PriorityQueueOptions>, b: Readonly<PriorityQueueOptions>) => b.priority! - a.priority!);
 		this.#queue.splice(index, 0, element);
 	}
 
@@ -49,9 +46,7 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 	}
 
 	filter(options: Readonly<Partial<PriorityQueueOptions>>): RunFunction[] {
-		return this.#queue.filter(
-			(element: Readonly<PriorityQueueOptions>) => element.priority === options.priority,
-		).map((element: Readonly<{run: RunFunction}>) => element.run);
+		return this.#queue.filter((element: Readonly<PriorityQueueOptions>) => element.priority === options.priority).map((element: Readonly<{run: RunFunction}>) => element.run);
 	}
 
 	get size(): number {

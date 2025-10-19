@@ -2,16 +2,26 @@ import {type Queue, type RunFunction} from './queue.js';
 
 type TimeoutOptions = {
 	/**
-	Per-operation timeout in milliseconds. Operations fulfill once `timeout` elapses if they haven't already.
+	Per-operation timeout in milliseconds. Operations will throw a `TimeoutError` if they don't complete within the specified time.
+
+	The timeout begins when the operation is dequeued and starts execution, not while it's waiting in the queue.
+
+	@default undefined
+
+	Can be overridden per task using the `timeout` option in `.add()`:
+
+	@example
+	```
+	const queue = new PQueue({timeout: 5000});
+
+	// This task uses the global 5s timeout
+	await queue.add(() => fetchData());
+
+	// This task has a 10s timeout
+	await queue.add(() => slowTask(), {timeout: 10000});
+	```
 	*/
 	timeout?: number;
-
-	/**
-	Whether or not a timeout is considered an exception.
-
-	@default false
-	*/
-	throwOnTimeout?: boolean;
 };
 
 export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOptions extends QueueAddOptions> = {
@@ -58,6 +68,11 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOpt
 	Whether the task must finish in the given interval or will be carried over into the next interval count.
 
 	@default false
+	*/
+	readonly carryoverIntervalCount?: boolean;
+
+	/**
+	@deprecated Renamed to `carryoverIntervalCount`.
 	*/
 	readonly carryoverConcurrencyCount?: boolean;
 } & TimeoutOptions;
