@@ -287,14 +287,6 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		this.#processQueue();
 	}
 
-	async #throwOnAbort(signal: AbortSignal): Promise<never> {
-		return new Promise((_resolve, reject) => {
-			signal.addEventListener('abort', () => {
-				reject(signal.reason);
-			}, {once: true});
-		});
-	}
-
 	/**
 	Updates the priority of a promise function by its id, affecting its execution order. Requires a defined concurrency limit to take effect.
 
@@ -367,6 +359,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					timeout: options.timeout,
 				});
 
+				let eventListener: (() => void) | undefined;
+
 				try {
 					// Check abort signal - if aborted, need to decrement the counter
 					// that was incremented in tryToStartAnother
@@ -394,7 +388,13 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					}
 
 					if (options.signal) {
-						operation = Promise.race([operation, this.#throwOnAbort(options.signal)]);
+						operation = Promise.race([operation, new Promise<never>((_resolve, reject) => {
+							eventListener = () => {
+								reject(options.signal!.reason);
+							};
+
+							options.signal!.addEventListener('abort', eventListener);
+						})]);
 					}
 
 					const result = await operation;
@@ -404,6 +404,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					reject(error);
 					this.emit('error', error);
 				} finally {
+					// Clean up abort event listener
+					if (eventListener) {
+						options.signal!.removeEventListener('abort', eventListener);
+					}
+
 					// Remove from running tasks
 					this.#runningTasks.delete(taskSymbol);
 
