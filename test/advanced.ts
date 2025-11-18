@@ -342,6 +342,28 @@ test('aborting multiple jobs at the same time', async () => {
 	assert.equal(queue.pending, 0);
 });
 
+test('abort listener is removed when job is completed', async () => {
+	const queue = new PQueue();
+	const mockSignal = {
+		aborted: false,
+		numberOfListeners: 0,
+		throwIfAborted() {
+			if (this.aborted) {
+				throw new Error('Aborted');
+			}
+		},
+		addEventListener() {
+			this.numberOfListeners++;
+		},
+		removeEventListener() {
+			this.numberOfListeners--;
+		},
+	};
+	await queue.add(async () => delay(10), {signal: mockSignal as unknown as AbortSignal});
+	assert.equal(queue.size, 0);
+	assert.equal(mockSignal.numberOfListeners, 0);
+});
+
 test('pending promises counted fast enough', async () => {
 	const queue = new PQueue({autoStart: false, concurrency: 2});
 
