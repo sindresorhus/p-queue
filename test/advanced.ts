@@ -344,24 +344,37 @@ test('aborting multiple jobs at the same time', async () => {
 
 test('abort listener is removed when job is completed', async () => {
 	const queue = new PQueue();
-	const mockSignal = {
-		aborted: false,
-		numberOfListeners: 0,
-		throwIfAborted() {
-			if (this.aborted) {
-				throw new Error('Aborted');
-			}
-		},
-		addEventListener() {
-			this.numberOfListeners++;
-		},
-		removeEventListener() {
-			this.numberOfListeners--;
-		},
+
+	// Track addEventListener/removeEventListener calls
+	let listenerCount = 0;
+	const controller = new AbortController();
+	const originalAddEventListener = controller.signal.addEventListener.bind(controller.signal);
+	const originalRemoveEventListener = controller.signal.removeEventListener.bind(controller.signal);
+
+	controller.signal.addEventListener = function (type, listener, options) {
+		if (type === 'abort') {
+			listenerCount++;
+		}
+
+		originalAddEventListener(type, listener, options);
 	};
-	await queue.add(async () => delay(10), {signal: mockSignal as unknown as AbortSignal});
+
+	controller.signal.removeEventListener = function (type, listener) {
+		if (type === 'abort') {
+			listenerCount--;
+		}
+
+		originalRemoveEventListener(type, listener);
+	};
+
+	// Add operations and verify listeners are cleaned up
+	for (let index = 0; index < 5; index++) {
+		await queue.add(async () => delay(10), {signal: controller.signal}); // eslint-disable-line no-await-in-loop
+		assert.equal(listenerCount, 0, `Listener ${index + 1} was not cleaned up`);
+	}
+
 	assert.equal(queue.size, 0);
-	assert.equal(mockSignal.numberOfListeners, 0);
+	assert.equal(queue.pending, 0);
 });
 
 test('pending promises counted fast enough', async () => {

@@ -388,12 +388,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					}
 
 					if (options.signal) {
+						const {signal} = options;
+
 						operation = Promise.race([operation, new Promise<never>((_resolve, reject) => {
 							eventListener = () => {
-								reject(options.signal!.reason);
+								reject(signal.reason);
 							};
 
-							options.signal!.addEventListener('abort', eventListener);
+							signal.addEventListener('abort', eventListener, {once: true});
 						})]);
 					}
 
@@ -406,7 +408,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				} finally {
 					// Clean up abort event listener
 					if (eventListener) {
-						options.signal!.removeEventListener('abort', eventListener);
+						options.signal?.removeEventListener('abort', eventListener);
 					}
 
 					// Remove from running tasks
