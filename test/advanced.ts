@@ -1146,6 +1146,7 @@ test('should not cause stack overflow with many aborted tasks', async () => {
 
 	// This should not cause a stack overflow
 	await Promise.all(promises);
+	await queue.onIdle();
 
 	// Verify queue state
 	assert.equal(queue.pending, 0);
@@ -1511,12 +1512,10 @@ test('rate-limit when all queued tasks are aborted', async () => {
 	controller.abort();
 
 	await Promise.allSettled([abortable1, abortable2]);
-	await delay(10);
+
+	await queue.onIdle();
 
 	// Should clear rate limit when queue becomes empty due to aborts
 	assert.equal(queue.isRateLimited, false);
 	assert.equal(events[1], 'rateLimitCleared');
-
-	await queue.onIdle();
 });
-

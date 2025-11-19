@@ -35,6 +35,12 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	#timeoutId?: NodeJS.Timeout;
 
+	readonly #strict: boolean;
+
+	// Circular buffer implementation for better performance
+	#strictTicks: number[] = [];
+	#strictTicksStartIndex = 0;
+
 	#queue: QueueType;
 
 	readonly #queueClass: new () => QueueType;
@@ -85,6 +91,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			concurrency: Number.POSITIVE_INFINITY,
 			autoStart: true,
 			queueClass: PriorityQueue,
+			strict: false,
 			...options,
 		} as Options<QueueType, EnqueueOptionsType>;
 
@@ -96,12 +103,21 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${options.interval?.toString() ?? ''}\` (${typeof options.interval})`);
 		}
 
+		if (options.strict && options.interval === 0) {
+			throw new TypeError('The `strict` option requires a non-zero `interval`');
+		}
+
+		if (options.strict && options.intervalCap === Number.POSITIVE_INFINITY) {
+			throw new TypeError('The `strict` option requires a finite `intervalCap`');
+		}
+
 		// TODO: Remove this fallback in the next major version
 		// eslint-disable-next-line @typescript-eslint/no-deprecated
 		this.#carryoverIntervalCount = options.carryoverIntervalCount ?? options.carryoverConcurrencyCount ?? false;
 		this.#isIntervalIgnored = options.intervalCap === Number.POSITIVE_INFINITY || options.interval === 0;
 		this.#intervalCap = options.intervalCap;
 		this.#interval = options.interval;
+		this.#strict = options.strict!;
 		this.#queue = new options.queueClass!();
 		this.#queueClass = options.queueClass!;
 		this.concurrency = options.concurrency!;
@@ -116,8 +132,63 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		this.#setupRateLimitTracking();
 	}
 
+	#cleanupStrictTicks(now: number): void {
+		// Remove ticks outside the current interval window using circular buffer approach
+		while (this.#strictTicksStartIndex < this.#strictTicks.length) {
+			const oldestTick = this.#strictTicks[this.#strictTicksStartIndex];
+			if (oldestTick !== undefined && now - oldestTick >= this.#interval) {
+				this.#strictTicksStartIndex++;
+			} else {
+				break;
+			}
+		}
+
+		// Compact the array when it becomes inefficient or fully consumed
+		// Compact when: (start index is large AND more than half wasted) OR all ticks expired
+		const shouldCompact = (this.#strictTicksStartIndex > 100 && this.#strictTicksStartIndex > this.#strictTicks.length / 2)
+			|| this.#strictTicksStartIndex === this.#strictTicks.length;
+
+		if (shouldCompact) {
+			this.#strictTicks = this.#strictTicks.slice(this.#strictTicksStartIndex);
+			this.#strictTicksStartIndex = 0;
+		}
+	}
+
+	// Helper methods for interval consumption
+	#consumeIntervalSlot(now: number): void {
+		if (this.#strict) {
+			this.#strictTicks.push(now);
+		} else {
+			this.#intervalCount++;
+		}
+	}
+
+	#rollbackIntervalSlot(): void {
+		if (this.#strict) {
+			// Pop from the end of the actual data (not from start index)
+			if (this.#strictTicks.length > this.#strictTicksStartIndex) {
+				this.#strictTicks.pop();
+			}
+		} else if (this.#intervalCount > 0) {
+			this.#intervalCount--;
+		}
+	}
+
+	#getActiveTicksCount(): number {
+		return this.#strictTicks.length - this.#strictTicksStartIndex;
+	}
+
 	get #doesIntervalAllowAnother(): boolean {
-		return this.#isIntervalIgnored || this.#intervalCount < this.#intervalCap;
+		if (this.#isIntervalIgnored) {
+			return true;
+		}
+
+		if (this.#strict) {
+			// Cleanup already done by #isIntervalPausedAt before this is called
+			return this.#getActiveTicksCount() < this.#intervalCap;
+		}
+
+		return this.#intervalCount < this.#intervalCap;
 	}
 
 	get #doesConcurrentAllowAnother(): boolean {
@@ -136,14 +207,32 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	#onResumeInterval(): void {
-		this.#onInterval(); // Already schedules update
-		this.#initializeIntervalIfNeeded();
+		// Clear timeout ID before processing to prevent race condition
+		// Must clear before #onInterval to allow new timeouts to be scheduled
 		this.#timeoutId = undefined;
+		this.#onInterval();
+		this.#initializeIntervalIfNeeded();
 	}
 
-	get #isIntervalPaused(): boolean {
-		const now = Date.now();
+	#isIntervalPausedAt(now: number): boolean {
+		// Strict mode: check if we need to wait for oldest tick to age out
+		if (this.#strict) {
+			this.#cleanupStrictTicks(now);
 
+			// If at capacity, need to wait for oldest tick to age out
+			const activeTicksCount = this.#getActiveTicksCount();
+			if (activeTicksCount >= this.#intervalCap) {
+				const oldestTick = this.#strictTicks[this.#strictTicksStartIndex]!;
+				// After cleanup, remaining ticks are within interval, so delay is always > 0
+				const delay = this.#interval - (now - oldestTick);
+				this.#createIntervalTimeout(delay);
+				return true;
+			}
+
+			return false;
+		}
+
+		// Fixed window mode (original logic)
 		if (this.#intervalId === undefined) {
 			const delay = this.#intervalEnd - now;
 			if (delay < 0) {
@@ -205,6 +294,13 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			if (this.#pending === 0) {
 				// Clear timeout as well when completely idle
 				this.#clearTimeoutTimer();
+
+				// Compact strict ticks when idle to free memory
+				if (this.#strict && this.#strictTicksStartIndex > 0) {
+					const now = Date.now();
+					this.#cleanupStrictTicks(now);
+				}
+
 				this.emit('idle');
 			}
 
@@ -214,18 +310,18 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		let taskStarted = false;
 
 		if (!this.#isPaused) {
-			const canInitializeInterval = !this.#isIntervalPaused;
+			const now = Date.now();
+			const canInitializeInterval = !this.#isIntervalPausedAt(now);
+
 			if (this.#doesIntervalAllowAnother && this.#doesConcurrentAllowAnother) {
 				const job = this.#queue.dequeue()!;
 
-				// Increment interval count immediately to prevent race conditions
 				if (!this.#isIntervalIgnored) {
-					this.#intervalCount++;
+					this.#consumeIntervalSlot(now);
 					this.#scheduleRateLimitUpdate();
 				}
 
 				this.emit('active');
-				this.#lastExecutionTime = Date.now();
 				job();
 
 				if (canInitializeInterval) {
@@ -244,6 +340,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			return;
 		}
 
+		// Strict mode uses timeouts instead of interval timers
+		if (this.#strict) {
+			return;
+		}
+
 		this.#intervalId = setInterval(
 			() => {
 				this.#onInterval();
@@ -255,11 +356,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	#onInterval(): void {
-		if (this.#intervalCount === 0 && this.#pending === 0 && this.#intervalId) {
-			this.#clearIntervalTimer();
-		}
+		// Non-strict mode uses interval timers and intervalCount
+		if (!this.#strict) {
+			if (this.#intervalCount === 0 && this.#pending === 0 && this.#intervalId) {
+				this.#clearIntervalTimer();
+			}
 
-		this.#intervalCount = this.#carryoverIntervalCount ? this.#pending : 0;
+			this.#intervalCount = this.#carryoverIntervalCount ? this.#pending : 0;
+		}
 
 		this.#processQueue();
 		this.#scheduleRateLimitUpdate();
@@ -336,12 +440,12 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<TaskResultType>;
 	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType> {
-		// In case `id` is not defined.
-		options.id ??= (this.#idAssigner++).toString();
-
+		// Create a copy to avoid mutating the original options object
 		options = {
 			timeout: this.timeout,
 			...options,
+			// Assign unique ID if not provided
+			id: options.id ?? (this.#idAssigner++).toString(),
 		};
 
 		return new Promise((resolve, reject) => {
@@ -367,16 +471,15 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					try {
 						options.signal?.throwIfAborted();
 					} catch (error) {
-						// Decrement the counter that was already incremented
-						if (!this.#isIntervalIgnored) {
-							this.#intervalCount--;
-						}
+						this.#rollbackIntervalConsumption();
 
 						// Clean up tracking before throwing
 						this.#runningTasks.delete(taskSymbol);
 
 						throw error;
 					}
+
+					this.#lastExecutionTime = Date.now();
 
 					let operation = function_({signal: options.signal});
 
@@ -469,10 +572,29 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	clear(): void {
 		this.#queue = new this.#queueClass();
+
+		// Clear interval timer since queue is now empty (consistent with #tryToStartAnother)
+		this.#clearIntervalTimer();
+
+		// Note: We preserve strict mode rate-limiting state (ticks and timeout)
+		// because clear() only clears queued tasks, not rate limit history.
+		// This ensures that rate limits are still enforced after clearing the queue.
+
 		// Note: We don't clear #runningTasks as those tasks are still running
 		// They will be removed when they complete in the finally block
+
 		// Force synchronous update since clear() should have immediate effect
 		this.#updateRateLimitState();
+
+		// Emit events so waiters (onEmpty, onIdle, onSizeLessThan) can resolve
+		this.emit('empty');
+
+		if (this.#pending === 0) {
+			this.#clearTimeoutTimer();
+			this.emit('idle');
+		}
+
+		this.emit('next');
 	}
 
 	/**
@@ -584,7 +706,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	```
 	*/
 	// eslint-disable-next-line @typescript-eslint/promise-function-async
-	async onError(): Promise<never> {
+	onError(): Promise<never> {
 		return new Promise<never>((_resolve, reject) => {
 			const handleError = (error: unknown) => {
 				this.off('error', handleError);
@@ -673,11 +795,39 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		});
 	}
 
+	#rollbackIntervalConsumption(): void {
+		if (this.#isIntervalIgnored) {
+			return;
+		}
+
+		this.#rollbackIntervalSlot();
+		this.#scheduleRateLimitUpdate();
+	}
+
 	#updateRateLimitState(): void {
 		const previous = this.#rateLimitedInInterval;
-		const shouldBeRateLimited = !this.#isIntervalIgnored
-			&& this.#intervalCount >= this.#intervalCap
-			&& this.#queue.size > 0;
+
+		// Early exit if rate limiting is disabled or queue is empty
+		if (this.#isIntervalIgnored || this.#queue.size === 0) {
+			if (previous) {
+				this.#rateLimitedInInterval = false;
+				this.emit('rateLimitCleared');
+			}
+
+			return;
+		}
+
+		// Get the current count based on mode
+		let count: number;
+		if (this.#strict) {
+			const now = Date.now();
+			this.#cleanupStrictTicks(now);
+			count = this.#getActiveTicksCount();
+		} else {
+			count = this.#intervalCount;
+		}
+
+		const shouldBeRateLimited = count >= this.#intervalCap;
 
 		if (shouldBeRateLimited !== previous) {
 			this.#rateLimitedInInterval = shouldBeRateLimited;

@@ -140,6 +140,25 @@ Default: `false`
 
 If `true`, specifies that any [pending](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise) Promises, should be carried over into the next interval and counted against the `intervalCap`. If `false`, any of those pending Promises will not count towards the next `intervalCap`.
 
+##### strict
+
+Type: `boolean`\
+Default: `false`
+
+Whether to use strict mode for rate limiting (sliding window algorithm).
+
+When enabled, ensures that no more than `intervalCap` tasks execute in any rolling `interval` window, rather than resetting the count at fixed intervals. This provides more predictable and evenly distributed execution.
+
+For example, with `intervalCap: 2` and `interval: 1000`:
+- **Default mode (fixed window)**: Tasks can burst at window boundaries. You could execute 2 tasks at 999ms and 2 more at 1000ms, resulting in 4 tasks within 1ms.
+- **Strict mode (sliding window)**: Enforces that no more than 2 tasks execute in any 1000ms rolling window, preventing bursts.
+
+> [!NOTE]
+> Strict mode is more resource-intensive as it tracks individual execution timestamps. Use it when you need guaranteed rate-limit compliance, such as when interacting with APIs that enforce strict rate limits.
+
+> [!NOTE]
+> The `carryoverIntervalCount` option has no effect when `strict` mode is enabled, as strict mode tracks actual execution timestamps rather than counting pending tasks.
+
 ### queue
 
 `PQueue` instance.
@@ -827,6 +846,18 @@ const queue = new PQueue({queueClass: QueueClass});
 #### How do the `concurrency` and `intervalCap` options affect each other?
 
 They are just different constraints. The `concurrency` option limits how many things run at the same time. The `intervalCap` option limits how many things run in total during the interval (over time).
+
+#### When should I use `strict` mode for rate limiting?
+
+Use `strict: true` when:
+- You're interacting with APIs that enforce strict rate limits and will throttle or block you if you exceed them, even briefly
+- You've experienced issues with the default fixed window mode (such as [#126](https://github.com/sindresorhus/p-queue/issues/126))
+- You need guaranteed compliance with rate limits for any rolling time window
+
+Use the default fixed window mode when:
+- You don't have strict rate limit requirements
+- Performance is more important than perfect rate limit distribution
+- You're rate limiting for backpressure management rather than external API constraints
 
 #### How do I implement backpressure?
 

@@ -291,6 +291,31 @@ test('.onSizeLessThan()', async () => {
 	assert.equal(queue.pending, 1);
 });
 
+test('.onSizeLessThan() resolves after clear()', async () => {
+	const queue = new PQueue({autoStart: false});
+
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	assert.equal(queue.size, 2);
+	assert.equal(queue.pending, 0);
+
+	const sizePromise = queue.onSizeLessThan(1);
+
+	queue.clear();
+
+	await Promise.race([
+		sizePromise,
+		(async () => {
+			await delay(200);
+			throw new Error('clear() should resolve onSizeLessThan() waiters');
+		})(),
+	]);
+
+	assert.equal(queue.size, 0);
+	assert.equal(queue.pending, 0);
+});
+
 test('.onIdle() - no pending', async () => {
 	const queue = new PQueue();
 	assert.equal(queue.size, 0);
@@ -561,6 +586,68 @@ test('.clear()', () => {
 	assert.equal(queue.size, 0);
 });
 
+test('.clear() resolves onEmpty() and onIdle() waiters', async () => {
+	const queue = new PQueue({autoStart: false});
+
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	const onEmptyPromise = queue.onEmpty();
+	const onIdlePromise = queue.onIdle();
+
+	queue.clear();
+
+	await Promise.race([
+		Promise.all([onEmptyPromise, onIdlePromise]),
+		(async () => {
+			await delay(200);
+			throw new Error('clear() should resolve onEmpty() and onIdle() waiters');
+		})(),
+	]);
+
+	assert.equal(queue.size, 0);
+	assert.equal(queue.pending, 0);
+});
+
+test('.clear() with running tasks emits empty but not idle', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const events: string[] = [];
+
+	queue.on('empty', () => events.push('empty'));
+	queue.on('idle', () => events.push('idle'));
+
+	// Start a long-running task
+	const taskPromise = queue.add(async () => {
+		await delay(100);
+		return 'done';
+	});
+
+	// Add more tasks to the queue
+	queue.add(async () => delay(50));
+	queue.add(async () => delay(50));
+
+	await delay(10); // Let first task start
+
+	assert.equal(queue.pending, 1);
+	assert.equal(queue.size, 2);
+
+	// Clear while task is running
+	queue.clear();
+
+	assert.equal(queue.size, 0);
+	assert.equal(queue.pending, 1); // Still running
+
+	// Should have emitted 'empty' but not 'idle' yet
+	assert.ok(events.includes('empty'), 'Should emit empty');
+	assert.ok(!events.includes('idle'), 'Should not emit idle while tasks are running');
+
+	// Wait for running task to complete
+	await taskPromise;
+
+	// Now idle should be emitted
+	assert.ok(events.includes('idle'), 'Should emit idle after running task completes');
+});
+
 test('.addAll()', async () => {
 	const queue = new PQueue();
 	const fn = async (): Promise<symbol> => fixture;
@@ -569,6 +656,39 @@ test('.addAll()', async () => {
 	assert.equal(queue.size, 0);
 	assert.equal(queue.pending, 2);
 	assert.deepEqual(await promise, [fixture, fixture]);
+});
+
+test('.addAll() assigns unique IDs to each task', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const ids: Array<string | undefined> = [];
+
+	// Capture IDs by using setPriority which throws if ID doesn't exist
+	const fn1 = async () => {
+		ids.push('task1');
+	};
+
+	const fn2 = async () => {
+		ids.push('task2');
+	};
+
+	const fn3 = async () => {
+		ids.push('task3');
+	};
+
+	// Pass shared options - each task should still get a unique ID
+	await queue.addAll([fn1, fn2, fn3], {priority: 1});
+
+	assert.equal(ids.length, 3);
+});
+
+test('.addAll() with options does not mutate the options object', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const options = {priority: 5};
+
+	await queue.addAll([async () => 'a', async () => 'b'], options);
+
+	// The original options object should not have an 'id' property added
+	assert.equal('id' in options, false);
 });
 
 test('enforce number in options.concurrency', () => {
