@@ -349,6 +349,9 @@ Note that this only limits the number of items waiting to start. There could sti
 
 Clear the queue.
 
+> [!WARNING]
+> Any promises returned by `.add()` for tasks that were waiting in the queue (not yet running) will **never settle** after calling `.clear()`. This can cause "unsettled top-level await" warnings or hang your process. If you need the promises to settle, use `AbortSignal` for cancellation instead — aborting rejects the `.add()` promise cleanly.
+
 #### .size
 
 Size of the queue, the number of queued items waiting to run.
@@ -877,7 +880,11 @@ You can also use `.onRateLimit()` for backpressure during rate limiting. See the
 
 #### How do I cancel or remove a queued task?
 
-Use `AbortSignal` for targeted cancellation. Aborting removes a waiting task and rejects the `.add()` promise. For bulk operations, use `queue.clear()` or share one `AbortController` across tasks.
+Use `AbortSignal` for targeted cancellation. When aborted, a queued task is removed and the `.add()` promise rejects. For bulk cancellation, share one `AbortController` across tasks. Avoid using `queue.clear()` alone for cancellation: it removes queued tasks but their `.add()` promises will never settle, causing dangling promises.
+
+Note that aborting only rejects the promise returned by `.add()` — it does not automatically stop the async work inside your function. For a running task, you must handle the signal inside the function itself (see the example below).
+
+Single-task cancellation:
 
 ```js
 import PQueue from 'p-queue';
@@ -888,6 +895,23 @@ const controller = new AbortController();
 const promise = queue.add(({signal}) => doWork({signal}), {signal: controller.signal});
 
 controller.abort(); // Cancels if still queued; running tasks must handle `signal` themselves
+```
+
+Bulk cancellation using a shared `AbortController`:
+
+```js
+import PQueue from 'p-queue';
+
+const queue = new PQueue({concurrency: 2});
+const controller = new AbortController();
+
+// All tasks share the same signal
+queue.add(({signal}) => doWork(signal), {signal: controller.signal}).catch(() => {});
+queue.add(({signal}) => doWork(signal), {signal: controller.signal}).catch(() => {});
+queue.add(({signal}) => doWork(signal), {signal: controller.signal}).catch(() => {});
+
+// Cancel all queued (and signal running) tasks — promises reject cleanly
+controller.abort();
 ```
 
 Direct removal methods are not provided as they would leak internals and risk dangling promises.
