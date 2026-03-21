@@ -109,7 +109,7 @@ await queue.add(() => slowTask(), {timeout: 10000});
 Type: `boolean`\
 Default: `true`
 
-Whether queue tasks within concurrency limit, are auto-executed as soon as they're added.
+Whether queue tasks within the concurrency limit are auto-executed as soon as they're added.
 
 ##### queueClass
 
