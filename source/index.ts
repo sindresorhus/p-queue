@@ -63,6 +63,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		timeout?: number;
 	}>();
 
+	readonly #queueAbortListenerCleanupFunctions = new Set<() => void>();
+
 	/**
 	Get or set the default timeout for all tasks. Can be changed at runtime.
 
@@ -452,7 +454,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			// Create a unique symbol for tracking this task
 			const taskSymbol = Symbol(`task-${options.id}`);
 
-			this.#queue.enqueue(async () => {
+			let cleanupQueueAbortHandler = () => undefined;
+			const run = async () => {
+				// Task is now running — remove the queued-state abort listener
+				cleanupQueueAbortHandler();
+
 				this.#pending++;
 
 				// Track this running task
@@ -522,7 +528,44 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 						this.#next();
 					});
 				}
-			}, options);
+			};
+
+			this.#queue.enqueue(run, options);
+
+			const removeQueuedTask = () => {
+				if (this.#queue instanceof PriorityQueue) {
+					this.#queue.remove(run);
+					return;
+				}
+
+				this.#queue.remove?.(options.id!); // Intentionally best-effort: queued abort removal is only supported for queue classes that implement `.remove()`.
+			};
+
+			// Handle abort while task is waiting in the queue
+			if (options.signal) {
+				const {signal} = options;
+
+				const queueAbortHandler = () => {
+					cleanupQueueAbortHandler();
+					removeQueuedTask();
+					reject(signal.reason);
+					this.#tryToStartAnother();
+					this.emit('next');
+				};
+
+				cleanupQueueAbortHandler = () => {
+					signal.removeEventListener('abort', queueAbortHandler);
+					this.#queueAbortListenerCleanupFunctions.delete(cleanupQueueAbortHandler);
+				};
+
+				if (signal.aborted) {
+					queueAbortHandler();
+					return;
+				}
+
+				signal.addEventListener('abort', queueAbortHandler, {once: true});
+				this.#queueAbortListenerCleanupFunctions.add(cleanupQueueAbortHandler);
+			}
 
 			this.emit('add');
 
@@ -571,6 +614,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	Clear the queue.
 	*/
 	clear(): void {
+		for (const cleanupQueueAbortHandler of this.#queueAbortListenerCleanupFunctions) {
+			cleanupQueueAbortHandler();
+		}
+
 		this.#queue = new this.#queueClass();
 
 		// Clear interval timer since queue is now empty (consistent with #tryToStartAnother)

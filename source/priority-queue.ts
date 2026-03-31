@@ -40,6 +40,22 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 		this.enqueue(item!.run, {priority, id});
 	}
 
+	remove(id: string): void;
+	remove(run: RunFunction): void;
+	remove(idOrRun: string | RunFunction): void {
+		const index = this.#queue.findIndex((element: Readonly<PriorityQueueOptions & {run: RunFunction}>) => {
+			if (typeof idOrRun === 'string') {
+				return element.id === idOrRun;
+			}
+
+			return element.run === idOrRun;
+		});
+
+		if (index !== -1) {
+			this.#queue.splice(index, 1);
+		}
+	}
+
 	dequeue(): RunFunction | undefined {
 		const item = this.#queue.shift();
 		return item?.run;
