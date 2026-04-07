@@ -586,7 +586,7 @@ test('strict mode isSaturated property', async () => {
 
 test('strict mode multiple complete intervals', async () => {
 	const queue = new PQueue({
-		interval: 50,
+		interval: 100,
 		intervalCap: 3,
 		strict: true,
 	});
@@ -609,9 +609,9 @@ test('strict mode multiple complete intervals', async () => {
 	const relativeExecutionTimes = executionTimes.map(t => t - startTime);
 
 	// Group by approximate interval
-	const intervals = [0, 50, 100, 150];
+	const intervals = [0, 100, 200, 300];
 	for (const intervalStart of intervals) {
-		const tasksInInterval = relativeExecutionTimes.filter(t => t >= intervalStart && t < intervalStart + 50).length;
+		const tasksInInterval = relativeExecutionTimes.filter(t => t >= intervalStart && t < intervalStart + 100).length;
 
 		assert.ok(tasksInInterval <= 3, `Interval starting at ${intervalStart}ms has ${tasksInInterval} tasks`);
 	}
