@@ -935,8 +935,11 @@ const results = await Promise.all(
 	tasks.map(task => queue.add(task))
 );
 // results = [result1, result2, result3] ✅ Always in input order
+```
 
-// Or more concisely:
+Or more concisely:
+
+```js
 const urls = ['url1', 'url2', 'url3'];
 const results = await Promise.all(
 	urls.map(url => queue.add(() => fetch(url)))
