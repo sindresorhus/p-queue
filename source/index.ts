@@ -441,32 +441,44 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	Adds a sync or async task to the queue. Always returns a promise.
 	*/
 	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<TaskResultType>;
-	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType> {
-		// Create a copy to avoid mutating the original options object
-		options = {
-			timeout: this.timeout,
-			...options,
-			// Assign unique ID if not provided
-			id: options.id ?? (this.#idAssigner++).toString(),
-		};
+	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<TaskResultType> {
+		const id = options?.id ?? (this.#idAssigner++).toString();
+
+		let options_: Partial<EnqueueOptionsType>;
+		if (options === undefined) {
+			// Hot path for `queue.add(fn)`: avoid object spread and only set the fields we need.
+			options_ = {};
+			options_.timeout = this.timeout;
+			options_.id = id;
+		} else {
+			// Create a copy to avoid mutating the original options object
+			options_ = {
+				timeout: this.timeout,
+				...options,
+				id,
+			};
+		}
+
+		const {signal} = options_ as TaskOptions;
+		const {timeout, priority = 0} = options_;
 
 		return new Promise((resolve, reject) => {
 			// Create a unique symbol for tracking this task
-			const taskSymbol = Symbol(`task-${options.id}`);
+			const taskSymbol = Symbol(`task-${id}`);
 
-			let cleanupQueueAbortHandler = () => undefined;
+			let cleanupQueueAbortHandler: (() => void) | undefined;
 			const run = async () => {
 				// Task is now running — remove the queued-state abort listener
-				cleanupQueueAbortHandler();
+				cleanupQueueAbortHandler?.();
 
 				this.#pending++;
 
 				// Track this running task
 				this.#runningTasks.set(taskSymbol, {
-					id: options.id,
-					priority: options.priority ?? 0, // Match priority-queue default
+					id,
+					priority, // Match priority-queue default
 					startTime: Date.now(),
-					timeout: options.timeout,
+					timeout,
 				});
 
 				let eventListener: (() => void) | undefined;
@@ -475,7 +487,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					// Check abort signal - if aborted, need to decrement the counter
 					// that was incremented in tryToStartAnother
 					try {
-						options.signal?.throwIfAborted();
+						signal?.throwIfAborted();
 					} catch (error) {
 						this.#rollbackIntervalConsumption();
 
@@ -487,18 +499,16 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 					this.#lastExecutionTime = Date.now();
 
-					let operation = function_({signal: options.signal});
+					let operation = function_({signal});
 
-					if (options.timeout) {
+					if (timeout) {
 						operation = pTimeout(Promise.resolve(operation), {
-							milliseconds: options.timeout,
-							message: `Task timed out after ${options.timeout}ms (queue has ${this.#pending} running, ${this.#queue.size} waiting)`,
+							milliseconds: timeout,
+							message: `Task timed out after ${timeout}ms (queue has ${this.#pending} running, ${this.#queue.size} waiting)`,
 						});
 					}
 
-					if (options.signal) {
-						const {signal} = options;
-
+					if (signal) {
 						operation = Promise.race([operation, new Promise<never>((_resolve, reject) => {
 							eventListener = () => {
 								reject(signal.reason);
@@ -517,7 +527,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				} finally {
 					// Clean up abort event listener
 					if (eventListener) {
-						options.signal?.removeEventListener('abort', eventListener);
+						signal?.removeEventListener('abort', eventListener);
 					}
 
 					// Remove from running tasks
@@ -530,7 +540,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				}
 			};
 
-			this.#queue.enqueue(run, options);
+			this.#queue.enqueue(run, options_);
 
 			const removeQueuedTask = () => {
 				if (this.#queue instanceof PriorityQueue) {
@@ -538,25 +548,25 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					return;
 				}
 
-				this.#queue.remove?.(options.id!); // Intentionally best-effort: queued abort removal is only supported for queue classes that implement `.remove()`.
+				this.#queue.remove?.(id); // Intentionally best-effort: queued abort removal is only supported for queue classes that implement `.remove()`.
 			};
 
 			// Handle abort while task is waiting in the queue
-			if (options.signal) {
-				const {signal} = options;
-
+			if (signal) {
 				const queueAbortHandler = () => {
-					cleanupQueueAbortHandler();
+					cleanupQueueAbortHandler?.();
 					removeQueuedTask();
 					reject(signal.reason);
 					this.#tryToStartAnother();
 					this.emit('next');
 				};
 
-				cleanupQueueAbortHandler = () => {
+				const cleanup = () => {
 					signal.removeEventListener('abort', queueAbortHandler);
-					this.#queueAbortListenerCleanupFunctions.delete(cleanupQueueAbortHandler);
+					this.#queueAbortListenerCleanupFunctions.delete(cleanup);
 				};
+
+				cleanupQueueAbortHandler = cleanup;
 
 				if (signal.aborted) {
 					queueAbortHandler();
@@ -564,7 +574,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				}
 
 				signal.addEventListener('abort', queueAbortHandler, {once: true});
-				this.#queueAbortListenerCleanupFunctions.add(cleanupQueueAbortHandler);
+				this.#queueAbortListenerCleanupFunctions.add(cleanup);
 			}
 
 			this.emit('add');

@@ -76,6 +76,18 @@ addBenchmark('large-fifo-backlog', async () => {
 	await queue.onIdle();
 });
 
+addBenchmark('add-no-options-paused', async () => {
+	const queue = new PQueue({autoStart: false});
+
+	for (let i = 0; i < largeBacklogTaskCount; i++) {
+		queue.add(noop);
+	}
+
+	if (queue.size !== largeBacklogTaskCount) {
+		throw new Error('Queued task count mismatch');
+	}
+});
+
 addBenchmark('priority-queue-dequeue', async () => {
 	const queue = new PriorityQueue();
 
