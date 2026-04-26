@@ -11,7 +11,7 @@ export type PriorityQueueOptions = {
 export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOptions> {
 	readonly #queue: Array<PriorityQueueOptions & {run: RunFunction}> = [];
 
-	// Index of the next item to dequeue. Old items are compacted lazily so dequeue stays O(1).
+	// The queue is stored as a sorted array, but dequeued items are left before `#head` until compaction. Only items from `#head` onward are live, which keeps repeated dequeues amortized O(1).
 	#head = 0;
 
 	enqueue(run: RunFunction, options?: Partial<PriorityQueueOptions>): void {
@@ -28,6 +28,7 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 		};
 
 		if (size === 0) {
+			// When the queue is logically empty, discard any consumed prefix before accepting new work.
 			this.#queue.length = 0;
 			this.#head = 0;
 			this.#queue.push(element);
@@ -35,16 +36,19 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 		}
 
 		if (this.#queue.at(-1)!.priority! >= priority) {
+			// Same-priority and lower-priority items belong after the current tail. Appending preserves FIFO order for equal priorities.
 			this.#queue.push(element);
 			return;
 		}
 
+		// Binary insertion must run on the live sorted range only.
 		this.#compact();
 		const index = lowerBound(this.#queue, element, (a: Readonly<PriorityQueueOptions>, b: Readonly<PriorityQueueOptions>) => b.priority! - a.priority!);
 		this.#queue.splice(index, 0, element);
 	}
 
 	setPriority(id: string, priority: number) {
+		// A dequeued item with the same id is no longer part of the queue.
 		const index = this.#queue.findIndex((element: Readonly<PriorityQueueOptions>, index) => index >= this.#head && element.id === id);
 		if (index === -1) {
 			throw new ReferenceError(`No promise function with the id "${id}" exists in the queue.`);
@@ -58,6 +62,7 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 	remove(run: RunFunction): void;
 	remove(idOrRun: string | RunFunction): void {
 		const index = this.#queue.findIndex((element: Readonly<PriorityQueueOptions & {run: RunFunction}>, index) => {
+			// The consumed prefix may still contain references that should not be removable.
 			if (index < this.#head) {
 				return false;
 			}
@@ -83,9 +88,11 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 		this.#head++;
 
 		if (this.#head === this.#queue.length) {
+			// Fully drained queues are reset immediately so the next enqueue starts from a clean array.
 			this.#queue.length = 0;
 			this.#head = 0;
 		} else if (this.#head > compactionThreshold && this.#head > this.#queue.length / 2) {
+			// Keep repeated dequeues cheap, but stop the consumed prefix from growing without bound.
 			this.#compact();
 		}
 
@@ -110,6 +117,7 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 	}
 
 	#compact(): void {
+		// Compaction restores the invariant that the whole array is the live sorted range.
 		if (this.#head === 0) {
 			return;
 		}
