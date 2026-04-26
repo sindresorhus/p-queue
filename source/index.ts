@@ -1,3 +1,5 @@
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference -- Needed in emitted declarations for p-timeout's ErrorOptions type.
+/// <reference lib="es2022.error" preserve="true" />
 import {EventEmitter} from 'eventemitter3';
 import pTimeout from 'p-timeout';
 import {type Queue, type RunFunction} from './queue.js';
