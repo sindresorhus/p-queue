@@ -1,4 +1,3 @@
-import {EventEmitter} from 'eventemitter3';
 import pTimeout from 'p-timeout';
 import {type Queue, type RunFunction} from './queue.js';
 import PriorityQueue from './priority-queue.js';
@@ -13,7 +12,7 @@ type EventName = 'active' | 'idle' | 'empty' | 'add' | 'next' | 'completed' | 'e
 /**
 Promise queue with concurrency control.
 */
-export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = QueueAddOptions> extends EventEmitter<EventName> { // eslint-disable-line @typescript-eslint/naming-convention
+export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = QueueAddOptions> extends EventTarget { // eslint-disable-line @typescript-eslint/naming-convention
 	readonly #carryoverIntervalCount: boolean;
 
 	readonly #isIntervalIgnored: boolean;
@@ -201,11 +200,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		this.#pending--;
 
 		if (this.#pending === 0) {
-			this.emit('pendingZero');
+			this.dispatchEvent(new Event('pendingZero'));
 		}
 
 		this.#tryToStartAnother();
-		this.emit('next');
+		this.dispatchEvent(new Event('next'));
 	}
 
 	#onResumeInterval(): void {
@@ -291,7 +290,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			// We can clear the interval ("pause")
 			// Because we can redo it later ("resume")
 			this.#clearIntervalTimer();
-			this.emit('empty');
+			this.dispatchEvent(new Event('empty'));
 
 			if (this.#pending === 0) {
 				// Clear timeout as well when completely idle
@@ -303,7 +302,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					this.#cleanupStrictTicks(now);
 				}
 
-				this.emit('idle');
+				this.dispatchEvent(new Event('idle'));
 			}
 
 			return false;
@@ -323,7 +322,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					this.#scheduleRateLimitUpdate();
 				}
 
-				this.emit('active');
+				this.dispatchEvent(new Event('active'));
 				job();
 
 				if (canInitializeInterval) {
@@ -510,10 +509,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 					const result = await operation;
 					resolve(result);
-					this.emit('completed', result);
+					this.dispatchEvent(new CustomEvent('completed', {detail: result}));
 				} catch (error: unknown) {
 					reject(error);
-					this.emit('error', error);
+					this.dispatchEvent(new ErrorEvent('error', {error}));
 				} finally {
 					// Clean up abort event listener
 					if (eventListener) {
@@ -567,7 +566,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				this.#queueAbortListenerCleanupFunctions.add(cleanupQueueAbortHandler);
 			}
 
-			this.emit('add');
+			this.dispatchEvent(new Event('add'));
 
 			this.#tryToStartAnother();
 		});
@@ -771,11 +770,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					return;
 				}
 
-				this.off(event, listener);
+				this.removeEventListener(event, listener);
 				resolve();
 			};
 
-			this.on(event, listener);
+			this.addEventListener(event, listener);
 		});
 	}
 
@@ -818,13 +817,13 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 		// Wire up to lifecycle events that affect rate limit state
 		// Only 'add' and 'next' can actually change rate limit state
-		this.on('add', () => {
+		this.addEventListener('add', () => {
 			if (this.#queue.size > 0) {
 				this.#scheduleRateLimitUpdate();
 			}
 		});
 
-		this.on('next', () => {
+		this.addEventListener('next', () => {
 			this.#scheduleRateLimitUpdate();
 		});
 	}
@@ -878,7 +877,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 		if (shouldBeRateLimited !== previous) {
 			this.#rateLimitedInInterval = shouldBeRateLimited;
-			this.emit(shouldBeRateLimited ? 'rateLimit' : 'rateLimitCleared');
+			this.dispatchEvent(new Event(shouldBeRateLimited ? 'rateLimit' : 'rateLimitCleared'));
 		}
 	}
 

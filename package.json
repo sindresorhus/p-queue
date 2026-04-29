@@ -12,7 +12,7 @@
 	},
 	"sideEffects": false,
 	"engines": {
-		"node": ">=20"
+		"node": ">=25"
 	},
 	"scripts": {
 		"build": "del-cli dist && tsc",
