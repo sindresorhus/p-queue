@@ -140,6 +140,25 @@ Default: `false`
 
 If `true`, specifies that any [pending](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise) Promises, should be carried over into the next interval and counted against the `intervalCap`. If `false`, any of those pending Promises will not count towards the next `intervalCap`.
 
+##### strict
+
+Type: `boolean`\
+Default: `false`
+
+Whether to use strict mode for rate limiting (sliding window algorithm).
+
+When enabled, ensures that no more than `intervalCap` tasks execute in any rolling `interval` window, rather than resetting the count at fixed intervals. This provides more predictable and evenly distributed execution.
+
+For example, with `intervalCap: 2` and `interval: 1000`:
+- **Default mode (fixed window)**: Tasks can burst at window boundaries. You could execute 2 tasks at 999ms and 2 more at 1000ms, resulting in 4 tasks within 1ms.
+- **Strict mode (sliding window)**: Enforces that no more than 2 tasks execute in any 1000ms rolling window, preventing bursts.
+
+> [!NOTE]
+> Strict mode is more resource-intensive as it tracks individual execution timestamps. Use it when you need guaranteed rate-limit compliance, such as when interacting with APIs that enforce strict rate limits.
+
+> [!NOTE]
+> The `carryoverIntervalCount` option has no effect when `strict` mode is enabled, as strict mode tracks actual execution timestamps rather than counting pending tasks.
+
 ### queue
 
 `PQueue` instance.
@@ -329,6 +348,9 @@ Note that this only limits the number of items waiting to start. There could sti
 #### .clear()
 
 Clear the queue.
+
+> [!WARNING]
+> Any promises returned by `.add()` for tasks that were waiting in the queue (not yet running) will **never settle** after calling `.clear()`. This can cause "unsettled top-level await" warnings or hang your process. If you need the promises to settle, use `AbortSignal` for cancellation instead — aborting rejects the `.add()` promise cleanly.
 
 #### .size
 
@@ -555,7 +577,7 @@ Useful if you for example add additional items at a later time.
 
 #### idle
 
-Emitted every time the queue becomes empty and all promises have completed; `queue.size === 0 && queue.pending === 0`.
+Emitted whenever the queue becomes idle: both empty and with zero running tasks (`size === 0 && pending === 0`). If no tasks are ever added, it never fires.
 
 The difference with `empty` is that `idle` guarantees that all work from the queue has finished. `empty` merely signals that the queue is empty, but it could mean that some promises haven't completed yet.
 
@@ -828,6 +850,18 @@ const queue = new PQueue({queueClass: QueueClass});
 
 They are just different constraints. The `concurrency` option limits how many things run at the same time. The `intervalCap` option limits how many things run in total during the interval (over time).
 
+#### When should I use `strict` mode for rate limiting?
+
+Use `strict: true` when:
+- You're interacting with APIs that enforce strict rate limits and will throttle or block you if you exceed them, even briefly
+- You've experienced issues with the default fixed window mode (such as [#126](https://github.com/sindresorhus/p-queue/issues/126))
+- You need guaranteed compliance with rate limits for any rolling time window
+
+Use the default fixed window mode when:
+- You don't have strict rate limit requirements
+- Performance is more important than perfect rate limit distribution
+- You're rate limiting for backpressure management rather than external API constraints
+
 #### How do I implement backpressure?
 
 Use `.onSizeLessThan()` to prevent the queue from growing unbounded and causing memory issues when producers are faster than consumers:
@@ -846,7 +880,11 @@ You can also use `.onRateLimit()` for backpressure during rate limiting. See the
 
 #### How do I cancel or remove a queued task?
 
-Use `AbortSignal` for targeted cancellation. Aborting removes a waiting task and rejects the `.add()` promise. For bulk operations, use `queue.clear()` or share one `AbortController` across tasks.
+Use `AbortSignal` for targeted cancellation. When aborted, a queued task is removed and the `.add()` promise rejects. For bulk cancellation, share one `AbortController` across tasks. Avoid using `queue.clear()` alone for cancellation: it removes queued tasks but their `.add()` promises will never settle, causing dangling promises.
+
+Note that aborting only rejects the promise returned by `.add()` — it does not automatically stop the async work inside your function. For a running task, you must handle the signal inside the function itself (see the example below).
+
+Single-task cancellation:
 
 ```js
 import PQueue from 'p-queue';
@@ -857,6 +895,23 @@ const controller = new AbortController();
 const promise = queue.add(({signal}) => doWork({signal}), {signal: controller.signal});
 
 controller.abort(); // Cancels if still queued; running tasks must handle `signal` themselves
+```
+
+Bulk cancellation using a shared `AbortController`:
+
+```js
+import PQueue from 'p-queue';
+
+const queue = new PQueue({concurrency: 2});
+const controller = new AbortController();
+
+// All tasks share the same signal
+queue.add(({signal}) => doWork(signal), {signal: controller.signal}).catch(() => {});
+queue.add(({signal}) => doWork(signal), {signal: controller.signal}).catch(() => {});
+queue.add(({signal}) => doWork(signal), {signal: controller.signal}).catch(() => {});
+
+// Cancel all queued (and signal running) tasks — promises reject cleanly
+controller.abort();
 ```
 
 Direct removal methods are not provided as they would leak internals and risk dangling promises.

@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {getEventListeners} from 'node:events';
 import EventEmitter from 'eventemitter3';
 import delay from 'delay';
 import pDefer from 'p-defer';
@@ -292,6 +293,429 @@ test('should skip an aborted job', async () => {
 	await assert.rejects(queue.add(() => {}, {signal: controller.signal}));
 });
 
+test('should reject when signal is aborted while task is waiting in queue', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const controller = new AbortController();
+
+	// Fill the concurrency slot so the second task is queued
+	queue.add(async () => new Promise(() => {})); // eslint-disable-line @typescript-eslint/no-empty-function
+
+	// Second task is queued, waiting for the first to finish
+	const queuedTask = queue.add(async () => 'result', {signal: controller.signal});
+
+	// Abort the queued task
+	controller.abort();
+
+	await assert.rejects(queuedTask, {name: 'AbortError'});
+	assert.equal(queue.size, 0);
+});
+
+test('should reject immediately when signal is already aborted and task is queued', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const controller = new AbortController();
+
+	// Fill the concurrency slot
+	queue.add(async () => new Promise(() => {})); // eslint-disable-line @typescript-eslint/no-empty-function
+
+	// Abort before adding
+	controller.abort();
+
+	// Task can't start immediately and signal is already aborted
+	await assert.rejects(
+		queue.add(async () => 'result', {signal: controller.signal}),
+		{name: 'AbortError'},
+	);
+	assert.equal(queue.size, 0);
+});
+
+test('abort with custom reason forwards the reason', async () => {
+	const queue = new PQueue({concurrency: 1});
+
+	// Fill the concurrency slot
+	queue.add(async () => new Promise(() => {})); // eslint-disable-line @typescript-eslint/no-empty-function
+
+	const controller = new AbortController();
+	const queuedTask = queue.add(async () => 'result', {signal: controller.signal});
+
+	const customReason = new Error('custom abort reason');
+	controller.abort(customReason);
+
+	await assert.rejects(queuedTask, {message: 'custom abort reason'});
+});
+
+test('abort works on a paused queue without unpausing', async () => {
+	const queue = new PQueue({concurrency: 2, autoStart: false});
+	const controller = new AbortController();
+
+	let normalRan = false;
+	const abortableTask = queue.add(async () => 'aborted', {signal: controller.signal});
+	queue.add(async () => {
+		normalRan = true;
+	});
+
+	controller.abort();
+
+	await assert.rejects(abortableTask, {name: 'AbortError'});
+	assert.equal(queue.size, 1); // Normal task still queued
+	assert.ok(!normalRan); // Queue is still paused
+	assert.ok(queue.isPaused);
+});
+
+test('aborting multiple queued tasks with same AbortController', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const controller = new AbortController();
+
+	// Fill the concurrency slot
+	const firstTask = queue.add(async () => delay(50));
+
+	// Queue three tasks with the same controller
+	const task1 = queue.add(async () => 'a', {signal: controller.signal});
+	const task2 = queue.add(async () => 'b', {signal: controller.signal});
+	const task3 = queue.add(async () => 'c', {signal: controller.signal});
+
+	controller.abort();
+
+	await assert.rejects(task1, {name: 'AbortError'});
+	await assert.rejects(task2, {name: 'AbortError'});
+	await assert.rejects(task3, {name: 'AbortError'});
+	assert.equal(queue.size, 0);
+
+	await firstTask;
+});
+
+test('aborting a queued task with explicit id removes the correct task', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const controller = new AbortController();
+
+	const results: string[] = [];
+
+	// Fill the concurrency slot
+	const firstTask = queue.add(async () => delay(50));
+
+	// Queue tasks with explicit IDs
+	queue.add(async () => {
+		results.push('keep');
+	}, {id: 'keep'});
+	const abortableTask = queue.add(async () => {
+		results.push('remove-me');
+	}, {id: 'remove-me', signal: controller.signal});
+	queue.add(async () => {
+		results.push('also-keep');
+	}, {id: 'also-keep'});
+
+	assert.equal(queue.size, 3);
+
+	controller.abort();
+
+	await assert.rejects(abortableTask, {name: 'AbortError'});
+	assert.equal(queue.size, 2);
+
+	await firstTask;
+	await queue.onIdle();
+
+	// Verify only the correct tasks ran
+	assert.deepEqual(results, ['keep', 'also-keep']);
+});
+
+test('aborting a queued task with duplicate id removes the correct task', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const controller = new AbortController();
+	const results: string[] = [];
+
+	const firstTask = queue.add(async () => delay(50));
+	const keptTask = queue.add(async () => {
+		results.push('kept');
+		return 'kept';
+	}, {id: 'duplicate'});
+	const abortableTask = queue.add(async () => {
+		results.push('aborted');
+		return 'aborted';
+	}, {id: 'duplicate', signal: controller.signal});
+	const trailingTask = queue.add(async () => {
+		results.push('trailing');
+		return 'trailing';
+	}, {id: 'trailing'});
+
+	controller.abort();
+
+	await assert.rejects(abortableTask, {name: 'AbortError'});
+	assert.equal(queue.size, 2);
+
+	await firstTask;
+	assert.equal(await Promise.race([
+		keptTask,
+		(async () => {
+			await delay(200);
+			return 'timed-out';
+		})(),
+	]), 'kept');
+	assert.equal(await trailingTask, 'trailing');
+	await queue.onIdle();
+
+	assert.deepEqual(results, ['kept', 'trailing']);
+});
+
+test('abort listener for queued task is cleaned up when the task starts running', async () => {
+	const queue = new PQueue({concurrency: 1});
+
+	let listenerCount = 0;
+	const controller = new AbortController();
+	const originalAddEventListener = controller.signal.addEventListener.bind(controller.signal);
+	const originalRemoveEventListener = controller.signal.removeEventListener.bind(controller.signal);
+
+	controller.signal.addEventListener = function (type, listener, options) {
+		if (type === 'abort') {
+			listenerCount++;
+		}
+
+		originalAddEventListener(type, listener, options);
+	};
+
+	controller.signal.removeEventListener = function (type, listener) {
+		if (type === 'abort') {
+			listenerCount--;
+		}
+
+		originalRemoveEventListener(type, listener);
+	};
+
+	// Fill the concurrency slot with a short task
+	const firstTask = queue.add(async () => delay(50));
+
+	// This task will be queued (adding a queued-state listener)
+	const queuedTask = queue.add(async () => 'done', {signal: controller.signal});
+
+	// While queued: one listener (queued-state abort handler)
+	assert.equal(listenerCount, 1);
+
+	// Wait for first task to complete, allowing queued task to start
+	await firstTask;
+	await queuedTask;
+
+	// All listeners should be cleaned up
+	assert.equal(listenerCount, 0);
+});
+
+test('aborting a queued task emits correct events', async () => {
+	const queue = new PQueue({concurrency: 1, autoStart: false});
+	const controller = new AbortController();
+
+	const errors: unknown[] = [];
+	const completed: unknown[] = [];
+	queue.on('error', error => {
+		errors.push(error);
+	});
+	queue.on('completed', result => {
+		completed.push(result);
+	});
+
+	const task = queue.add(async () => 'result', {signal: controller.signal});
+
+	const emptyPromise = queue.onEmpty();
+	const idlePromise = queue.onIdle();
+
+	controller.abort();
+
+	await assert.rejects(task, {name: 'AbortError'});
+	await emptyPromise;
+	await idlePromise;
+
+	assert.equal(queue.size, 0);
+	assert.equal(queue.pending, 0);
+	assert.equal(errors.length, 0);
+	assert.equal(completed.length, 0);
+});
+
+test('onError does not reject when a queued task is aborted', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const controller = new AbortController();
+
+	// Running task that finishes normally
+	const runningTask = queue.add(async () => delay(50));
+
+	// Queued task that will be aborted
+	const queuedTask = queue.add(async () => 'result', {signal: controller.signal});
+
+	// The documented pattern: fail fast on error, resolve on idle
+	const raceResult = Promise.race([
+		(async () => {
+			await queue.onError();
+			return 'error';
+		})(),
+		(async () => {
+			await queue.onIdle();
+			return 'idle';
+		})(),
+	]);
+
+	controller.abort();
+
+	await assert.rejects(queuedTask, {name: 'AbortError'});
+	await runningTask;
+
+	// OnIdle should win because aborting a queued task is not an error
+	assert.equal(await raceResult, 'idle');
+});
+
+test('clear() removes queued abort listeners', async () => {
+	const queue = new PQueue({autoStart: false});
+	const controller = new AbortController();
+
+	const queuedTask = queue.add(async () => 'result', {signal: controller.signal});
+	assert.equal(getEventListeners(controller.signal, 'abort').length, 1);
+
+	queue.clear();
+	assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+
+	controller.abort();
+
+	assert.equal(await Promise.race([
+		(async () => {
+			try {
+				await queuedTask;
+			} catch {
+				return 'settled';
+			}
+
+			return 'settled';
+		})(),
+		(async () => {
+			await delay(50);
+			return 'pending';
+		})(),
+	]), 'pending');
+});
+
+test('clear() removes queued abort listeners for shared signals', () => {
+	const queue = new PQueue({autoStart: false});
+	const controller = new AbortController();
+
+	queue.add(async () => '1', {signal: controller.signal});
+	queue.add(async () => '2', {signal: controller.signal});
+	queue.add(async () => '3', {signal: controller.signal});
+
+	assert.equal(getEventListeners(controller.signal, 'abort').length, 3);
+
+	queue.clear();
+
+	assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+});
+
+test('clear() lets the same signal be reused without stale queued listeners', async () => {
+	const queue = new PQueue({autoStart: false});
+	const controller = new AbortController();
+
+	const clearedTask = queue.add(async () => 'cleared', {signal: controller.signal});
+	queue.clear();
+
+	const activeTask = queue.add(async () => 'active', {signal: controller.signal});
+	assert.equal(getEventListeners(controller.signal, 'abort').length, 1);
+
+	controller.abort();
+
+	await assert.rejects(activeTask, {name: 'AbortError'});
+	assert.equal(await Promise.race([
+		(async () => {
+			try {
+				await clearedTask;
+			} catch {
+				return 'settled';
+			}
+
+			return 'settled';
+		})(),
+		(async () => {
+			await delay(50);
+			return 'pending';
+		})(),
+	]), 'pending');
+});
+
+test('clear() keeps the running task abort listener while removing queued ones', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const controller = new AbortController();
+	const runningTaskDeferred = pDefer<void>();
+
+	const runningTask = queue.add(async () => runningTaskDeferred.promise, {signal: controller.signal});
+	const queuedTask1 = queue.add(async () => '1', {signal: controller.signal});
+	const queuedTask2 = queue.add(async () => '2', {signal: controller.signal});
+
+	assert.equal(getEventListeners(controller.signal, 'abort').length, 3);
+
+	queue.clear();
+
+	assert.equal(getEventListeners(controller.signal, 'abort').length, 1);
+
+	runningTaskDeferred.resolve();
+	await runningTask;
+
+	assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+
+	assert.equal(await Promise.race([
+		(async () => {
+			try {
+				await Promise.all([queuedTask1, queuedTask2]);
+			} catch {
+				return 'settled';
+			}
+
+			return 'settled';
+		})(),
+		(async () => {
+			await delay(50);
+			return 'pending';
+		})(),
+	]), 'pending');
+});
+
+test('clear() only leaves the running task affected when a shared signal aborts later', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const controller = new AbortController();
+	const abortReason = new Error('later abort');
+
+	const runningTask = queue.add(async ({signal}) => new Promise((_resolve, reject) => {
+		signal.addEventListener('abort', () => {
+			reject(signal.reason);
+		}, {once: true});
+	}), {signal: controller.signal});
+
+	const queuedTask = queue.add(async () => 'queued', {signal: controller.signal});
+
+	queue.clear();
+	controller.abort(abortReason);
+
+	await assert.rejects(runningTask, {message: 'later abort'});
+	assert.equal(await Promise.race([
+		(async () => {
+			try {
+				await queuedTask;
+			} catch {
+				return 'settled';
+			}
+
+			return 'settled';
+		})(),
+		(async () => {
+			await delay(50);
+			return 'pending';
+		})(),
+	]), 'pending');
+});
+
+test('clear() does not accumulate abort listeners across repeated discard cycles', () => {
+	const queue = new PQueue({autoStart: false});
+	const controller = new AbortController();
+
+	for (let index = 0; index < 5; index++) {
+		queue.add(async () => index, {signal: controller.signal});
+		queue.add(async () => index, {signal: controller.signal});
+		assert.equal(getEventListeners(controller.signal, 'abort').length, 2);
+
+		queue.clear();
+		assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+	}
+});
+
 test('should pass AbortSignal instance to job', async () => {
 	const queue = new PQueue();
 	const controller = new AbortController();
@@ -331,13 +755,46 @@ test('aborting multiple jobs at the same time', async () => {
 	const task1 = queue.add(async () => new Promise(() => {}), {signal: controller1.signal}); // eslint-disable-line @typescript-eslint/no-empty-function
 	const task2 = queue.add(async () => new Promise(() => {}), {signal: controller2.signal}); // eslint-disable-line @typescript-eslint/no-empty-function
 
-	setTimeout(() => {
-		controller1.abort();
-		controller2.abort();
-	}, 0);
+	controller1.abort();
+	controller2.abort();
 
 	await assert.rejects(task1);
 	await assert.rejects(task2);
+	assert.equal(queue.size, 0);
+	assert.equal(queue.pending, 0);
+});
+
+test('abort listener is removed when job is completed', async () => {
+	const queue = new PQueue();
+
+	// Track addEventListener/removeEventListener calls
+	let listenerCount = 0;
+	const controller = new AbortController();
+	const originalAddEventListener = controller.signal.addEventListener.bind(controller.signal);
+	const originalRemoveEventListener = controller.signal.removeEventListener.bind(controller.signal);
+
+	controller.signal.addEventListener = function (type, listener, options) {
+		if (type === 'abort') {
+			listenerCount++;
+		}
+
+		originalAddEventListener(type, listener, options);
+	};
+
+	controller.signal.removeEventListener = function (type, listener) {
+		if (type === 'abort') {
+			listenerCount--;
+		}
+
+		originalRemoveEventListener(type, listener);
+	};
+
+	// Add operations and verify listeners are cleaned up
+	for (let index = 0; index < 5; index++) {
+		await queue.add(async () => delay(10), {signal: controller.signal}); // eslint-disable-line no-await-in-loop
+		assert.equal(listenerCount, 0, `Listener ${index + 1} was not cleaned up`);
+	}
+
 	assert.equal(queue.size, 0);
 	assert.equal(queue.pending, 0);
 });
@@ -365,26 +822,31 @@ test('pending promises with abortions counted fast enough', async () => {
 
 	const controller = new AbortController();
 
-	let hasThirdRun = false;
+	let hasFourthRun = false;
 
-	queue.add(async () => delay(1000));
-	queue.add(async () => delay(1000));
+	queue.add(async () => delay(100));
+	queue.add(async () => delay(100));
 	const abortedPromise = queue.add(async () => delay(1000), {signal: controller.signal});
 	queue.add(async () => {
-		hasThirdRun = true;
+		hasFourthRun = true;
 	});
 
+	// Abort before starting — task is removed from queue immediately
 	controller.abort();
-	queue.start();
-
-	await delay(100);
-
-	assert.ok(!hasThirdRun);
 	await assert.rejects(abortedPromise);
 
-	await delay(100);
+	queue.start();
 
-	assert.ok(hasThirdRun);
+	await delay(50);
+
+	// Tasks 1 and 2 are still running
+	assert.ok(!hasFourthRun);
+
+	// Wait for tasks 1 and 2 to complete
+	await delay(150);
+
+	// Task 4 runs after tasks 1 and 2 finish (aborted task no longer blocks it)
+	assert.ok(hasFourthRun);
 });
 
 test('intervalCap', async () => {
@@ -1111,6 +1573,7 @@ test('should not cause stack overflow with many aborted tasks', async () => {
 
 	// This should not cause a stack overflow
 	await Promise.all(promises);
+	await queue.onIdle();
 
 	// Verify queue state
 	assert.equal(queue.pending, 0);
@@ -1476,12 +1939,10 @@ test('rate-limit when all queued tasks are aborted', async () => {
 	controller.abort();
 
 	await Promise.allSettled([abortable1, abortable2]);
-	await delay(10);
+
+	await queue.onIdle();
 
 	// Should clear rate limit when queue becomes empty due to aborts
 	assert.equal(queue.isRateLimited, false);
 	assert.equal(events[1], 'rateLimitCleared');
-
-	await queue.onIdle();
 });
-

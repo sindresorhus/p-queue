@@ -75,6 +75,23 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOpt
 	@deprecated Renamed to `carryoverIntervalCount`.
 	*/
 	readonly carryoverConcurrencyCount?: boolean;
+
+	/**
+	Whether to use strict mode for rate limiting (sliding window algorithm).
+
+	When enabled, ensures that no more than `intervalCap` tasks execute in any rolling `interval` window, rather than resetting the count at fixed intervals. This provides more predictable and evenly distributed execution.
+
+	@default false
+
+	For example, with `intervalCap: 2` and `interval: 1000`:
+	- __Default mode (fixed window)__: Tasks can burst at window boundaries. You could execute 2 tasks at 999ms and 2 more at 1000ms, resulting in 4 tasks within 1ms.
+	- __Strict mode (sliding window)__: Enforces that no more than 2 tasks execute in any 1000ms rolling window, preventing bursts.
+
+	Strict mode is more resource-intensive as it tracks individual execution timestamps. Use it when you need guaranteed rate-limit compliance, such as when interacting with APIs that enforce strict rate limits.
+
+	The `carryoverIntervalCount` option has no effect when `strict` mode is enabled, as strict mode tracks actual execution timestamps rather than counting pending tasks.
+	*/
+	readonly strict?: boolean;
 } & TimeoutOptions;
 
 export type QueueAddOptions = {
@@ -127,5 +144,5 @@ export type TaskOptions = {
 	}
 	```
 	*/
-	readonly signal?: AbortSignal;
+	readonly signal?: AbortSignal | undefined;
 };

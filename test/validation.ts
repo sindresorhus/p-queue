@@ -74,6 +74,23 @@ test('timeout validation in constructor', () => {
 	assert.equal(queue.timeout, 1000);
 });
 
+test('abort before start frees concurrency immediately', async () => {
+	const queue = new PQueue({concurrency: 1});
+
+	const controller = new AbortController();
+	controller.abort();
+
+	// First task is aborted before start
+	await assert.rejects(queue.add(async () => 'ignored', {signal: controller.signal}));
+
+	const started: number[] = [];
+	await queue.add(async () => {
+		started.push(1);
+	});
+
+	assert.deepStrictEqual(started, [1]);
+});
+
 test('carryover mode with no backlog does not report limited', async () => {
 	const queue = new PQueue({
 		interval: 100,
