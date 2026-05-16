@@ -921,14 +921,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	/**
-	The tasks currently being executed. Each task includes its `id`, `priority`, `startTime`, and `timeout` (if set).
+	The tasks currently being executed. Each task includes its `id`, `priority`, `startTime`, `timeout` (if set), and `timeoutRemaining` (milliseconds until the task times out, or `undefined` if no timeout is set).
 
 	Returns an array of task info objects.
 
 	```js
 	import PQueue from 'p-queue';
 
-	const queue = new PQueue({concurrency: 2});
+	const queue = new PQueue({concurrency: 2, timeout: 10000});
 
 	// Add tasks with IDs for better debugging
 	queue.add(() => fetchUser(123), {id: 'user-123'});
@@ -940,12 +940,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	//   id: 'user-123',
 	//   priority: 0,
 	//   startTime: 1759253001716,
-	//   timeout: undefined
+	//   timeout: 10000,
+	//   timeoutRemaining: 9700
 	// }, {
 	//   id: 'posts-456',
 	//   priority: 1,
 	//   startTime: 1759253001916,
-	//   timeout: undefined
+	//   timeout: 10000,
+	//   timeoutRemaining: 9900
 	// }]
 	```
 	*/
@@ -954,9 +956,13 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		readonly priority: number;
 		readonly startTime: number;
 		readonly timeout?: number;
+		readonly timeoutRemaining?: number;
 	}> {
 		// Return fresh array with fresh objects to prevent mutations
-		return [...this.#runningTasks.values()].map(task => ({...task}));
+		return [...this.#runningTasks.values()].map(task => ({
+			...task,
+			timeoutRemaining: task.timeout ? Math.max(0, task.startTime + task.timeout - Date.now()) : undefined,
+		}));
 	}
 }
 
