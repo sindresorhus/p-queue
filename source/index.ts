@@ -666,12 +666,15 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	Note that this only limits the number of items waiting to start. There could still be up to `concurrency` jobs already running that this call does not include in its calculation.
 	*/
 	async onSizeLessThan(limit: number): Promise<void> {
-		// Instantly resolve if the queue is empty.
+		// Instantly resolve if the size is already below the limit.
 		if (this.#queue.size < limit) {
 			return;
 		}
 
-		await this.#onEvent('next', () => this.#queue.size < limit);
+		// Listen on both `'next'` (task completion, queued abort, `clear()`) and `'active'` (every dequeue),
+		// so waiters wake even when the queue drains without a completion (`start()`, a runtime `concurrency`
+		// increase, or an interval tick).
+		await this.#onEvent(['next', 'active'], () => this.#queue.size < limit);
 	}
 
 	/**
@@ -764,18 +767,25 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		});
 	}
 
-	async #onEvent(event: EventName, filter?: () => boolean): Promise<void> {
+	async #onEvent(events: EventName | EventName[], filter?: () => boolean): Promise<void> {
+		const eventList = Array.isArray(events) ? events : [events];
+
 		return new Promise(resolve => {
 			const listener = () => {
 				if (filter && !filter()) {
 					return;
 				}
 
-				this.off(event, listener);
+				for (const event of eventList) {
+					this.off(event, listener);
+				}
+
 				resolve();
 			};
 
-			this.on(event, listener);
+			for (const event of eventList) {
+				this.on(event, listener);
+			}
 		});
 	}
 
