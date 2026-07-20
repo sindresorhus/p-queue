@@ -450,6 +450,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			id: options.id ?? (this.#idAssigner++).toString(),
 		};
 
+		if (options.timeout !== undefined && !(Number.isFinite(options.timeout) && options.timeout > 0)) {
+			throw new TypeError(`Expected \`timeout\` to be a positive finite number, got \`${options.timeout}\` (${typeof options.timeout})`);
+		}
+
 		return new Promise((resolve, reject) => {
 			// Create a unique symbol for tracking this task
 			const taskSymbol = Symbol(`task-${options.id}`);
@@ -489,7 +493,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 					let operation = function_({signal: options.signal});
 
-					if (options.timeout) {
+					if (options.timeout !== undefined) {
 						operation = pTimeout(Promise.resolve(operation), {
 							milliseconds: options.timeout,
 							message: `Task timed out after ${options.timeout}ms (queue has ${this.#pending} running, ${this.#queue.size} waiting)`,
