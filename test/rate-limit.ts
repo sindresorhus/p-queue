@@ -43,6 +43,56 @@ test('rate-limit rapid pause/start cycles', async () => {
 	assert.equal(results.length, 4);
 });
 
+test('rate-limit preserves the interval count for re-entrant task additions', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 2,
+	});
+
+	const starts: number[] = [];
+	const addTask = (index: number): void => {
+		queue.add(() => {
+			starts.push(index);
+
+			if (index < 4) {
+				addTask(index + 1);
+			}
+		});
+	};
+
+	addTask(0);
+	assert.deepEqual(starts, [0, 1]);
+
+	await queue.onIdle();
+	assert.deepEqual(starts, [0, 1, 2, 3, 4]);
+});
+
+test('rate-limit preserves the interval count for re-entrant active listeners', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 2,
+	});
+
+	const starts: number[] = [];
+	let nextTask = 0;
+	queue.on('active', () => {
+		if (nextTask < 5) {
+			const taskIndex = nextTask++;
+			queue.add(() => {
+				starts.push(taskIndex);
+			});
+		}
+	});
+
+	queue.add(() => {
+		starts.push(-1);
+	});
+	assert.equal(starts.length, 2);
+
+	await queue.onIdle();
+	assert.equal(starts.length, 6);
+});
+
 test('rate-limit edge case with zero-interval', async () => {
 	// Zero interval should effectively disable rate limiting
 	const queue = new PQueue({

@@ -507,6 +507,27 @@ test('strict mode after queue becomes idle', async () => {
 	assert.ok(elapsed < 50, `Second batch should execute immediately after idle, took ${elapsed}ms`);
 });
 
+test('strict mode frees a slot as soon as the oldest tick ages out, even with spread ticks', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 2,
+		strict: true,
+	});
+
+	// Consume both slots spread across the window: tick at ≈0 and tick at ≈60.
+	await queue.add(async () => undefined);
+	await delay(60);
+	await queue.add(async () => undefined);
+
+	// At ≈120ms the first tick (≈0) has aged out but the second (≈60) has not, so exactly one slot is free and the next task should run immediately.
+	await delay(60);
+	const start = Date.now();
+	await queue.add(async () => undefined);
+	const elapsed = Date.now() - start;
+
+	assert.ok(elapsed < 40, `Task should run as soon as the oldest tick ages out, but waited ${elapsed}ms`);
+});
+
 test('strict mode prevents boundary bursts', async () => {
 	// This test verifies that strict mode prevents the boundary burst problem
 	// that occurs with fixed window mode

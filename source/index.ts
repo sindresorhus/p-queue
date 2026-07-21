@@ -27,12 +27,15 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	readonly #interval: number;
 
+	/*
+	Timestamp when the current interval window ends. Kept accurate at every window transition: `#initializeIntervalIfNeeded` sets it when a window starts and `#onInterval` advances it as the recurring timer rolls into each new window. This is the source of truth for whether a task added after the queue goes idle belongs to a fresh window, so it must not go stale.
+	*/
 	#intervalEnd = 0;
 
-	#lastExecutionTime = 0;
-
+	// Recurring timer that drives windows while the queue is actively processing. Absent (`undefined`) once the queue goes idle.
 	#intervalId?: NodeJS.Timeout;
 
+	// One-shot timer used while idle to resume at the next window boundary, since `#intervalId` is cleared when idle.
 	#timeoutId?: NodeJS.Timeout;
 
 	readonly #strict: boolean;
@@ -234,26 +237,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			return false;
 		}
 
-		// Fixed window mode (original logic)
+		// Fixed window mode. While the recurring timer runs it already governs the windows, so pausing is only decided here when the queue is idle (the timer is absent) and we rely on `#intervalEnd`.
 		if (this.#intervalId === undefined) {
 			const delay = this.#intervalEnd - now;
 			if (delay < 0) {
-				// If the interval has expired while idle, check if we should enforce the interval
-				// from the last task execution. This ensures proper spacing between tasks even
-				// when the queue becomes empty and then new tasks are added.
-				if (this.#lastExecutionTime > 0) {
-					const timeSinceLastExecution = now - this.#lastExecutionTime;
-					if (timeSinceLastExecution < this.#interval) {
-						// Not enough time has passed since the last task execution
-						this.#createIntervalTimeout(this.#interval - timeSinceLastExecution);
-						return true;
-					}
-				}
-
-				// Enough time has passed or no previous execution, allow execution
-				this.#intervalCount = (this.#carryoverIntervalCount) ? this.#pending : 0;
+				// The interval expired while idle, so reset the count for the new window.
+				this.#intervalCount = this.#carryoverIntervalCount ? this.#pending : 0;
 			} else {
-				// Act as the interval is pending
+				// Still inside the previous window; wait out the remaining time before starting the next task.
 				this.#createIntervalTimeout(delay);
 				return true;
 			}
@@ -323,12 +314,12 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					this.#scheduleRateLimitUpdate();
 				}
 
-				this.emit('active');
-				job();
-
 				if (canInitializeInterval) {
 					this.#initializeIntervalIfNeeded();
 				}
+
+				this.emit('active');
+				job();
 
 				taskStarted = true;
 			}
@@ -360,8 +351,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	#onInterval(): void {
 		// Non-strict mode uses interval timers and intervalCount
 		if (!this.#strict) {
-			if (this.#intervalCount === 0 && this.#pending === 0 && this.#intervalId) {
-				this.#clearIntervalTimer();
+			// Only touch the recurring interval timer here. When resumed via a timeout instead, `#intervalId` is undefined and `#initializeIntervalIfNeeded` sets `#intervalEnd` right after.
+			if (this.#intervalId !== undefined) {
+				if (this.#intervalCount === 0 && this.#pending === 0) {
+					this.#clearIntervalTimer();
+				} else {
+					// The recurring timer fired, starting a new window. Keep the boundary accurate so tasks added after the queue later goes idle are scheduled against the correct window.
+					this.#intervalEnd = Date.now() + this.#interval;
+				}
 			}
 
 			this.#intervalCount = this.#carryoverIntervalCount ? this.#pending : 0;
@@ -488,8 +485,6 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 						throw error;
 					}
-
-					this.#lastExecutionTime = Date.now();
 
 					let operation = function_({signal: options.signal});
 
