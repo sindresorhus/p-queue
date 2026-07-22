@@ -548,7 +548,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					removeQueuedTask();
 					reject(signal.reason);
 					this.#tryToStartAnother();
-          this.dispatchEvent(new Event('next'));
+					this.dispatchEvent(new Event('next'));
 				};
 
 				cleanupQueueAbortHandler = () => {
