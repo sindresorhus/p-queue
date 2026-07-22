@@ -866,7 +866,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		if (this.#isIntervalIgnored || this.#queue.size === 0) {
 			if (previous) {
 				this.#rateLimitedInInterval = false;
-        this.dispatchEvent(new Event('rateLimitCleared'));
+				this.dispatchEvent(new Event('rateLimitCleared'));
 			}
 
 			return;
