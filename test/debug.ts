@@ -1,5 +1,5 @@
 import {test} from 'node:test';
-import assert from 'node:assert';
+import assert from 'node:assert/strict';
 import delay from 'delay';
 import PQueue from '../source/index.js';
 
@@ -118,6 +118,63 @@ test('runningTasks returns fresh arrays', async () => {
 	running1.push({id: 'fake', priority: 0, startTime: Date.now()});
 	assert.notDeepEqual(running1, running2);
 	assert.equal(queue.runningTasks.length, 1);
+
+	await queue.onIdle();
+});
+
+test('runningTasks includes timeoutRemaining for tasks with timeout', async () => {
+	const queue = new PQueue({concurrency: 2, timeout: 5000});
+
+	queue.add(async () => delay(200), {id: 'with-timeout'});
+	queue.add(async () => delay(200), {id: 'custom-timeout', timeout: 2000});
+
+	await delay(10);
+
+	const running = queue.runningTasks;
+	const withTimeout = running.find(t => t.id === 'with-timeout');
+	const customTimeout = running.find(t => t.id === 'custom-timeout');
+
+	assert.ok(withTimeout);
+	assert.ok(typeof withTimeout.timeoutRemaining === 'number');
+	assert.ok(withTimeout.timeoutRemaining! > 0);
+	assert.ok(withTimeout.timeoutRemaining! <= 5000);
+
+	assert.ok(customTimeout);
+	assert.ok(typeof customTimeout.timeoutRemaining === 'number');
+	assert.ok(customTimeout.timeoutRemaining! > 0);
+	assert.ok(customTimeout.timeoutRemaining! <= 2000);
+
+	await queue.onIdle();
+});
+
+test('runningTasks timeoutRemaining is undefined when no timeout is set', async () => {
+	const queue = new PQueue({concurrency: 1});
+
+	queue.add(async () => delay(100), {id: 'no-timeout'});
+
+	await delay(10);
+
+	const running = queue.runningTasks;
+	assert.equal(running.length, 1);
+	assert.equal(running[0].timeoutRemaining, undefined);
+
+	await queue.onIdle();
+});
+
+test('runningTasks timeoutRemaining decreases over time', async () => {
+	const queue = new PQueue({concurrency: 1, timeout: 5000});
+
+	queue.add(async () => delay(300), {id: 'task'});
+
+	await delay(10);
+
+	const remaining1 = queue.runningTasks[0].timeoutRemaining!;
+
+	await delay(100);
+
+	const remaining2 = queue.runningTasks[0].timeoutRemaining!;
+
+	assert.ok(remaining2 < remaining1, `Expected ${remaining2} < ${remaining1}`);
 
 	await queue.onIdle();
 });

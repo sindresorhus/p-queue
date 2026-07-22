@@ -109,7 +109,7 @@ await queue.add(() => slowTask(), {timeout: 10000});
 Type: `boolean`\
 Default: `true`
 
-Whether queue tasks within concurrency limit, are auto-executed as soon as they're added.
+Whether queue tasks within the concurrency limit are auto-executed as soon as they're added.
 
 ##### queueClass
 
@@ -476,14 +476,14 @@ setInterval(() => {
 
 #### .runningTasks
 
-The tasks currently being executed. Each task includes its `id`, `priority`, `startTime`, and `timeout` (if set).
+The tasks currently being executed. Each task includes its `id`, `priority`, `startTime`, `timeout` (if set), and `timeoutRemaining` (milliseconds until the task times out, or `undefined` if no timeout is set).
 
 Returns an array of task info objects.
 
 ```js
 import PQueue from 'p-queue';
 
-const queue = new PQueue({concurrency: 2});
+const queue = new PQueue({concurrency: 2, timeout: 10000});
 
 // Add tasks with IDs for better debugging
 queue.add(() => fetchUser(123), {id: 'user-123'});
@@ -497,13 +497,15 @@ console.log(queue.runningTasks);
 		id: 'user-123',
 		priority: 0,
 		startTime: 1759253001716,
-		timeout: undefined
+		timeout: 10000,
+		timeoutRemaining: 9700
 	},
 	{
 		id: 'posts-456',
 		priority: 1,
 		startTime: 1759253001916,
-		timeout: undefined
+		timeout: 10000,
+		timeoutRemaining: 9900
 	}
 ]
 */

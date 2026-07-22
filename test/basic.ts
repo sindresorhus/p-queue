@@ -316,6 +316,129 @@ test('.onSizeLessThan() resolves after clear()', async () => {
 	assert.equal(queue.pending, 0);
 });
 
+test('.onSizeLessThan() resolves when start() drains the queue', async () => {
+	const queue = new PQueue({concurrency: 3, autoStart: false});
+
+	for (let index = 0; index < 5; index++) {
+		queue.add(async () => delay(1000));
+	}
+
+	assert.equal(queue.size, 5);
+
+	const sizePromise = queue.onSizeLessThan(3);
+
+	queue.start();
+
+	await Promise.race([
+		sizePromise,
+		(async () => {
+			await delay(100);
+			throw new Error('start() draining the queue should resolve onSizeLessThan() waiters');
+		})(),
+	]);
+
+	// Resolved on the synchronous drain, not on a task completion.
+	assert.equal(queue.size, 2);
+	assert.equal(queue.pending, 3);
+});
+
+test('.onSizeLessThan() resolves when concurrency is raised at runtime', async () => {
+	const queue = new PQueue({concurrency: 1});
+
+	for (let index = 0; index < 5; index++) {
+		queue.add(async () => delay(1000));
+	}
+
+	assert.equal(queue.size, 4);
+	assert.equal(queue.pending, 1);
+
+	const sizePromise = queue.onSizeLessThan(2);
+
+	queue.concurrency = 4;
+
+	await Promise.race([
+		sizePromise,
+		(async () => {
+			await delay(100);
+			throw new Error('raising concurrency should resolve onSizeLessThan() waiters');
+		})(),
+	]);
+
+	assert.equal(queue.size, 1);
+	assert.equal(queue.pending, 4);
+});
+
+test('.onSizeLessThan() resolves when a rate-limit interval tick drains the queue', async () => {
+	// Under rate limiting, tasks are dequeued on interval ticks rather than on completions.
+	const queue = new PQueue({intervalCap: 2, interval: 100});
+
+	for (let index = 0; index < 5; index++) {
+		queue.add(async () => delay(1000));
+	}
+
+	// The first interval immediately dequeues up to `intervalCap`.
+	assert.equal(queue.size, 3);
+	assert.equal(queue.pending, 2);
+
+	const time = timeSpan();
+
+	// Needs a second interval tick (not a completion) to drop below the limit.
+	await queue.onSizeLessThan(3);
+
+	// Resolved via the interval tick (~100ms), long before the 1000ms tasks could complete,
+	// so all four dequeued tasks are still running (none completed to drive the resolution).
+	assert.ok(time() < 500, `Expected to resolve on the interval tick, took ${time()}ms`);
+	assert.equal(queue.size, 1);
+	assert.equal(queue.pending, 4);
+});
+
+test('.onSizeLessThan() resolves multiple waiters with different limits on a single drain', async () => {
+	const queue = new PQueue({concurrency: 4, autoStart: false});
+
+	for (let index = 0; index < 6; index++) {
+		queue.add(async () => delay(1000));
+	}
+
+	assert.equal(queue.size, 6);
+
+	const waiters = Promise.all([
+		queue.onSizeLessThan(5),
+		queue.onSizeLessThan(4),
+		queue.onSizeLessThan(3),
+	]);
+
+	queue.start();
+
+	await Promise.race([
+		waiters,
+		(async () => {
+			await delay(100);
+			throw new Error('all waiters should resolve on the synchronous drain');
+		})(),
+	]);
+
+	// Draining to size 2 satisfies every limit above, without any completion.
+	assert.equal(queue.size, 2);
+	assert.equal(queue.pending, 4);
+});
+
+test('.onSizeLessThan() removes its listeners once resolved', async () => {
+	const queue = new PQueue({concurrency: 3, autoStart: false});
+
+	for (let index = 0; index < 5; index++) {
+		queue.add(async () => delay(1000));
+	}
+
+	const sizePromise = queue.onSizeLessThan(3);
+
+	queue.start();
+	await sizePromise;
+
+	// Both the `'next'` and `'active'` listeners must be cleaned up to avoid leaking on repeated calls.
+	assert.equal(queue.listenerCount('next'), 0);
+	assert.equal(queue.listenerCount('active'), 0);
+});
+
 test('.onIdle() - no pending', async () => {
 	const queue = new PQueue();
 	assert.equal(queue.size, 0);

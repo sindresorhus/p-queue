@@ -26,12 +26,15 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	readonly #interval: number;
 
+	/*
+	Timestamp when the current interval window ends. Kept accurate at every window transition: `#initializeIntervalIfNeeded` sets it when a window starts and `#onInterval` advances it as the recurring timer rolls into each new window. This is the source of truth for whether a task added after the queue goes idle belongs to a fresh window, so it must not go stale.
+	*/
 	#intervalEnd = 0;
 
-	#lastExecutionTime = 0;
-
+	// Recurring timer that drives windows while the queue is actively processing. Absent (`undefined`) once the queue goes idle.
 	#intervalId?: NodeJS.Timeout;
 
+	// One-shot timer used while idle to resume at the next window boundary, since `#intervalId` is cleared when idle.
 	#timeoutId?: NodeJS.Timeout;
 
 	readonly #strict: boolean;
@@ -233,26 +236,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			return false;
 		}
 
-		// Fixed window mode (original logic)
+		// Fixed window mode. While the recurring timer runs it already governs the windows, so pausing is only decided here when the queue is idle (the timer is absent) and we rely on `#intervalEnd`.
 		if (this.#intervalId === undefined) {
 			const delay = this.#intervalEnd - now;
 			if (delay < 0) {
-				// If the interval has expired while idle, check if we should enforce the interval
-				// from the last task execution. This ensures proper spacing between tasks even
-				// when the queue becomes empty and then new tasks are added.
-				if (this.#lastExecutionTime > 0) {
-					const timeSinceLastExecution = now - this.#lastExecutionTime;
-					if (timeSinceLastExecution < this.#interval) {
-						// Not enough time has passed since the last task execution
-						this.#createIntervalTimeout(this.#interval - timeSinceLastExecution);
-						return true;
-					}
-				}
-
-				// Enough time has passed or no previous execution, allow execution
-				this.#intervalCount = (this.#carryoverIntervalCount) ? this.#pending : 0;
+				// The interval expired while idle, so reset the count for the new window.
+				this.#intervalCount = this.#carryoverIntervalCount ? this.#pending : 0;
 			} else {
-				// Act as the interval is pending
+				// Still inside the previous window; wait out the remaining time before starting the next task.
 				this.#createIntervalTimeout(delay);
 				return true;
 			}
@@ -322,12 +313,12 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					this.#scheduleRateLimitUpdate();
 				}
 
-				this.dispatchEvent(new Event('active'));
-				job();
-
 				if (canInitializeInterval) {
 					this.#initializeIntervalIfNeeded();
 				}
+
+				this.dispatchEvent(new Event('active'));
+				job();
 
 				taskStarted = true;
 			}
@@ -359,8 +350,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	#onInterval(): void {
 		// Non-strict mode uses interval timers and intervalCount
 		if (!this.#strict) {
-			if (this.#intervalCount === 0 && this.#pending === 0 && this.#intervalId) {
-				this.#clearIntervalTimer();
+			// Only touch the recurring interval timer here. When resumed via a timeout instead, `#intervalId` is undefined and `#initializeIntervalIfNeeded` sets `#intervalEnd` right after.
+			if (this.#intervalId !== undefined) {
+				if (this.#intervalCount === 0 && this.#pending === 0) {
+					this.#clearIntervalTimer();
+				} else {
+					// The recurring timer fired, starting a new window. Keep the boundary accurate so tasks added after the queue later goes idle are scheduled against the correct window.
+					this.#intervalEnd = Date.now() + this.#interval;
+				}
 			}
 
 			this.#intervalCount = this.#carryoverIntervalCount ? this.#pending : 0;
@@ -449,6 +446,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			id: options.id ?? (this.#idAssigner++).toString(),
 		};
 
+		if (options.timeout !== undefined && !(Number.isFinite(options.timeout) && options.timeout > 0)) {
+			throw new TypeError(`Expected \`timeout\` to be a positive finite number, got \`${options.timeout}\` (${typeof options.timeout})`);
+		}
+
 		return new Promise((resolve, reject) => {
 			// Create a unique symbol for tracking this task
 			const taskSymbol = Symbol(`task-${options.id}`);
@@ -484,11 +485,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 						throw error;
 					}
 
-					this.#lastExecutionTime = Date.now();
-
 					let operation = function_({signal: options.signal});
 
-					if (options.timeout) {
+					if (options.timeout !== undefined) {
 						operation = pTimeout(Promise.resolve(operation), {
 							milliseconds: options.timeout,
 							message: `Task timed out after ${options.timeout}ms (queue has ${this.#pending} running, ${this.#queue.size} waiting)`,
@@ -549,7 +548,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					removeQueuedTask();
 					reject(signal.reason);
 					this.#tryToStartAnother();
-					this.emit('next');
+          this.dispatchEvent(new Event('next'));
 				};
 
 				cleanupQueueAbortHandler = () => {
@@ -633,14 +632,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		this.#updateRateLimitState();
 
 		// Emit events so waiters (onEmpty, onIdle, onSizeLessThan) can resolve
-		this.emit('empty');
+		this.dispatchEvent(new Event('empty'));
 
 		if (this.#pending === 0) {
 			this.#clearTimeoutTimer();
-			this.emit('idle');
+			this.dispatchEvent(new Event('idle'));
 		}
 
-		this.emit('next');
+		this.dispatchEvent(new Event('next'));
 	}
 
 	/**
@@ -665,12 +664,15 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	Note that this only limits the number of items waiting to start. There could still be up to `concurrency` jobs already running that this call does not include in its calculation.
 	*/
 	async onSizeLessThan(limit: number): Promise<void> {
-		// Instantly resolve if the queue is empty.
+		// Instantly resolve if the size is already below the limit.
 		if (this.#queue.size < limit) {
 			return;
 		}
 
-		await this.#onEvent('next', () => this.#queue.size < limit);
+		// Listen on both `'next'` (task completion, queued abort, `clear()`) and `'active'` (every dequeue),
+		// so waiters wake even when the queue drains without a completion (`start()`, a runtime `concurrency`
+		// increase, or an interval tick).
+		await this.#onEvent(['next', 'active'], () => this.#queue.size < limit);
 	}
 
 	/**
@@ -763,18 +765,25 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		});
 	}
 
-	async #onEvent(event: EventName, filter?: () => boolean): Promise<void> {
+	async #onEvent(events: EventName | EventName[], filter?: () => boolean): Promise<void> {
+		const eventList = Array.isArray(events) ? events : [events];
+
 		return new Promise(resolve => {
 			const listener = () => {
 				if (filter && !filter()) {
 					return;
 				}
 
-				this.removeEventListener(event, listener);
+				for (const event of eventList) {
+					this.removeEventListener(event, listener);
+				}
+
 				resolve();
 			};
 
-			this.addEventListener(event, listener);
+			for (const event of eventList) {
+				this.addEventListener(event, listener);
+			}
 		});
 	}
 
@@ -857,7 +866,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		if (this.#isIntervalIgnored || this.#queue.size === 0) {
 			if (previous) {
 				this.#rateLimitedInInterval = false;
-				this.emit('rateLimitCleared');
+        this.dispatchEvent(new Event('rateLimitCleared'));
 			}
 
 			return;
@@ -920,14 +929,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	/**
-	The tasks currently being executed. Each task includes its `id`, `priority`, `startTime`, and `timeout` (if set).
+	The tasks currently being executed. Each task includes its `id`, `priority`, `startTime`, `timeout` (if set), and `timeoutRemaining` (milliseconds until the task times out, or `undefined` if no timeout is set).
 
 	Returns an array of task info objects.
 
 	```js
 	import PQueue from 'p-queue';
 
-	const queue = new PQueue({concurrency: 2});
+	const queue = new PQueue({concurrency: 2, timeout: 10000});
 
 	// Add tasks with IDs for better debugging
 	queue.add(() => fetchUser(123), {id: 'user-123'});
@@ -939,12 +948,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	//   id: 'user-123',
 	//   priority: 0,
 	//   startTime: 1759253001716,
-	//   timeout: undefined
+	//   timeout: 10000,
+	//   timeoutRemaining: 9700
 	// }, {
 	//   id: 'posts-456',
 	//   priority: 1,
 	//   startTime: 1759253001916,
-	//   timeout: undefined
+	//   timeout: 10000,
+	//   timeoutRemaining: 9900
 	// }]
 	```
 	*/
@@ -953,9 +964,13 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		readonly priority: number;
 		readonly startTime: number;
 		readonly timeout?: number;
+		readonly timeoutRemaining?: number;
 	}> {
 		// Return fresh array with fresh objects to prevent mutations
-		return [...this.#runningTasks.values()].map(task => ({...task}));
+		return [...this.#runningTasks.values()].map(task => ({
+			...task,
+			timeoutRemaining: task.timeout ? Math.max(0, task.startTime + task.timeout - Date.now()) : undefined,
+		}));
 	}
 }
 

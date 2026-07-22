@@ -74,6 +74,25 @@ test('timeout validation in constructor', () => {
 	assert.equal(queue.timeout, 1000);
 });
 
+test('timeout validation in add', async () => {
+	const expectedError = {
+		name: 'TypeError',
+		message: /Expected `timeout` to be a positive finite number/,
+	};
+
+	const zeroTimeoutQueue = new PQueue({timeout: 10});
+	await assert.rejects(
+		zeroTimeoutQueue.add(async () => delay(30), {timeout: 0}),
+		expectedError,
+	);
+
+	const negativeTimeoutQueue = new PQueue();
+	await assert.rejects(
+		negativeTimeoutQueue.add(async () => 'ignored', {timeout: -1}),
+		expectedError,
+	);
+});
+
 test('abort before start frees concurrency immediately', async () => {
 	const queue = new PQueue({concurrency: 1});
 

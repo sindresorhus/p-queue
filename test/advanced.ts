@@ -999,6 +999,92 @@ test('interval should be maintained when using await between adds (issue #182)',
 	}
 });
 
+test('task added in a fresh window runs immediately after queue went idle mid-window (issue #251)', async () => {
+	const queue = new PQueue({intervalCap: 2, interval: 200});
+
+	// Window [0, 200): consume slot 1 at t≈0.
+	queue.add(() => undefined);
+
+	// Consume slot 2 later in the window at t≈120.
+	await delay(120);
+	queue.add(() => undefined);
+	await queue.onIdle();
+
+	// Now past the window boundary at t≈220. Both slots of the fresh window should be available immediately.
+	await delay(100);
+	const start = Date.now();
+	queue.add(() => undefined);
+	await queue.add(() => undefined);
+	const elapsed = Date.now() - start;
+
+	assert.ok(elapsed < 50, `Both tasks should start immediately in the new window, but waited ${elapsed}ms`);
+});
+
+test('fresh window after idle still enforces the cap for the following task (issue #251)', async () => {
+	const queue = new PQueue({intervalCap: 2, interval: 200});
+
+	// Consume both slots of the first window, then let the queue drain.
+	queue.add(() => undefined);
+	await delay(120);
+	queue.add(() => undefined);
+	await queue.onIdle();
+
+	// Past the boundary: the fresh window grants exactly two slots, so a third task must wait for the next window.
+	await delay(100);
+	const timestamps: number[] = [];
+	const start = Date.now();
+	queue.add(() => {
+		timestamps.push(Date.now() - start);
+	});
+	queue.add(() => {
+		timestamps.push(Date.now() - start);
+	});
+	await queue.add(() => {
+		timestamps.push(Date.now() - start);
+	});
+
+	assert.ok(timestamps[0] < 50, `First task should be immediate, waited ${timestamps[0]}ms`);
+	assert.ok(timestamps[1] < 50, `Second task should be immediate, waited ${timestamps[1]}ms`);
+	assert.ok(timestamps[2] >= 170, `Third task should wait for the next window, but ran after ${timestamps[2]}ms`);
+});
+
+test('carryoverIntervalCount does not break the fresh window after idle mid-window (issue #251)', async () => {
+	const queue = new PQueue({intervalCap: 2, interval: 200, carryoverIntervalCount: true});
+
+	queue.add(() => undefined);
+	await delay(120);
+	queue.add(() => undefined);
+	await queue.onIdle();
+
+	// With no pending tasks, carrying the count over resets it to zero, so the fresh window is fully available.
+	await delay(100);
+	const start = Date.now();
+	queue.add(() => undefined);
+	await queue.add(() => undefined);
+	const elapsed = Date.now() - start;
+
+	assert.ok(elapsed < 50, `Both tasks should start immediately in the new window, but waited ${elapsed}ms`);
+});
+
+test('task added after going idle but before the boundary still waits for the current window (issue #251)', async () => {
+	const queue = new PQueue({intervalCap: 2, interval: 200});
+	const windowStart = Date.now();
+
+	// Fill both slots spread across the window, after which the queue goes idle.
+	queue.add(() => undefined);
+	await delay(120);
+	queue.add(() => undefined);
+	await queue.onIdle();
+
+	// Added while still inside the window [0, 200): the cap is reached, so it must wait for the boundary, not run immediately. This guards against the reset firing before the window has actually expired.
+	const start = Date.now();
+	await queue.add(() => undefined);
+	const waited = Date.now() - start;
+
+	assert.ok(waited >= 40, `Task should wait for the current window to end, but only waited ${waited}ms`);
+	assert.ok(Date.now() - windowStart >= 190, 'Task should run at the window boundary');
+});
+
 test('interval maintained when queue becomes empty multiple times', async () => {
 	const queue = new PQueue({
 		intervalCap: 1,
