@@ -16,11 +16,12 @@ Promise queue with concurrency control.
 export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = QueueAddOptions> extends EventEmitter<EventName> { // eslint-disable-line @typescript-eslint/naming-convention
 	readonly #carryoverIntervalCount: boolean;
 
-	readonly #isIntervalIgnored: boolean;
+	// The `!` is needed because it's assigned via `#updateIsIntervalIgnored()` in the constructor.
+	#isIntervalIgnored!: boolean;
 
 	#intervalCount = 0;
 
-	readonly #intervalCap: number;
+	#intervalCap: number;
 
 	#rateLimitedInInterval = false;
 	#rateLimitFlushScheduled = false;
@@ -119,10 +120,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		// TODO: Remove this fallback in the next major version
 		// eslint-disable-next-line @typescript-eslint/no-deprecated
 		this.#carryoverIntervalCount = options.carryoverIntervalCount ?? options.carryoverConcurrencyCount ?? false;
-		this.#isIntervalIgnored = options.intervalCap === Number.POSITIVE_INFINITY || options.interval === 0;
 		this.#intervalCap = options.intervalCap;
 		this.#interval = options.interval;
 		this.#strict = options.strict!;
+		this.#updateIsIntervalIgnored();
 		this.#queue = new options.queueClass!();
 		this.#queueClass = options.queueClass!;
 		this.concurrency = options.concurrency!;
@@ -386,6 +387,29 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		}
 
 		this.#concurrency = newConcurrency;
+
+		this.#processQueue();
+	}
+
+	#updateIsIntervalIgnored(): void {
+		this.#isIntervalIgnored = this.#intervalCap === Number.POSITIVE_INFINITY || this.#interval === 0;
+	}
+
+	get intervalCap(): number {
+		return this.#intervalCap;
+	}
+
+	set intervalCap(newIntervalCap: number) {
+		if (!(typeof newIntervalCap === 'number' && newIntervalCap >= 1)) {
+			throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${newIntervalCap}\` (${typeof newIntervalCap})`);
+		}
+
+		if (this.#strict && newIntervalCap === Number.POSITIVE_INFINITY) {
+			throw new TypeError('The `strict` option requires a finite `intervalCap`');
+		}
+
+		this.#intervalCap = newIntervalCap;
+		this.#updateIsIntervalIgnored();
 
 		this.#processQueue();
 	}

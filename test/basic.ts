@@ -899,6 +899,65 @@ test('enforce number in options.intervalCap', () => {
 	});
 });
 
+test('enforce number in queue.intervalCap', () => {
+	assert.throws(
+		() => {
+			(new PQueue()).intervalCap = 0;
+		},
+		{constructor: TypeError},
+	);
+
+	assert.throws(
+		() => {
+			// @ts-expect-error Testing
+			(new PQueue()).intervalCap = undefined;
+		},
+		{constructor: TypeError},
+	);
+
+	assert.doesNotThrow(() => {
+		(new PQueue()).intervalCap = 1;
+	});
+
+	assert.doesNotThrow(() => {
+		(new PQueue()).intervalCap = 10;
+	});
+
+	assert.doesNotThrow(() => {
+		(new PQueue()).intervalCap = Number.POSITIVE_INFINITY;
+	});
+});
+
+test('queue.intervalCap requires a finite value when strict', () => {
+	const queue = new PQueue({intervalCap: 1, interval: 100, strict: true});
+
+	assert.throws(
+		() => {
+			queue.intervalCap = Number.POSITIVE_INFINITY;
+		},
+		{constructor: TypeError},
+	);
+});
+
+test('queue.intervalCap can be changed at runtime', async () => {
+	const queue = new PQueue({intervalCap: 1, interval: 100});
+
+	for (let index = 0; index < 4; index++) {
+		queue.add(async () => delay(1000));
+	}
+
+	// Only `intervalCap` (1) tasks are dequeued up front.
+	assert.equal(queue.pending, 1);
+	assert.equal(queue.size, 3);
+
+	// Raising the cap should immediately let more tasks start, without
+	// waiting for another interval tick.
+	queue.intervalCap = 3;
+
+	assert.equal(queue.pending, 3);
+	assert.equal(queue.size, 1);
+});
+
 test('enforce finite in options.interval', () => {
 	assert.throws(
 		() => {

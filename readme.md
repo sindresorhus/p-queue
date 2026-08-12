@@ -125,6 +125,8 @@ Minimum: `1`
 
 The max number of runs in the given interval of time.
 
+Can be changed after the queue is created via `queue.intervalCap`.
+
 ##### interval
 
 Type: `number`\
@@ -438,6 +440,8 @@ queue.timeout = 10000;
 ```
 
 #### [.concurrency](#concurrency)
+
+#### [.intervalCap](#intervalcap)
 
 #### .isPaused
 
