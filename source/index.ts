@@ -318,8 +318,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					this.#initializeIntervalIfNeeded();
 				}
 
-				this.emit('active');
+				// The task is started before the event, so that a listener which enqueues more work sees the
+				// concurrency slot already taken. Emitting first let a listener start a second task past the limit.
 				job();
+				this.emit('active');
 
 				taskStarted = true;
 			}

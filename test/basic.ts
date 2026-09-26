@@ -1465,3 +1465,32 @@ test('.onError() - works when called before adding tasks', async () => {
 		{message: 'Early error'},
 	);
 });
+
+test('an active listener cannot exceed the concurrency limit', async t => {
+	// `active` was emitted before `pending` was incremented, so a listener that enqueued work re-entered the
+	// start check while the limit still looked free, and a second task ran alongside the first.
+	const queue = new PQueue({concurrency: 1});
+	let live = 0;
+	let maxLive = 0;
+	let added = false;
+
+	const task = async () => {
+		live++;
+		maxLive = Math.max(maxLive, live);
+		await delay(10);
+		live--;
+	};
+
+	queue.on('active', () => {
+		if (!added) {
+			added = true;
+			queue.add(task);
+		}
+	});
+
+	await queue.add(task);
+	await queue.onIdle();
+
+	assert.strictEqual(maxLive, 1);
+	assert.strictEqual(queue.size, 0);
+});
