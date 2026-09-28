@@ -31,6 +31,8 @@ test('strict mode enforces sliding window rate limiting', async () => {
 
 	await Promise.all(promises);
 
+	assert.equal(executionTimes.length, 6);
+
 	// Verify sliding window constraint: no more than 2 tasks in any 1000ms window
 	assertSlidingWindow(executionTimes, 1000, 2);
 });
@@ -86,8 +88,10 @@ test('strict mode vs fixed window timing', async () => {
 	// - Task 3 must wait another interval
 	assert.ok(strictRelative[0] < 50, 'Task 0 should execute immediately');
 	assert.ok(strictRelative[1] < 50, 'Task 1 should execute immediately');
-	assert.ok(strictRelative[2] >= 450 && strictRelative[2] < 650, 'Task 2 should wait ~500ms');
-	assert.ok(strictRelative[3] >= 450 && strictRelative[3] < 650, 'Task 3 should wait ~500ms');
+	assert.ok(strictRelative[2] >= 450, 'Task 2 should wait ~500ms');
+	assert.ok(strictRelative[2] < 650, 'Task 2 should not wait for a whole extra interval');
+	assert.ok(strictRelative[3] >= 450, 'Task 3 should wait ~500ms');
+	assert.ok(strictRelative[3] < 650, 'Task 3 should not wait for a whole extra interval');
 });
 
 test('strict mode with large intervalCap', async () => {
@@ -108,6 +112,8 @@ test('strict mode with large intervalCap', async () => {
 	}
 
 	await Promise.all(promises);
+
+	assert.equal(executionTimes.length, 30);
 
 	// Verify no more than 10 tasks in any 100ms window
 	assertSlidingWindow(executionTimes, 100, 10);
@@ -139,8 +145,10 @@ test('strict mode clear() preserves ticks', async () => {
 	});
 
 	// Both should wait for the sliding window to free up
-	assert.ok(executionTimes[0] >= 80 && executionTimes[0] < 200, 'First task after clear should be rate limited');
-	assert.ok(executionTimes[1] >= 80 && executionTimes[1] < 200, 'Second task after clear should be rate limited');
+	assert.ok(executionTimes[0] >= 80, 'First task after clear should be rate limited');
+	assert.ok(executionTimes[0] < 200, 'First task after clear should not wait a whole interval');
+	assert.ok(executionTimes[1] >= 80, 'Second task after clear should be rate limited');
+	assert.ok(executionTimes[1] < 200, 'Second task after clear should not wait a whole interval');
 });
 
 test('strict mode with concurrency limit', async () => {
@@ -180,8 +188,12 @@ test('strict mode rate limit events', async () => {
 
 	const events: string[] = [];
 
-	queue.on('rateLimit', () => events.push('rateLimit'));
-	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+	queue.addEventListener('rateLimit', () => {
+		events.push('rateLimit');
+	});
+	queue.addEventListener('rateLimitCleared', () => {
+		events.push('rateLimitCleared');
+	});
 
 	// Add 4 tasks
 	const promises = [];
@@ -283,10 +295,18 @@ test('strict mode with priority', async () => {
 
 	// Add tasks with different priorities
 	const promises = [
-		queue.add(async () => results.push(1), {priority: 0}),
-		queue.add(async () => results.push(2), {priority: 0}),
-		queue.add(async () => results.push(3), {priority: 1}), // Higher priority
-		queue.add(async () => results.push(4), {priority: 0}),
+		queue.add(async () => {
+			results.push(1);
+		}, {priority: 0}),
+		queue.add(async () => {
+			results.push(2);
+		}, {priority: 0}),
+		queue.add(async () => {
+			results.push(3);
+		}, {priority: 1}), // Higher priority
+		queue.add(async () => {
+			results.push(4);
+		}, {priority: 0}),
 	];
 
 	await Promise.all(promises);
@@ -308,10 +328,10 @@ test('strict mode with onRateLimit()', async () => {
 	queue.add(async () => undefined);
 	queue.add(async () => undefined);
 
-	let rateLimitCalled = false;
+	let hasRateLimitResolved = false;
 	const rateLimitPromise = (async () => {
 		await queue.onRateLimit();
-		rateLimitCalled = true;
+		hasRateLimitResolved = true;
 	})();
 
 	// Add one more task to trigger rate limit
@@ -319,7 +339,7 @@ test('strict mode with onRateLimit()', async () => {
 
 	await delay(20);
 
-	assert.ok(rateLimitCalled, 'onRateLimit() should resolve when rate limited');
+	assert.ok(hasRateLimitResolved, 'onRateLimit() should resolve when rate limited');
 
 	await queue.onIdle();
 });
@@ -345,6 +365,8 @@ test('strict mode with carryoverIntervalCount', async () => {
 
 	await queue.onIdle();
 
+	assert.equal(executionTimes.length, 4);
+
 	// Verify sliding window is enforced regardless of carryoverIntervalCount
 	assertSlidingWindow(executionTimes, 100, 2);
 });
@@ -353,7 +375,7 @@ test('strict mode throws error with intervalCap: Infinity', () => {
 	assert.throws(
 		() => new PQueue({
 			interval: 1000,
-			intervalCap: Number.POSITIVE_INFINITY,
+			intervalCap: Infinity,
 			strict: true,
 		}),
 		{
@@ -392,7 +414,7 @@ test('strict mode with AbortSignal', async () => {
 	// Abort the third task before it can run
 	controller.abort();
 
-	await assert.rejects(abortedPromise);
+	await assert.rejects(abortedPromise, {name: 'AbortError'});
 	await queue.onIdle();
 
 	// Should have executed 3 tasks (one was aborted)
@@ -411,7 +433,7 @@ test('strict mode frees capacity when task aborts before start', async () => {
 
 	const startTime = Date.now();
 
-	await assert.rejects(queue.add(async () => undefined, {signal: controller.signal}));
+	await assert.rejects(queue.add(async () => undefined, {signal: controller.signal}), {name: 'AbortError'});
 
 	let startedAt = 0;
 	await queue.add(async () => {
@@ -429,11 +451,14 @@ test('strict mode ignores aborted tasks for sliding window', async () => {
 	});
 
 	const abortControllers = [new AbortController(), new AbortController()];
-	const abortPromises: Array<Promise<unknown>> = [];
 	for (const controller of abortControllers) {
 		controller.abort();
-		abortPromises.push(assert.rejects(queue.add(async () => undefined, {signal: controller.signal})));
 	}
+
+	const abortPromises = abortControllers.map(async controller => assert.rejects(
+		queue.add(async () => undefined, {signal: controller.signal}),
+		{name: 'AbortError'},
+	));
 
 	await Promise.all(abortPromises);
 
@@ -460,17 +485,17 @@ test('strict mode aborted tasks do not trigger rateLimit event', async () => {
 		strict: true,
 	});
 
-	let rateLimited = false;
-	queue.on('rateLimit', () => {
-		rateLimited = true;
+	let hasRateLimited = false;
+	queue.addEventListener('rateLimit', () => {
+		hasRateLimited = true;
 	});
 
 	const controller = new AbortController();
 	controller.abort();
 
-	await assert.rejects(queue.add(async () => undefined, {signal: controller.signal}));
+	await assert.rejects(queue.add(async () => undefined, {signal: controller.signal}), {name: 'AbortError'});
 
-	assert.equal(rateLimited, false, 'Aborted task should not trigger rateLimit');
+	assert.equal(hasRateLimited, false, 'Aborted task should not trigger rateLimit');
 	assert.equal(queue.isRateLimited, false, 'Queue should not be rate limited after aborted task');
 });
 
@@ -547,6 +572,8 @@ test('strict mode prevents boundary bursts', async () => {
 	}
 
 	await queue.onIdle();
+
+	assert.equal(executionTimes.length, 4);
 
 	// Verify that there's never more than 2 tasks in any 100ms window
 	// by checking every possible window start point
@@ -630,12 +657,8 @@ test('strict mode multiple complete intervals', async () => {
 	const relativeExecutionTimes = executionTimes.map(t => t - startTime);
 
 	// Group by approximate interval
-	const intervals = [0, 100, 200, 300];
-	for (const intervalStart of intervals) {
-		const tasksInInterval = relativeExecutionTimes.filter(t => t >= intervalStart && t < intervalStart + 100).length;
-
-		assert.ok(tasksInInterval <= 3, `Interval starting at ${intervalStart}ms has ${tasksInInterval} tasks`);
-	}
+	const tasksPerInterval = [0, 100, 200, 300].map(intervalStart => relativeExecutionTimes.filter(time => time >= intervalStart && time < intervalStart + 100).length);
+	assert.ok(tasksPerInterval.every(count => count <= 3), `Each 100ms interval should hold at most 3 tasks, got ${JSON.stringify(tasksPerInterval)}`);
 });
 
 test('strict mode precision timing', async () => {
@@ -662,10 +685,14 @@ test('strict mode precision timing', async () => {
 	// Tasks 4-5: execute at ~400ms (after next two age out)
 	assert.ok(executionTimes[0] < 50);
 	assert.ok(executionTimes[1] < 50);
-	assert.ok(executionTimes[2] >= 180 && executionTimes[2] < 300);
-	assert.ok(executionTimes[3] >= 180 && executionTimes[3] < 300);
-	assert.ok(executionTimes[4] >= 380 && executionTimes[4] < 500);
-	assert.ok(executionTimes[5] >= 380 && executionTimes[5] < 500);
+	assert.ok(executionTimes[2] >= 180);
+	assert.ok(executionTimes[2] < 300);
+	assert.ok(executionTimes[3] >= 180);
+	assert.ok(executionTimes[3] < 300);
+	assert.ok(executionTimes[4] >= 380);
+	assert.ok(executionTimes[4] < 500);
+	assert.ok(executionTimes[5] >= 380);
+	assert.ok(executionTimes[5] < 500);
 });
 
 test('strict mode with concurrency: Infinity', async () => {
@@ -673,7 +700,7 @@ test('strict mode with concurrency: Infinity', async () => {
 		interval: 100,
 		intervalCap: 3,
 		strict: true,
-		concurrency: Number.POSITIVE_INFINITY,
+		concurrency: Infinity,
 	});
 
 	const executionTimes: number[] = [];

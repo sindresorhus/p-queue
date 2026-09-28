@@ -144,18 +144,16 @@ test('PriorityQueue stays ordered after cursor compaction', () => {
 	}
 
 	// Cross the compaction threshold while leaving queued items behind.
-	for (let index = 0; index < 120; index++) {
-		assert.equal(queue.dequeue(), tasks[index]);
-	}
+	const consumedPrefix = Array.from({length: 120}, () => queue.dequeue());
+	assert.deepEqual(consumedPrefix, tasks.slice(0, 120));
 
 	queue.enqueue(urgent, {priority: 1});
 
 	assert.equal(queue.size, 31);
 	assert.equal(queue.dequeue(), urgent);
 
-	for (let index = 120; index < tasks.length; index++) {
-		assert.equal(queue.dequeue(), tasks[index]);
-	}
+	const liveRange = tasks.slice(120).map(task => queue.dequeue());
+	assert.deepEqual(liveRange, tasks.slice(120));
 
 	assert.equal(queue.dequeue(), undefined);
 	assert.equal(queue.size, 0);

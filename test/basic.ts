@@ -1,13 +1,13 @@
-/* eslint-disable no-new */
+/* eslint-disable no-new -- constructing without assigning is the behaviour under test */
+import process from 'node:process';
 import {test} from 'node:test';
+import {getEventListeners} from 'node:events';
 import assert from 'node:assert/strict';
-import EventEmitter from 'eventemitter3';
 import delay from 'delay';
 import timeSpan from 'time-span';
 import randomInt from 'random-int';
 import pDefer from 'p-defer';
-import {TimeoutError} from 'p-timeout';
-import PQueue from '../source/index.js';
+import PQueue, {TimeoutError} from '../source/index.js';
 
 const fixture = Symbol('fixture');
 
@@ -51,8 +51,9 @@ test('.add() - concurrency: 1', async () => {
 
 	// eslint-disable-next-line unicorn/no-array-callback-reference
 	assert.deepEqual(await Promise.all(input.map(mapper)), [10, 20, 30]);
-	const duration = end() as number;
-	assert.ok(duration >= 590 && duration <= 650, `Expected duration to be between 590-650ms, got ${duration}ms`);
+	const duration = end();
+	assert.ok(duration >= 590, `Expected duration to be at least 590ms, got ${duration}ms`);
+	assert.ok(duration <= 650, `Expected duration to be at most 650ms, got ${duration}ms`);
 });
 
 test('.add() - concurrency: 5', async () => {
@@ -60,7 +61,7 @@ test('.add() - concurrency: 5', async () => {
 	const queue = new PQueue({concurrency});
 	let running = 0;
 
-	const input = Array.from({length: 100}).fill(0).map(async () => queue.add(async () => {
+	const input = Array.from({length: 100}, async () => queue.add(async () => {
 		running++;
 		assert.ok(running <= concurrency);
 		assert.ok(queue.pending <= concurrency);
@@ -76,7 +77,7 @@ test('.add() - update concurrency', async () => {
 	const queue = new PQueue({concurrency});
 	let running = 0;
 
-	const input = Array.from({length: 100}).fill(0).map(async (_value, index) => queue.add(async () => {
+	const input = Array.from({length: 100}, async (_value, index) => queue.add(async () => {
 		running++;
 
 		assert.ok(running <= concurrency);
@@ -85,10 +86,12 @@ test('.add() - update concurrency', async () => {
 		await delay(randomInt(30, 200));
 		running--;
 
-		if (index % 30 === 0) {
-			queue.concurrency = --concurrency;
-			assert.equal(queue.concurrency, concurrency);
+		if (index % 30 !== 0) {
+			return;
 		}
+
+		queue.concurrency = --concurrency;
+		assert.equal(queue.concurrency, concurrency);
 	}));
 
 	await Promise.all(input);
@@ -97,12 +100,24 @@ test('.add() - update concurrency', async () => {
 test('.add() - priority', async () => {
 	const result: number[] = [];
 	const queue = new PQueue({concurrency: 1});
-	queue.add(async () => result.push(1), {priority: 1});
-	queue.add(async () => result.push(0), {priority: 0});
-	queue.add(async () => result.push(1), {priority: 1});
-	queue.add(async () => result.push(2), {priority: 1});
-	queue.add(async () => result.push(3), {priority: 2});
-	queue.add(async () => result.push(0), {priority: -1});
+	queue.add(async () => {
+		result.push(1);
+	}, {priority: 1});
+	queue.add(async () => {
+		result.push(0);
+	}, {priority: 0});
+	queue.add(async () => {
+		result.push(1);
+	}, {priority: 1});
+	queue.add(async () => {
+		result.push(2);
+	}, {priority: 1});
+	queue.add(async () => {
+		result.push(3);
+	}, {priority: 2});
+	queue.add(async () => {
+		result.push(0);
+	}, {priority: -1});
 	await queue.onEmpty();
 	assert.deepEqual(result, [1, 3, 1, 2, 0, 0]);
 });
@@ -124,10 +139,18 @@ test('.sizeBy() - priority', async () => {
 test('.add() - priority defaults to 0 when undefined', async () => {
 	const result: string[] = [];
 	const queue = new PQueue({concurrency: 1});
-	queue.add(async () => result.push('first'), {priority: undefined});
-	queue.add(async () => result.push('second'), {priority: undefined});
-	queue.add(async () => result.push('priority'), {priority: 1});
-	queue.add(async () => result.push('third'), {priority: undefined});
+	queue.add(async () => {
+		result.push('first');
+	}, {priority: undefined});
+	queue.add(async () => {
+		result.push('second');
+	}, {priority: undefined});
+	queue.add(async () => {
+		result.push('priority');
+	}, {priority: 1});
+	queue.add(async () => {
+		result.push('third');
+	}, {priority: undefined});
 	await queue.onEmpty();
 	assert.deepEqual(result, ['first', 'priority', 'second', 'third']);
 });
@@ -143,7 +166,7 @@ test('.add() - timeout always throws', async () => {
 			return '🐌';
 		}),
 		TimeoutError,
-		'Task exceeding timeout should throw TimeoutError',
+		'Task exceeding timeout should reject with a TimeoutError',
 	);
 
 	// Task that completes within timeout
@@ -191,6 +214,125 @@ test('.add() - timeout behavior', async () => {
 	assert.equal(longResult, '🐢', 'Task should complete with extended timeout');
 
 	await queue.onIdle();
+});
+
+test('.add() - the task signal aborts on timeout', async () => {
+	const queue = new PQueue({timeout: 20});
+	let taskSignal: AbortSignal | undefined;
+
+	await assert.rejects(queue.add(async ({signal}) => {
+		taskSignal = signal;
+		await delay(100);
+	}), error => {
+		assert.ok(error instanceof TimeoutError);
+		assert.ok(error instanceof DOMException);
+		assert.ok(error instanceof Error);
+		assert.equal(error.name, 'TimeoutError');
+		assert.equal(taskSignal?.reason, error);
+		return true;
+	});
+});
+
+test('.add() - the timeout aborts the task signal when a user signal is also set', async () => {
+	const queue = new PQueue({timeout: 20});
+	const controller = new AbortController();
+	let taskSignal: AbortSignal | undefined;
+
+	const promise = queue.add(async ({signal}) => {
+		taskSignal = signal;
+		await delay(100);
+	}, {signal: controller.signal});
+
+	await assert.rejects(promise, TimeoutError);
+	assert.ok(taskSignal?.reason instanceof TimeoutError);
+	assert.equal(controller.signal.aborted, false);
+});
+
+test('.add() - timeout: undefined disables the queue timeout for one task', async () => {
+	const queue = new PQueue({timeout: 20});
+	let taskSignal: AbortSignal | undefined;
+
+	const result = await queue.add(async ({signal}) => {
+		taskSignal = signal;
+		await delay(50);
+		return '🐢';
+	}, {timeout: undefined});
+
+	assert.equal(result, '🐢');
+	assert.equal(taskSignal, undefined);
+});
+
+test('.add() - the timeout wins over an abort listener of the task', async () => {
+	const queue = new PQueue({timeout: 20});
+
+	// The task rejects in its own abort listener, without delay. `.add()` must still reject with the `TimeoutError`.
+	// eslint-disable-next-line @typescript-eslint/promise-function-async
+	await assert.rejects(queue.add(({signal}) => new Promise((_resolve, reject) => {
+		signal!.addEventListener('abort', () => {
+			reject(new Error('Rejected by the task'));
+		});
+	})), TimeoutError);
+});
+
+for (const timeout of [undefined, 5000]) {
+	test(`.add() - a signal that aborts while the task starts rejects and frees the slot (timeout: ${timeout})`, {timeout: 2000}, async () => {
+		const queue = new PQueue({concurrency: 1, timeout});
+		const controller = new AbortController();
+		const reason = new Error('Aborted while starting');
+
+		const promise = queue.add(async () => {
+			controller.abort(reason);
+			return new Promise(() => {}); // eslint-disable-line @typescript-eslint/no-empty-function
+		}, {signal: controller.signal});
+
+		await assert.rejects(promise, reason);
+		assert.equal(await queue.add(async () => '🦄'), '🦄');
+	});
+}
+
+test('.add() - the abort listeners are removed when a task with a timeout completes', async () => {
+	const queue = new PQueue({timeout: 5000});
+	const controller = new AbortController();
+	let taskSignal: AbortSignal | undefined;
+
+	await queue.add(async ({signal}) => {
+		taskSignal = signal;
+	}, {signal: controller.signal});
+
+	assert.ok(taskSignal);
+	assert.equal(getEventListeners(taskSignal, 'abort').length, 0);
+	assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+});
+
+test('.add() - the task signal aborts on the user signal when a timeout is set', async () => {
+	const queue = new PQueue({timeout: 5000});
+	const controller = new AbortController();
+	const reason = new Error('Aborted by the user');
+	let taskSignal: AbortSignal | undefined;
+
+	const promise = queue.add(async ({signal}) => {
+		taskSignal = signal;
+		await delay(100);
+	}, {signal: controller.signal});
+
+	controller.abort(reason);
+
+	await assert.rejects(promise, reason);
+	assert.equal(taskSignal?.reason, reason);
+});
+
+test('.add() - timeout timer is cleared when the task completes', async () => {
+	// A timer that is not cleared keeps the process alive until the timeout.
+	const countTimers = () => process.getActiveResourcesInfo().filter(resource => resource === 'Timeout').length;
+	const timerCount = countTimers();
+	let timerCountWhileRunning = 0;
+
+	await new PQueue({timeout: 60_000}).add(async () => {
+		timerCountWhileRunning = countTimers();
+	});
+
+	assert.equal(timerCountWhileRunning, timerCount + 1);
+	assert.equal(countTimers(), timerCount);
 });
 
 test('.add() - change timeout in between', async () => {
@@ -435,8 +577,8 @@ test('.onSizeLessThan() removes its listeners once resolved', async () => {
 	await sizePromise;
 
 	// Both the `'next'` and `'active'` listeners must be cleaned up to avoid leaking on repeated calls.
-	assert.equal(queue.listenerCount('next'), 0);
-	assert.equal(queue.listenerCount('active'), 0);
+	assert.equal(getEventListeners(queue, 'next').length, 0);
+	assert.equal(getEventListeners(queue, 'active').length, 0);
 });
 
 test('.onIdle() - no pending', async () => {
@@ -736,8 +878,12 @@ test('.clear() with running tasks emits empty but not idle', async () => {
 	const queue = new PQueue({concurrency: 1});
 	const events: string[] = [];
 
-	queue.on('empty', () => events.push('empty'));
-	queue.on('idle', () => events.push('idle'));
+	queue.addEventListener('empty', () => {
+		events.push('empty');
+	});
+	queue.addEventListener('idle', () => {
+		events.push('idle');
+	});
 
 	// Start a long-running task
 	const taskPromise = queue.add(async () => {
@@ -829,17 +975,9 @@ test('enforce number in options.concurrency', () => {
 		{constructor: TypeError},
 	);
 
-	assert.doesNotThrow(() => {
-		new PQueue({concurrency: 1});
-	});
-
-	assert.doesNotThrow(() => {
-		new PQueue({concurrency: 10});
-	});
-
-	assert.doesNotThrow(() => {
-		new PQueue({concurrency: Number.POSITIVE_INFINITY});
-	});
+	new PQueue({concurrency: 1});
+	new PQueue({concurrency: 10});
+	new PQueue({concurrency: Infinity});
 });
 
 test('enforce number in queue.concurrency', () => {
@@ -858,17 +996,9 @@ test('enforce number in queue.concurrency', () => {
 		{constructor: TypeError},
 	);
 
-	assert.doesNotThrow(() => {
-		(new PQueue()).concurrency = 1;
-	});
-
-	assert.doesNotThrow(() => {
-		(new PQueue()).concurrency = 10;
-	});
-
-	assert.doesNotThrow(() => {
-		(new PQueue()).concurrency = Number.POSITIVE_INFINITY;
-	});
+	(new PQueue()).concurrency = 1;
+	(new PQueue()).concurrency = 10;
+	(new PQueue()).concurrency = Infinity;
 });
 
 test('enforce number in options.intervalCap', () => {
@@ -886,17 +1016,9 @@ test('enforce number in options.intervalCap', () => {
 		{constructor: TypeError},
 	);
 
-	assert.doesNotThrow(() => {
-		new PQueue({intervalCap: 1});
-	});
-
-	assert.doesNotThrow(() => {
-		new PQueue({intervalCap: 10});
-	});
-
-	assert.doesNotThrow(() => {
-		new PQueue({intervalCap: Number.POSITIVE_INFINITY});
-	});
+	new PQueue({intervalCap: 1});
+	new PQueue({intervalCap: 10});
+	new PQueue({intervalCap: Infinity});
 });
 
 test('enforce finite in options.interval', () => {
@@ -914,21 +1036,22 @@ test('enforce finite in options.interval', () => {
 		{constructor: TypeError},
 	);
 
-	assert.throws(() => {
-		new PQueue({interval: Number.POSITIVE_INFINITY});
-	});
+	assert.throws(
+		() => {
+			new PQueue({interval: Infinity});
+		},
+		{constructor: TypeError},
+	);
 
-	assert.doesNotThrow(() => {
-		new PQueue({interval: 0});
-	});
+	new PQueue({interval: 0});
+	new PQueue({interval: 10});
 
-	assert.doesNotThrow(() => {
-		new PQueue({interval: 10});
-	});
-
-	assert.throws(() => {
-		new PQueue({interval: Number.POSITIVE_INFINITY});
-	});
+	assert.throws(
+		() => {
+			new PQueue({interval: Infinity});
+		},
+		{constructor: TypeError},
+	);
 });
 
 test('autoStart: false', () => {
@@ -1095,10 +1218,11 @@ test('should resolve empty when size is zero', async () => {
 
 	// Pause at 0.5 second
 	setTimeout(
-		async () => {
+		() => {
 			queue.pause();
-			await delay(10);
-			queue.start();
+			delay(10).then(() => {
+				queue.start();
+			});
 		},
 		500,
 	);
@@ -1113,10 +1237,14 @@ test('.add() - throttled', async () => {
 		interval: 500,
 		autoStart: false,
 	});
-	queue.add(async () => result.push(1));
+	queue.add(async () => {
+		result.push(1);
+	});
 	queue.start();
 	await delay(250);
-	queue.add(async () => result.push(2));
+	queue.add(async () => {
+		result.push(2);
+	});
 	assert.deepEqual(result, [1]);
 	await delay(300);
 	assert.deepEqual(result, [1, 2]);
@@ -1215,9 +1343,9 @@ test('.add() - throttled 10, concurrency 5', async () => {
 		autoStart: false,
 	});
 
-	const firstValue = [...Array.from({length: 5}).keys()];
-	const secondValue = [...Array.from({length: 10}).keys()];
-	const thirdValue = [...Array.from({length: 13}).keys()];
+	const firstValue = Array.from({length: 5}, (_value, index) => index);
+	const secondValue = Array.from({length: 10}, (_value, index) => index);
+	const thirdValue = Array.from({length: 13}, (_value, index) => index);
 
 	for (const value of thirdValue) {
 		queue.add(async () => {
@@ -1414,13 +1542,8 @@ test('.onError() - works with Promise.race pattern', async () => {
 	queue.add(async () => delay(150));
 
 	// Stop processing on first error
-	try {
-		await racePromise;
-		assert.fail('Should have thrown error');
-	} catch (error) {
-		assert.equal((error as Error).message, 'Failed task');
-		queue.pause(); // Stop processing remaining tasks
-	}
+	await assert.rejects(racePromise, {message: 'Failed task'});
+	queue.pause(); // Stop processing remaining tasks
 
 	// Clean up unhandled rejection
 	await Promise.allSettled([task]);
@@ -1472,7 +1595,7 @@ test('an active listener cannot exceed the concurrency limit', async t => {
 	const queue = new PQueue({concurrency: 1});
 	let live = 0;
 	let maxLive = 0;
-	let added = false;
+	let hasAdded = false;
 
 	const task = async () => {
 		live++;
@@ -1481,16 +1604,21 @@ test('an active listener cannot exceed the concurrency limit', async t => {
 		live--;
 	};
 
-	queue.on('active', () => {
-		if (!added) {
-			added = true;
-			queue.add(task);
+	queue.addEventListener('active', () => {
+		if (hasAdded) {
+			return;
 		}
+
+		hasAdded = true;
+		queue.add(task);
 	});
 
 	await queue.add(task);
 	await queue.onIdle();
 
+	// `t.assert` is undefined on early Node.js 22 releases, so the imported assert is the portable choice.
+	// eslint-disable-next-line node-test/prefer-test-context-assert
 	assert.strictEqual(maxLive, 1);
+	// eslint-disable-next-line node-test/prefer-test-context-assert
 	assert.strictEqual(queue.size, 0);
 });

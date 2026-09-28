@@ -1,5 +1,5 @@
 import {test} from 'node:test';
-import assert from 'node:assert';
+import assert from 'node:assert/strict';
 import delay from 'delay';
 import PQueue from '../source/index.js';
 
@@ -10,8 +10,12 @@ test('backlog drains before interval reset - triggers rate-limit-cleared', async
 	});
 
 	const events: string[] = [];
-	queue.on('rateLimit', () => events.push('rateLimit'));
-	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+	queue.addEventListener('rateLimit', () => {
+		events.push('rateLimit');
+	});
+	queue.addEventListener('rateLimitCleared', () => {
+		events.push('rateLimitCleared');
+	});
 
 	// Add tasks to trigger rate limit
 	queue.add(async () => delay(50));
@@ -19,16 +23,16 @@ test('backlog drains before interval reset - triggers rate-limit-cleared', async
 	queue.add(async () => delay(50));
 
 	await delay(10);
-	assert.equal(queue.isRateLimited, true);
-	assert.equal(events[0], 'rateLimit');
+	assert.strictEqual(queue.isRateLimited, true);
+	assert.strictEqual(events[0], 'rateLimit');
 
 	// Wait for all tasks to complete (backlog drains)
 	await queue.onIdle();
 
 	// Should have cleared due to empty queue, not interval reset
-	assert.equal(queue.isRateLimited, false);
-	assert.equal(events[1], 'rateLimitCleared');
-	assert.equal(queue.size, 0, 'Queue should be empty');
+	assert.strictEqual(queue.isRateLimited, false);
+	assert.strictEqual(events[1], 'rateLimitCleared');
+	assert.strictEqual(queue.size, 0, 'Queue should be empty');
 });
 
 test('setPriority validates input', async () => {
@@ -43,7 +47,7 @@ test('setPriority validates input', async () => {
 		() => {
 			queue.setPriority('non-existent', 5);
 		},
-		{message: /No promise function with the id "non-existent" exists in the queue/},
+		{message: /No promise function with the id "non-existent" exists in the queue/v},
 	);
 
 	// Valid update
@@ -56,28 +60,28 @@ test('timeout validation in constructor', () => {
 	// Invalid timeout values
 	assert.throws(
 		() => new PQueue({timeout: -1}),
-		{message: /positive finite number/},
+		{message: /positive finite number/v},
 	);
 
 	assert.throws(
-		() => new PQueue({timeout: Number.POSITIVE_INFINITY}),
-		{message: /positive finite number/},
+		() => new PQueue({timeout: Infinity}),
+		{message: /positive finite number/v},
 	);
 
 	assert.throws(
-		() => new PQueue({timeout: Number.NaN}),
-		{message: /positive finite number/},
+		() => new PQueue({timeout: NaN}),
+		{message: /positive finite number/v},
 	);
 
 	// Valid timeout
 	const queue = new PQueue({timeout: 1000});
-	assert.equal(queue.timeout, 1000);
+	assert.strictEqual(queue.timeout, 1000);
 });
 
 test('timeout validation in add', async () => {
 	const expectedError = {
 		name: 'TypeError',
-		message: /Expected `timeout` to be a positive finite number/,
+		message: /Expected `timeout` to be a positive finite number/v,
 	};
 
 	const zeroTimeoutQueue = new PQueue({timeout: 10});
@@ -100,7 +104,10 @@ test('abort before start frees concurrency immediately', async () => {
 	controller.abort();
 
 	// First task is aborted before start
-	await assert.rejects(queue.add(async () => 'ignored', {signal: controller.signal}));
+	await assert.rejects(
+		queue.add(async () => 'ignored', {signal: controller.signal}),
+		{name: 'AbortError'},
+	);
 
 	const started: number[] = [];
 	await queue.add(async () => {
@@ -117,9 +124,9 @@ test('carryover mode with no backlog does not report limited', async () => {
 		carryoverIntervalCount: true,
 	});
 
-	let rateLimitEventFired = false;
-	queue.on('rateLimit', () => {
-		rateLimitEventFired = true;
+	let hasRateLimitEventFired = false;
+	queue.addEventListener('rateLimit', () => {
+		hasRateLimitEventFired = true;
 	});
 
 	// Add exactly intervalCap tasks
@@ -129,8 +136,8 @@ test('carryover mode with no backlog does not report limited', async () => {
 	]);
 
 	// Queue is empty, should not be rate limited
-	assert.equal(queue.isRateLimited, false);
-	assert.equal(rateLimitEventFired, false);
+	assert.strictEqual(queue.isRateLimited, false);
+	assert.strictEqual(hasRateLimitEventFired, false);
 });
 
 test('clear() triggers immediate state drop while rate-limited', async () => {
@@ -140,8 +147,12 @@ test('clear() triggers immediate state drop while rate-limited', async () => {
 	});
 
 	const events: string[] = [];
-	queue.on('rateLimit', () => events.push('rateLimit'));
-	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+	queue.addEventListener('rateLimit', () => {
+		events.push('rateLimit');
+	});
+	queue.addEventListener('rateLimitCleared', () => {
+		events.push('rateLimitCleared');
+	});
 
 	// Add tasks to trigger rate limit
 	queue.add(async () => delay(50));
@@ -149,14 +160,14 @@ test('clear() triggers immediate state drop while rate-limited', async () => {
 	queue.add(async () => delay(50));
 
 	await delay(10);
-	assert.equal(queue.isRateLimited, true);
+	assert.strictEqual(queue.isRateLimited, true);
 
 	// Clear the queue
 	queue.clear();
 
 	// Should immediately clear rate limit
 	await delay(10);
-	assert.equal(queue.isRateLimited, false);
+	assert.strictEqual(queue.isRateLimited, false);
 	assert.ok(events.includes('rateLimitCleared'));
 });
 

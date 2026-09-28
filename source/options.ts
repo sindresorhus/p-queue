@@ -2,23 +2,32 @@ import {type Queue, type RunFunction} from './queue.js';
 
 type TimeoutOptions = {
 	/**
-	Per-operation timeout in milliseconds. Operations will throw a `TimeoutError` if they don't complete within the specified time.
+	The time in milliseconds a task can run. When the time is up, the `signal` of the task aborts and `.add()` rejects with a `TimeoutError`, which is a `DOMException`. Like with the `signal` option of `.add()`, the concurrency slot is freed, but the task keeps running unless it handles its `signal`.
 
-	The timeout begins when the operation is dequeued and starts execution, not while it's waiting in the queue.
+	The time starts when the task starts running, not when it is added. Override it for one task with the `timeout` option of `.add()`.
 
 	@default undefined
 
-	Can be overridden per task using the `timeout` option in `.add()`:
-
 	@example
 	```
+	import PQueue, {TimeoutError} from 'p-queue';
+
 	const queue = new PQueue({timeout: 5000});
 
-	// This task uses the global 5s timeout
-	await queue.add(() => fetchData());
+	try {
+		// The signal aborts on timeout, which stops the request
+		await queue.add(({signal}) => fetch('https://sindresorhus.com', {signal}));
+	} catch (error) {
+		if (error instanceof TimeoutError) {
+			console.log('The task timed out after 5 seconds');
+		}
+	}
 
-	// This task has a 10s timeout
+	// A longer timeout for this task
 	await queue.add(() => slowTask(), {timeout: 10000});
+
+	// No timeout for this task
+	await queue.add(() => verySlowTask(), {timeout: undefined});
 	```
 	*/
 	timeout?: number;
@@ -26,7 +35,7 @@ type TimeoutOptions = {
 
 export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOptions extends QueueAddOptions> = {
 	/**
-	Concurrency limit.
+	The maximum number of tasks that run at the same time.
 
 	Minimum: `1`.
 
@@ -35,19 +44,19 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOpt
 	readonly concurrency?: number;
 
 	/**
-	Whether queue tasks within the concurrency limit are auto-executed as soon as they're added.
+	Whether tasks start as soon as they are added. If `false`, call `.start()` to start them.
 
 	@default true
 	*/
 	readonly autoStart?: boolean;
 
 	/**
-	Class with a `enqueue` and `dequeue` method, and a `size` getter. See the [Custom QueueClass](https://github.com/sindresorhus/p-queue#custom-queueclass) section.
+	A class with `enqueue()`, `dequeue()`, `filter()`, `setPriority()`, and `remove()` methods and a `size` getter. See [Custom QueueClass](https://github.com/sindresorhus/p-queue#custom-queueclass).
 	*/
 	readonly queueClass?: new () => QueueType;
 
 	/**
-	The max number of runs in the given interval of time.
+	The maximum number of tasks that start in each `interval`.
 
 	Minimum: `1`.
 
@@ -56,7 +65,7 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOpt
 	readonly intervalCap?: number;
 
 	/**
-	The length of time in milliseconds before the interval count resets. Must be finite.
+	The length of the rate-limit interval in milliseconds. Must be finite. `0` disables rate limiting.
 
 	Minimum: `0`.
 
@@ -65,64 +74,70 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOpt
 	readonly interval?: number;
 
 	/**
-	Whether the task must finish in the given interval or will be carried over into the next interval count.
+	Whether tasks that are still running when an interval ends count against `intervalCap` in the next interval.
 
 	@default false
 	*/
 	readonly carryoverIntervalCount?: boolean;
 
 	/**
-	@deprecated Renamed to `carryoverIntervalCount`.
-	*/
-	readonly carryoverConcurrencyCount?: boolean;
+	Whether to rate limit with a sliding window instead of fixed windows. Requires a non-zero `interval` and a finite `intervalCap`.
 
-	/**
-	Whether to use strict mode for rate limiting (sliding window algorithm).
-
-	When enabled, ensures that no more than `intervalCap` tasks execute in any rolling `interval` window, rather than resetting the count at fixed intervals. This provides more predictable and evenly distributed execution.
-
-	@default false
+	With a sliding window, no more than `intervalCap` tasks start in any period of length `interval`. With fixed windows, the count resets at each window boundary, so tasks can burst there.
 
 	For example, with `intervalCap: 2` and `interval: 1000`:
-	- __Default mode (fixed window)__: Tasks can burst at window boundaries. You could execute 2 tasks at 999ms and 2 more at 1000ms, resulting in 4 tasks within 1ms.
-	- __Strict mode (sliding window)__: Enforces that no more than 2 tasks execute in any 1000ms rolling window, preventing bursts.
+	- __Fixed windows (default):__ 2 tasks can start at 999 ms and 2 more at 1000 ms, so 4 tasks start within 1 ms.
+	- __Sliding window (strict):__ No more than 2 tasks start in any 1000 ms period.
 
-	Strict mode is more resource-intensive as it tracks individual execution timestamps. Use it when you need guaranteed rate-limit compliance, such as when interacting with APIs that enforce strict rate limits.
+	Strict mode uses more resources, because it keeps the start time of each task. Use it when an API enforces strict rate limits.
 
-	The `carryoverIntervalCount` option has no effect when `strict` mode is enabled, as strict mode tracks actual execution timestamps rather than counting pending tasks.
+	`carryoverIntervalCount` has no effect in strict mode, because strict mode counts start times, not running tasks.
+
+	@default false
 	*/
 	readonly strict?: boolean;
 } & TimeoutOptions;
 
 export type QueueAddOptions = {
 	/**
-	Priority of operation. Operations with greater priority will be scheduled first.
+	Tasks with a higher priority start first.
 
 	@default 0
 	*/
 	readonly priority?: number;
 
 	/**
-	Unique identifier for the promise function, used to update its priority before execution. If not specified, it is auto-assigned an incrementing BigInt starting from `1n`.
+	A unique identifier for the task, used to change its priority with `.setPriority()`. Defaults to an incrementing number as a string (`'1'`, `'2'`, and so on).
 	*/
 	id?: string;
-} & TaskOptions & TimeoutOptions;
+
+	/**
+	Override the timeout of the queue for this task. `undefined` means no timeout.
+
+	@default The `timeout` of the queue
+	*/
+	timeout?: number;
+} & TaskOptions;
 
 export type TaskOptions = {
 	/**
-	[`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) for cancellation of the operation. When aborted, it will be removed from the queue and the `queue.add()` call will reject with an `AbortError`. If the operation is already running, the signal will need to be handled by the operation itself.
+	An [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) to cancel the task. If it aborts while the task waits, the task is removed and `.add()` rejects with the [abort reason](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/reason). If it aborts while the task runs, `.add()` rejects and the concurrency slot is freed, but the task keeps running unless it handles the signal itself.
 
 	@example
 	```
-	import PQueue, {AbortError} from 'p-queue';
+	import PQueue from 'p-queue';
 	import got, {CancelError} from 'got';
 
 	const queue = new PQueue();
 
 	const controller = new AbortController();
 
+	setTimeout(() => {
+		controller.abort();
+	}, 100);
+
 	try {
-		await queue.add(({signal}) => {
+		await queue.add(async ({signal}) => {
 			const request = got('https://sindresorhus.com');
 
 			signal.addEventListener('abort', () => {
@@ -138,7 +153,7 @@ export type TaskOptions = {
 			}
 		}, {signal: controller.signal});
 	} catch (error) {
-		if (!(error instanceof AbortError)) {
+		if (!(error instanceof DOMException)) {
 			throw error;
 		}
 	}

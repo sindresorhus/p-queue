@@ -34,17 +34,13 @@ test('runningTasks returns current running tasks', async () => {
 	assert.ok(runningIds.includes('task1') || runningIds.includes('task2') || runningIds.includes('task3'));
 
 	// Check that priorities are included (should have 2 tasks running)
-	const priorities = running.map(t => t.priority);
+	const priorities = running.map(task => task.priority);
 	assert.equal(priorities.length, 2);
-	for (const priority of priorities) {
-		assert.ok([0, 1, 2].includes(priority));
-	}
+	assert.ok(priorities.every(priority => [0, 1, 2].includes(priority)));
 
 	// Check that startTime is set
-	for (const task of running) {
-		assert.ok(task.startTime > 0);
-		assert.ok(task.startTime <= Date.now());
-	}
+	assert.ok(running.every(task => task.startTime > 0));
+	assert.ok(running.every(task => task.startTime <= Date.now()));
 
 	await queue.onIdle();
 });
@@ -135,14 +131,14 @@ test('runningTasks includes timeoutRemaining for tasks with timeout', async () =
 	const customTimeout = running.find(t => t.id === 'custom-timeout');
 
 	assert.ok(withTimeout);
-	assert.ok(typeof withTimeout.timeoutRemaining === 'number');
-	assert.ok(withTimeout.timeoutRemaining! > 0);
-	assert.ok(withTimeout.timeoutRemaining! <= 5000);
+	assert.equal(typeof withTimeout.timeoutRemaining, 'number');
+	assert.ok(withTimeout.timeoutRemaining > 0);
+	assert.ok(withTimeout.timeoutRemaining <= 5000);
 
 	assert.ok(customTimeout);
-	assert.ok(typeof customTimeout.timeoutRemaining === 'number');
-	assert.ok(customTimeout.timeoutRemaining! > 0);
-	assert.ok(customTimeout.timeoutRemaining! <= 2000);
+	assert.equal(typeof customTimeout.timeoutRemaining, 'number');
+	assert.ok(customTimeout.timeoutRemaining > 0);
+	assert.ok(customTimeout.timeoutRemaining <= 2000);
 
 	await queue.onIdle();
 });
@@ -191,11 +187,9 @@ test('runningTasks handles tasks without IDs', async () => {
 	assert.equal(running.length, 2);
 
 	// Tasks without explicit IDs should not have id property
-	for (const task of running) {
-		assert.ok(task.id === undefined || typeof task.id === 'string');
-		assert.ok(typeof task.priority === 'number');
-		assert.ok(typeof task.startTime === 'number');
-	}
+	assert.ok(running.every(task => task.id === undefined || typeof task.id === 'string'));
+	assert.ok(running.every(task => typeof task.priority === 'number'));
+	assert.ok(running.every(task => typeof task.startTime === 'number'));
 
 	await queue.onIdle();
 });
@@ -223,7 +217,7 @@ test('runningTasks works with interval rate limiting', async () => {
 
 	// Check if more tasks are running
 	const runningCount2 = queue.runningTasks.length;
-	assert.ok(runningCount2 >= 0 && runningCount2 <= 2, `Should have 0-2 running tasks, got ${runningCount2}`);
+	assert.ok(runningCount2 <= 2, `Should have at most 2 running tasks, got ${runningCount2}`);
 
 	await queue.onIdle();
 });
@@ -287,38 +281,15 @@ test('isSaturated with rate-limited queue', async () => {
 	await queue.onIdle();
 });
 
-test('improved timeout error includes queue state', async () => {
-	const queue = new PQueue({concurrency: 2, timeout: 50});
+test('timeout error has the queue state at the time of the timeout', async () => {
+	const queue = new PQueue({concurrency: 1, timeout: 20});
 
-	// Add some tasks that will timeout but we'll catch them
-	const promises = [
-		(async () => {
-			try {
-				await queue.add(async () => delay(100), {id: 'slow-task-1'});
-			} catch {
-				// Ignore timeout errors for these tasks
-			}
-		})(),
-		(async () => {
-			try {
-				await queue.add(async () => delay(100), {id: 'slow-task-2'});
-			} catch {
-				// Ignore timeout errors for these tasks
-			}
-		})(),
-		queue.add(async () => delay(10), {id: 'fast-task'}),
+	const slowTask = queue.add(async () => delay(100));
+	const waitingTasks = [
+		queue.add(async () => delay(1)),
+		queue.add(async () => delay(1)),
 	];
 
-	try {
-		await queue.add(async () => delay(100), {id: 'timeout-task'});
-		assert.fail('Should have thrown timeout error');
-	} catch (error: any) {
-		// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-		assert.ok(error.message.includes('timeout-task') || error.message.includes('timed out'));
-		// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-		assert.ok(error.message.includes('Queue state') || error.message.includes('queue has'));
-	}
-
-	// Wait for all tasks to complete or timeout
-	await Promise.allSettled(promises);
+	await assert.rejects(slowTask, {message: 'Task timed out after 20ms (queue has 1 running, 2 waiting)'});
+	await Promise.all(waitingTasks);
 });

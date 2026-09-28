@@ -14,6 +14,16 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 	// The queue is stored as a sorted array, but dequeued items are left before `#head` until compaction. Only items from `#head` onward are live, which keeps repeated dequeues amortized O(1).
 	#head = 0;
 
+	#compact(): void {
+		// Compaction restores the invariant that the whole array is the live sorted range.
+		if (this.#head === 0) {
+			return;
+		}
+
+		this.#queue.splice(0, this.#head);
+		this.#head = 0;
+	}
+
 	enqueue(run: RunFunction, options?: Partial<PriorityQueueOptions>): void {
 		const {
 			priority = 0,
@@ -61,18 +71,8 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 	remove(id: string): void;
 	remove(run: RunFunction): void;
 	remove(idOrRun: string | RunFunction): void {
-		const index = this.#queue.findIndex((element: Readonly<PriorityQueueOptions & {run: RunFunction}>, index) => {
-			// The consumed prefix may still contain references that should not be removable.
-			if (index < this.#head) {
-				return false;
-			}
-
-			if (typeof idOrRun === 'string') {
-				return element.id === idOrRun;
-			}
-
-			return element.run === idOrRun;
-		});
+		// The consumed prefix may still contain references that should not be removable.
+		const index = this.#queue.findIndex((element, index) => index >= this.#head && (typeof idOrRun === 'string' ? element.id : element.run) === idOrRun);
 
 		if (index !== -1) {
 			this.#queue.splice(index, 1);
@@ -114,15 +114,5 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 
 	get size(): number {
 		return this.#queue.length - this.#head;
-	}
-
-	#compact(): void {
-		// Compaction restores the invariant that the whole array is the live sorted range.
-		if (this.#head === 0) {
-			return;
-		}
-
-		this.#queue.splice(0, this.#head);
-		this.#head = 0;
 	}
 }

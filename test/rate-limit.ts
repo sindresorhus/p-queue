@@ -1,5 +1,5 @@
 import {test} from 'node:test';
-import assert from 'node:assert';
+import assert from 'node:assert/strict';
 import delay from 'delay';
 import PQueue from '../source/index.js';
 
@@ -40,7 +40,7 @@ test('rate-limit rapid pause/start cycles', async () => {
 	await Promise.all(promises);
 
 	// All tasks should complete despite rapid state changes
-	assert.equal(results.length, 4);
+	assert.strictEqual(results.length, 4);
 });
 
 test('rate-limit preserves the interval count for re-entrant task additions', async () => {
@@ -61,10 +61,10 @@ test('rate-limit preserves the interval count for re-entrant task additions', as
 	};
 
 	addTask(0);
-	assert.deepEqual(starts, [0, 1]);
+	assert.deepStrictEqual(starts, [0, 1]);
 
 	await queue.onIdle();
-	assert.deepEqual(starts, [0, 1, 2, 3, 4]);
+	assert.deepStrictEqual(starts, [0, 1, 2, 3, 4]);
 });
 
 test('rate-limit preserves the interval count for re-entrant active listeners', async () => {
@@ -75,22 +75,24 @@ test('rate-limit preserves the interval count for re-entrant active listeners', 
 
 	const starts: number[] = [];
 	let nextTask = 0;
-	queue.on('active', () => {
-		if (nextTask < 5) {
-			const taskIndex = nextTask++;
-			queue.add(() => {
-				starts.push(taskIndex);
-			});
+	queue.addEventListener('active', () => {
+		if (nextTask >= 5) {
+			return;
 		}
+
+		const taskIndex = nextTask++;
+		queue.add(() => {
+			starts.push(taskIndex);
+		});
 	});
 
 	queue.add(() => {
 		starts.push(-1);
 	});
-	assert.equal(starts.length, 2);
+	assert.strictEqual(starts.length, 2);
 
 	await queue.onIdle();
-	assert.equal(starts.length, 6);
+	assert.strictEqual(starts.length, 6);
 });
 
 test('rate-limit edge case with zero-interval', async () => {
@@ -119,8 +121,12 @@ test('rate-limit state consistency with sync microtask scheduling', async () => 
 	});
 
 	const events: string[] = [];
-	queue.on('rateLimit', () => events.push('rateLimit'));
-	queue.on('rateLimitCleared', () => events.push('rateLimitCleared'));
+	queue.addEventListener('rateLimit', () => {
+		events.push('rateLimit');
+	});
+	queue.addEventListener('rateLimitCleared', () => {
+		events.push('rateLimitCleared');
+	});
 
 	// Schedule multiple tasks synchronously
 	const promises = [];
@@ -134,11 +140,11 @@ test('rate-limit state consistency with sync microtask scheduling', async () => 
 
 	// Events should be consistent
 	await delay(10);
-	assert.equal(queue.isRateLimited, true);
-	assert.equal(events[0], 'rateLimit');
+	assert.strictEqual(queue.isRateLimited, true);
+	assert.strictEqual(events[0], 'rateLimit');
 
 	await Promise.all(promises);
-	assert.equal(queue.isRateLimited, false);
+	assert.strictEqual(queue.isRateLimited, false);
 	assert.ok(events.includes('rateLimitCleared'));
 });
 
@@ -148,16 +154,18 @@ test('rate-limit with queue manipulation during rate-limit event', async () => {
 		intervalCap: 1,
 	});
 
-	let manipulated = false;
+	let hasManipulated = false;
 
-	queue.on('rateLimit', () => {
-		if (!manipulated) {
-			manipulated = true;
-			// Try to manipulate queue during event
-			queue.add(async () => 'extra');
-			queue.pause();
-			queue.start();
+	queue.addEventListener('rateLimit', () => {
+		if (hasManipulated) {
+			return;
 		}
+
+		hasManipulated = true;
+		// Try to manipulate queue during event
+		queue.add(async () => 'extra');
+		queue.pause();
+		queue.start();
 	});
 
 	// Add tasks to trigger rate limit
@@ -189,7 +197,7 @@ test('onRateLimit() with microtask race condition', async () => {
 	});
 
 	const promises = [];
-	let rateLimitCalled = false;
+	let hasRateLimitBeenCalled = false;
 
 	// Race: onRateLimit vs task completion
 	promises.push(queue.add(async () => {
@@ -205,11 +213,11 @@ test('onRateLimit() with microtask race condition', async () => {
 	await Promise.resolve(); // Microtask delay
 	const rateLimitPromise = (async () => {
 		await queue.onRateLimit();
-		rateLimitCalled = true;
+		hasRateLimitBeenCalled = true;
 	})();
 
 	await Promise.all([...promises, rateLimitPromise]);
-	assert.ok(rateLimitCalled, 'onRateLimit should handle late attachment');
+	assert.ok(hasRateLimitBeenCalled, 'onRateLimit should handle late attachment');
 });
 
 test('onRateLimitCleared() with microtask race condition', async () => {
@@ -233,7 +241,7 @@ test('onRateLimitCleared() with microtask race condition', async () => {
 
 	// The promise should resolve when rate limit is cleared
 	await clearedPromise;
-	assert.ok(true, 'onRateLimitCleared should handle attachment during rate limit');
+	assert.strictEqual(queue.isRateLimited, false, 'onRateLimitCleared should handle attachment during rate limit');
 });
 
 test('onRateLimit() called during state transition', async () => {
@@ -264,7 +272,7 @@ test('onRateLimit() called during state transition', async () => {
 	await queue.onIdle();
 
 	// Verify sequence order
-	assert.equal(sequence[0], 'task1-start');
+	assert.strictEqual(sequence[0], 'task1-start');
 	assert.ok(sequence.includes('rate-limit'));
 });
 
@@ -276,8 +284,12 @@ test('onRateLimit/onRateLimitCleared rapid transitions', async () => {
 
 	const events: string[] = [];
 
-	queue.on('rateLimit', () => events.push('limited'));
-	queue.on('rateLimitCleared', () => events.push('cleared'));
+	queue.addEventListener('rateLimit', () => {
+		events.push('limited');
+	});
+	queue.addEventListener('rateLimitCleared', () => {
+		events.push('cleared');
+	});
 
 	// Create rapid transitions
 	const createTransitions = async () => {
@@ -308,10 +320,10 @@ test('onRateLimit() resolves when rate limit is triggered', async () => {
 	// Add tasks to eventually trigger rate limit
 	queue.add(async () => delay(10));
 
-	let rateLimitResolved = false;
+	let hasRateLimitResolved = false;
 	const rateLimitPromise = (async () => {
 		await queue.onRateLimit();
-		rateLimitResolved = true;
+		hasRateLimitResolved = true;
 	})();
 
 	// Add another task which will trigger rate limit
@@ -321,7 +333,7 @@ test('onRateLimit() resolves when rate limit is triggered', async () => {
 	await delay(20);
 
 	// OnRateLimit should have resolved since we hit rate limit
-	assert.ok(rateLimitResolved, 'onRateLimit should resolve when rate limit is triggered');
+	assert.ok(hasRateLimitResolved, 'onRateLimit should resolve when rate limit is triggered');
 
 	// Clean up
 	await queue.onIdle();
