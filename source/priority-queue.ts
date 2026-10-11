@@ -5,7 +5,7 @@ import {type QueueAddOptions} from './options.js';
 const compactionThreshold = 100;
 
 export type PriorityQueueOptions = {
-	priority?: number;
+	priority?: number | undefined;
 } & QueueAddOptions;
 
 export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOptions> {

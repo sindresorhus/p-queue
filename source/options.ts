@@ -1,4 +1,5 @@
 import {type Queue, type RunFunction} from './queue.js';
+import type PriorityQueue from './priority-queue.js';
 
 type TimeoutOptions = {
 	/**
@@ -32,10 +33,11 @@ type TimeoutOptions = {
 	await queue.add(() => verySlowTask(), {timeout: undefined});
 	```
 	*/
-	timeout?: number;
+	timeout?: number | undefined;
 };
 
-export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOptions extends QueueAddOptions> = {
+// The defaults match `PQueue`, so that `Options` without type arguments is for the default queue.
+export type Options<QueueType extends Queue<RunFunction, QueueOptions> = PriorityQueue, QueueOptions extends QueueAddOptions = QueueAddOptions> = {
 	/**
 	The maximum number of tasks that run at the same time. Must be an integer or `Infinity`.
 
@@ -107,19 +109,19 @@ export type QueueAddOptions = {
 
 	@default 0
 	*/
-	readonly priority?: number;
+	readonly priority?: number | undefined;
 
 	/**
 	A unique identifier for the task, used to change its priority with `.setPriority()`. Defaults to an incrementing number as a string (`'1'`, `'2'`, and so on).
 	*/
-	id?: string;
+	id?: string | undefined;
 
 	/**
 	Override the timeout of the queue for this task. `undefined` means no timeout.
 
 	@default The `timeout` of the queue
 	*/
-	timeout?: number;
+	timeout?: number | undefined;
 } & TaskOptions;
 
 export type TaskOptions = {

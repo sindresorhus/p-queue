@@ -60,16 +60,23 @@
 		"typescript": "^6.0.3",
 		"xo": "^5.0.1"
 	},
-	"xo": {
-		"rules": {
-			"@typescript-eslint/member-ordering": "off",
-			"@typescript-eslint/no-floating-promises": "off",
-			"@typescript-eslint/no-unsafe-call": "off",
-			"@typescript-eslint/no-unsafe-assignment": "off",
-			"@typescript-eslint/no-unsafe-return": "off",
-			"@typescript-eslint/no-unsafe-argument": "off",
-			"@typescript-eslint/prefer-promise-reject-errors": "off",
-			"node-test/no-import-test-files": "off"
+	"xo": [
+		{
+			"ignores": [
+				"test/fixtures"
+			]
+		},
+		{
+			"rules": {
+				"@typescript-eslint/member-ordering": "off",
+				"@typescript-eslint/no-floating-promises": "off",
+				"@typescript-eslint/no-unsafe-call": "off",
+				"@typescript-eslint/no-unsafe-assignment": "off",
+				"@typescript-eslint/no-unsafe-return": "off",
+				"@typescript-eslint/no-unsafe-argument": "off",
+				"@typescript-eslint/prefer-promise-reject-errors": "off",
+				"node-test/no-import-test-files": "off"
+			}
 		}
-	}
+	]
 }

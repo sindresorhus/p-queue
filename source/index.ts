@@ -2,9 +2,11 @@ import {type Queue, type RunFunction} from './queue.js';
 import PriorityQueue from './priority-queue.js';
 import {type QueueAddOptions, type Options, type TaskOptions} from './options.js';
 
-type Task<TaskResultType> =
-	| ((options: TaskOptions) => PromiseLike<TaskResultType>)
-	| ((options: TaskOptions) => TaskResultType);
+// `.add()` resolves with `Awaited<TaskResultType>`, because a task that returns `T | Promise<T>` can infer `TaskResultType` as that union.
+type Task<TaskResultType> = (options: TaskOptions) => TaskResultType | PromiseLike<TaskResultType>;
+
+// The result of each task, so that `.addAll()` with tasks of different result types resolves with a tuple.
+type TaskResults<Tasks extends ReadonlyArray<Task<unknown>>> = {-readonly [Index in keyof Tasks]: Awaited<ReturnType<Tasks[Index]>>};
 
 type EventMap = {
 	active: Event;
@@ -100,10 +102,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	// Track currently running tasks for debugging
 	readonly #runningTasks = new Map<symbol, {
-		id?: string;
+		id: string;
 		priority: number;
 		startTime: number;
-		timeout?: number;
+		timeout: number | undefined;
 	}>();
 
 	readonly #queueAbortListenerCleanupFunctions = new Set<() => void>();
@@ -121,7 +123,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	queue.timeout = 10000;
 	```
 	*/
-	timeout?: number;
+	timeout?: number | undefined;
 
 	constructor(options?: Options<QueueType, EnqueueOptionsType>) {
 		super();
@@ -558,13 +560,15 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		}
 	}
 
-	async #add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType>, waitingTask: WaitingTask): Promise<TaskResultType> {
+	async #add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType>, waitingTask: WaitingTask): Promise<Awaited<TaskResultType>> {
+		// Assign unique ID if not provided
+		const id = options.id ?? (this.#idAssigner++).toString();
+
 		// Create a copy to avoid mutating the original options object
 		options = {
 			timeout: this.timeout,
 			...options,
-			// Assign unique ID if not provided
-			id: options.id ?? (this.#idAssigner++).toString(),
+			id,
 		};
 
 		validateTimeout(options.timeout);
@@ -574,12 +578,12 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			throw new TypeError(`Expected \`priority\` to be a number, got \`${String(options.priority)}\` (${typeof options.priority})`);
 		}
 
-		waitingTask.id = options.id;
+		waitingTask.id = id;
 		waitingTask.priority = options.priority ?? 0; // Match priority-queue default
 
-		return new Promise((resolve, reject) => {
+		return new Promise<Awaited<TaskResultType>>((resolve, reject) => {
 			// Create a unique symbol for tracking this task
-			const taskSymbol = Symbol(`task-${options.id}`);
+			const taskSymbol = Symbol(`task-${id}`);
 
 			let cleanupQueueAbortHandler = () => undefined;
 			const run = async () => {
@@ -598,7 +602,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 				// Track this running task
 				this.#runningTasks.set(taskSymbol, {
-					id: options.id,
+					id,
 					priority: waitingTask.priority!,
 					startTime: Date.now(),
 					timeout: options.timeout,
@@ -694,7 +698,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					return;
 				}
 
-				this.#queue.remove(options.id!);
+				this.#queue.remove(id);
 			};
 
 			// Handle abort while task is waiting in the queue
@@ -801,9 +805,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	Handle rejections of the returned promise. Otherwise, they are unhandled rejections, which can make the process exit.
 	*/
-	add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<TaskResultType>;
-	// Not `async`, so that `.clear()` gets the same promise as the caller and can mark it as handled. An `async` wrapper would return a different promise.
-	add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType> { // eslint-disable-line @typescript-eslint/promise-function-async
+	add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<Awaited<TaskResultType>> { // eslint-disable-line @typescript-eslint/promise-function-async
+		// Not `async`, so that `.clear()` gets the same promise as the caller and can mark it as handled. An `async` wrapper would return a different promise.
 		const waitingTask: WaitingTask = {};
 		const promise = this.#add(function_, options, waitingTask);
 		waitingTask.promise = promise;
@@ -819,16 +822,21 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	/**
 	Like `.add()`, but takes an array of functions.
 
-	@returns A promise that resolves with all the results when all tasks complete.
+	@returns A promise that resolves with all the results, in the order of the functions, when all tasks complete.
 	*/
+	async addAll<const Tasks extends ReadonlyArray<Task<unknown>>>(
+		functions: Tasks,
+		options?: Partial<EnqueueOptionsType>,
+	): Promise<TaskResults<Tasks>>;
+	// For an explicit result type, like `.addAll<string>(…)`.
 	async addAll<TaskResultsType>(
 		functions: ReadonlyArray<Task<TaskResultsType>>,
 		options?: Partial<EnqueueOptionsType>,
-	): Promise<TaskResultsType[]>;
-	async addAll<TaskResultsType>(
-		functions: ReadonlyArray<Task<TaskResultsType>>,
+	): Promise<Array<Awaited<TaskResultsType>>>;
+	async addAll(
+		functions: ReadonlyArray<Task<unknown>>,
 		options?: Partial<EnqueueOptionsType>,
-	): Promise<TaskResultsType[]> {
+	): Promise<unknown[]> {
 		return Promise.all(functions.map(async function_ => this.add(function_, options)));
 	}
 
@@ -1192,11 +1200,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	```
 	*/
 	get runningTasks(): ReadonlyArray<{
-		readonly id?: string;
+		readonly id: string;
 		readonly priority: number;
 		readonly startTime: number;
-		readonly timeout?: number;
-		readonly timeoutRemaining?: number;
+		readonly timeout: number | undefined;
+		readonly timeoutRemaining: number | undefined;
 	}> {
 		// Return fresh array with fresh objects to prevent mutations
 		return Array.from(this.#runningTasks.values(), task => ({
@@ -1230,9 +1238,9 @@ export class TimeoutError extends DOMException {
 	}
 }
 
-export type {Queue} from './queue.js';
+export type {Queue, RunFunction} from './queue.js';
 export {default as PriorityQueue} from './priority-queue.js';
-export {type QueueAddOptions, type Options} from './options.js';
+export {type QueueAddOptions, type Options, type TaskOptions} from './options.js';
 
 // Typed event listeners. Only types, the methods are the native ones from `EventTarget`. It must be an interface to merge with the class.
 // eslint-disable-next-line @typescript-eslint/consistent-type-definitions

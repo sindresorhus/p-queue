@@ -248,7 +248,7 @@ try {
 
 #### .addAll(fns, options?)
 
-Like `.add()`, but takes an array of functions. Returns a promise that resolves with all the results when all tasks complete.
+Like `.add()`, but takes an array of functions. Returns a promise that resolves with all the results, in the order of the functions, when all tasks complete.
 
 #### .pause()
 
