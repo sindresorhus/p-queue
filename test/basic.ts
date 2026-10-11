@@ -1771,3 +1771,30 @@ test('.add() runs tasks with `Infinity` priority first, in the order they were a
 
 	assert.deepEqual(order, ['first', 'second', 'third', 'normal', 'last']);
 });
+
+test('.onError() - pausing in an `error` listener stops the remaining tasks, as documented', async () => {
+	const queue = new PQueue({concurrency: 2});
+	queue.addEventListener('error', () => {
+		queue.pause();
+	}, {once: true});
+
+	const started: number[] = [];
+	const fetchData = async (number: number) => {
+		started.push(number);
+		await delay(10 * number);
+		if (number === 1) {
+			throw new Error('🦄');
+		}
+	};
+
+	queue.add(async () => fetchData(1)).catch(() => undefined);
+	queue.add(async () => fetchData(2)).catch(() => undefined);
+	queue.add(async () => fetchData(3)).catch(() => undefined);
+
+	await assert.rejects(Promise.race([queue.onError(), queue.onIdle()]), {message: '🦄'});
+	await queue.onPendingZero();
+
+	assert.deepEqual(started, [1, 2]);
+	assert.equal(queue.size, 1);
+	queue.clear();
+});

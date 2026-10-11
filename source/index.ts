@@ -1035,6 +1035,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	```
 	const queue = new PQueue({intervalCap: 5, interval: 1000});
 
+	for (let index = 0; index < 10; index++) {
+		queue.add(() => someTask());
+	}
+
 	await queue.onRateLimitCleared();
 	console.log('The rate limit is cleared');
 	```
@@ -1051,7 +1055,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	/**
-	Returns a promise that rejects when a task fails: it throws, times out, or its `signal` aborts while it runs.
+	Returns a promise that rejects when a task fails: it throws, times out, or its `signal` aborts while it runs. It rejects with the error of the task, or with `null` if the error is `undefined`, like the `error` event.
 
 	Use `Promise.race([queue.onError(), queue.onIdle()])` to stop at the first error, and to resolve normally when the queue becomes idle.
 
@@ -1063,6 +1067,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	const queue = new PQueue({concurrency: 2});
 
+	// Do not start the remaining tasks. Pause in an `error` listener, because it runs before the next task starts, and the code after `await` runs later.
+	queue.addEventListener('error', () => {
+		queue.pause();
+	}, {once: true});
+
 	queue.add(() => fetchData(1)).catch(() => {});
 	queue.add(() => fetchData(2)).catch(() => {});
 	queue.add(() => fetchData(3)).catch(() => {});
@@ -1073,7 +1082,6 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			queue.onIdle()
 		]);
 	} catch (error) {
-		queue.pause(); // Do not start the remaining tasks
 		console.error('Queue failed:', error);
 	}
 	```
@@ -1189,13 +1197,13 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	//   priority: 0,
 	//   startTime: 1759253001716,
 	//   timeout: 10000,
-	//   timeoutRemaining: 9700
+	//   timeoutRemaining: 10000
 	// }, {
 	//   id: 'posts-456',
 	//   priority: 1,
-	//   startTime: 1759253001916,
+	//   startTime: 1759253001716,
 	//   timeout: 10000,
-	//   timeoutRemaining: 9900
+	//   timeoutRemaining: 10000
 	// }]
 	```
 	*/

@@ -72,7 +72,7 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions> = Priorit
 	The length of the rate-limit interval in milliseconds. `0` disables rate limiting.
 
 	Minimum: `0`.
-	Maximum: `2147483647` (about 24.8 days).
+	Maximum: `2147483647` (about 24.8 days) with a finite `intervalCap`.
 
 	@default 0
 	*/
@@ -112,7 +112,7 @@ export type QueueAddOptions = {
 	readonly priority?: number | undefined;
 
 	/**
-	A unique identifier for the task, used to change its priority with `.setPriority()`. Defaults to an incrementing number as a string (`'1'`, `'2'`, and so on).
+	A unique identifier for the task, used to change its priority with `.setPriority()`. Defaults to an incrementing number as a string (`'1'`, `'2'`, and so on), so do not use such strings as your own ids.
 	*/
 	id?: string | undefined;
 
@@ -145,7 +145,7 @@ export type TaskOptions = {
 		await queue.add(async ({signal}) => {
 			const request = got('https://sindresorhus.com');
 
-			signal.addEventListener('abort', () => {
+			signal?.addEventListener('abort', () => {
 				request.cancel();
 			});
 

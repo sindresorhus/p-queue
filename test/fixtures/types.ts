@@ -84,6 +84,12 @@ const task = async ({signal}: TaskOptions) => signal?.aborted;
 const fifoResult = fifoQueue.add(task);
 expectType<Equal<typeof fifoResult, Promise<boolean | undefined>>>();
 
+// The `signal` example in the readme.
+const controller = new AbortController();
+await queue.add(async ({signal}) => {
+	signal?.addEventListener('abort', () => {});
+}, {signal: controller.signal});
+
 // `Options` works without type arguments, for the default queue.
 const options: Options = {concurrency: 2, timeout: 1000};
 const queueFromOptions = new PQueue(options);

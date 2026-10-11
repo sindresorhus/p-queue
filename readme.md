@@ -131,7 +131,7 @@ The maximum number of tasks that start in each `interval`. Must be an integer or
 Type: `number`\
 Default: `0`\
 Minimum: `0`\
-Maximum: `2147483647` (about 24.8 days)
+Maximum: `2147483647` (about 24.8 days) with a finite `intervalCap`
 
 The length of the rate-limit interval in milliseconds. `0` disables rate limiting.
 
@@ -198,7 +198,7 @@ Tasks with a higher priority start first. `Infinity` and `-Infinity` work. `.add
 
 Type: `string`
 
-A unique identifier for the task, used to change its priority with `.setPriority()`. Defaults to an incrementing number as a string (`'1'`, `'2'`, and so on).
+A unique identifier for the task, used to change its priority with `.setPriority()`. Defaults to an incrementing number as a string (`'1'`, `'2'`, and so on), so do not use such strings as your own ids.
 
 ##### timeout
 
@@ -227,7 +227,7 @@ try {
 	await queue.add(async ({signal}) => {
 		const request = got('https://sindresorhus.com');
 
-		signal.addEventListener('abort', () => {
+		signal?.addEventListener('abort', () => {
 			request.cancel();
 		});
 
@@ -312,13 +312,17 @@ Returns a promise that resolves when the queue is no longer rate-limited. If the
 ```js
 const queue = new PQueue({intervalCap: 5, interval: 1000});
 
+for (let index = 0; index < 10; index++) {
+	queue.add(() => someTask());
+}
+
 await queue.onRateLimitCleared();
 console.log('The rate limit is cleared');
 ```
 
 #### .onError()
 
-Returns a promise that rejects when a task fails: it throws, times out, or its `signal` aborts while it runs.
+Returns a promise that rejects when a task fails: it throws, times out, or its `signal` aborts while it runs. It rejects with the error of the task, or with `null` if the error is `undefined`, like the `error` event.
 
 Use `Promise.race([queue.onError(), queue.onIdle()])` to stop at the first error, and to resolve normally when the queue becomes idle.
 
@@ -330,6 +334,11 @@ import PQueue from 'p-queue';
 
 const queue = new PQueue({concurrency: 2});
 
+// Do not start the remaining tasks. Pause in an `error` listener, because it runs before the next task starts, and the code after `await` runs later.
+queue.addEventListener('error', () => {
+	queue.pause();
+}, {once: true});
+
 queue.add(() => fetchData(1)).catch(() => {});
 queue.add(() => fetchData(2)).catch(() => {});
 queue.add(() => fetchData(3)).catch(() => {});
@@ -340,7 +349,6 @@ try {
 		queue.onIdle()
 	]);
 } catch (error) {
-	queue.pause(); // Do not start the remaining tasks
 	console.error('Queue failed:', error);
 }
 ```
@@ -511,14 +519,14 @@ console.log(queue.runningTasks);
 		priority: 0,
 		startTime: 1759253001716,
 		timeout: 10000,
-		timeoutRemaining: 9700
+		timeoutRemaining: 10000
 	},
 	{
 		id: 'posts-456',
 		priority: 1,
-		startTime: 1759253001916,
+		startTime: 1759253001716,
 		timeout: 10000,
-		timeoutRemaining: 9900
+		timeoutRemaining: 10000
 	}
 ]
 */
