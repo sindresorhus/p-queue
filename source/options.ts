@@ -100,7 +100,7 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOpt
 
 export type QueueAddOptions = {
 	/**
-	Tasks with a higher priority start first.
+	Tasks with a higher priority start first. `Infinity` and `-Infinity` work. `.add()` rejects with a `TypeError` when it is `NaN` or not a number.
 
 	@default 0
 	*/

@@ -1752,3 +1752,22 @@ test('an active listener cannot exceed the concurrency limit', async t => {
 	// eslint-disable-next-line node-test/prefer-test-context-assert
 	assert.strictEqual(queue.size, 0);
 });
+
+test('.add() runs tasks with `Infinity` priority first, in the order they were added', async () => {
+	const queue = new PQueue({concurrency: 1, autoStart: false});
+	const order: string[] = [];
+	const task = (name: string) => () => {
+		order.push(name);
+	};
+
+	queue.add(task('first'), {priority: Infinity});
+	queue.add(task('normal'));
+	queue.add(task('second'), {priority: Infinity});
+	queue.add(task('last'), {priority: -Infinity});
+	queue.add(task('third'), {priority: Infinity});
+
+	queue.start();
+	await queue.onIdle();
+
+	assert.deepEqual(order, ['first', 'second', 'third', 'normal', 'last']);
+});

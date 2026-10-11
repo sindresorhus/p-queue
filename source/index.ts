@@ -23,6 +23,9 @@ type EventName = keyof EventMap;
 
 // A task that waits in the queue. `promise` is the promise that `.add()` returned, and `reject` rejects it. `.clear()` marks the promise as handled before it rejects it, so that a caller that ignores the promise does not get an unhandled rejection, which can make the process exit. A caller that handles the promise still gets the error.
 type WaitingTask = {
+	id?: string;
+	// Kept here, because `.setPriority()` changes it while the task waits, and `runningTasks` reports it.
+	priority?: number;
 	promise?: Promise<unknown>;
 	reject?: (reason: unknown) => void;
 	isCleared?: boolean;
@@ -515,6 +518,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			throw new TypeError(`Expected \`timeout\` to be a positive finite number, got \`${options.timeout}\` (${typeof options.timeout})`);
 		}
 
+		// A `NaN` priority breaks the order of the queue, also for the other tasks. `Infinity` is fine.
+		if (options.priority !== undefined && (typeof options.priority !== 'number' || Number.isNaN(options.priority))) {
+			throw new TypeError(`Expected \`priority\` to be a number, got \`${String(options.priority)}\` (${typeof options.priority})`);
+		}
+
+		waitingTask.id = options.id;
+		waitingTask.priority = options.priority ?? 0; // Match priority-queue default
+
 		return new Promise((resolve, reject) => {
 			// Create a unique symbol for tracking this task
 			const taskSymbol = Symbol(`task-${options.id}`);
@@ -530,7 +541,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				// Track this running task
 				this.#runningTasks.set(taskSymbol, {
 					id: options.id,
-					priority: options.priority ?? 0, // Match priority-queue default
+					priority: waitingTask.priority!,
 					startTime: Date.now(),
 					timeout: options.timeout,
 				});
@@ -723,6 +734,13 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		}
 
 		this.#queue.setPriority(id, priority);
+
+		for (const waitingTask of this.#waitingTasks) {
+			if (waitingTask.id === id) {
+				waitingTask.priority = priority;
+				break;
+			}
+		}
 	}
 
 	/**

@@ -200,3 +200,27 @@ test('abort before start rolls back interval count', async () => {
 	// Should not have waited for another interval
 	assert.ok(elapsed < 100, 'Task should start immediately in new interval');
 });
+
+test('priority validation in add', async () => {
+	const queue = new PQueue({concurrency: 1, autoStart: false});
+	const expectedError = {
+		name: 'TypeError',
+		message: /Expected `priority` to be a number/v,
+	};
+
+	let hasRun = false;
+	await assert.rejects(queue.add(() => {
+		hasRun = true;
+	}, {priority: NaN}), expectedError);
+	// @ts-expect-error Testing
+	await assert.rejects(queue.add(async () => 'ignored', {priority: '1'}), expectedError);
+	assert.equal(queue.size, 0);
+
+	queue.start();
+	await queue.onIdle();
+	assert.equal(hasRun, false);
+
+	assert.equal(await queue.add(async () => '🦄', {priority: Infinity}), '🦄');
+	assert.equal(await queue.add(async () => '🦄', {priority: -Infinity}), '🦄');
+	assert.equal(await queue.add(async () => '🦄', {priority: undefined}), '🦄');
+});

@@ -301,6 +301,23 @@ test('isSaturated when concurrency is lowered below the running tasks', async ()
 	assert.equal(queue.isSaturated, false);
 });
 
+test('runningTasks has the priority set by setPriority while the task waited', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const {promise, resolve} = pDefer();
+
+	queue.add(async () => promise, {id: 'blocker'});
+	let priorityWhileRunning: number | undefined;
+	const task = queue.add(() => {
+		priorityWhileRunning = queue.runningTasks.find(({id}) => id === 'task')?.priority;
+	}, {id: 'task', priority: 1});
+
+	queue.setPriority('task', 5);
+	resolve();
+	await task;
+
+	assert.equal(priorityWhileRunning, 5);
+});
+
 test('timeout error has the queue state at the time of the timeout', async () => {
 	const queue = new PQueue({concurrency: 1, timeout: 20});
 

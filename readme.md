@@ -190,7 +190,7 @@ Type: `object`
 Type: `number`\
 Default: `0`
 
-Tasks with a higher priority start first.
+Tasks with a higher priority start first. `Infinity` and `-Infinity` work. `.add()` rejects with a `TypeError` when it is `NaN` or not a number.
 
 ##### id
 

@@ -175,3 +175,56 @@ test('PriorityQueue setPriority works when only one live item remains', () => {
 	assert.equal(queue.dequeue(), second);
 	assert.equal(queue.dequeue(), undefined);
 });
+
+test('PriorityQueue keeps FIFO order among `Infinity` priorities', () => {
+	const queue = new PriorityQueue();
+	const first = createRun('first');
+	const low = createRun('low');
+	const second = createRun('second');
+	const third = createRun('third');
+
+	queue.enqueue(first, {priority: Infinity});
+	queue.enqueue(low, {priority: 0});
+	queue.enqueue(second, {priority: Infinity});
+	queue.enqueue(third, {priority: Infinity});
+
+	assert.deepEqual([queue.dequeue(), queue.dequeue(), queue.dequeue(), queue.dequeue()], [first, second, third, low]);
+});
+
+test('PriorityQueue orders `-Infinity` priorities last and keeps their FIFO order', () => {
+	const queue = new PriorityQueue();
+	const first = createRun('first');
+	const second = createRun('second');
+	const normal = createRun('normal');
+
+	queue.enqueue(first, {priority: -Infinity});
+	queue.enqueue(second, {priority: -Infinity});
+	queue.enqueue(normal, {priority: 0});
+
+	assert.deepEqual([queue.dequeue(), queue.dequeue(), queue.dequeue()], [normal, first, second]);
+});
+
+test('PriorityQueue setPriority with the current priority keeps the position', () => {
+	const queue = new PriorityQueue();
+	const first = createRun('first');
+	const second = createRun('second');
+	const third = createRun('third');
+
+	queue.enqueue(first, {id: 'first', priority: 1});
+	queue.enqueue(second, {id: 'second', priority: 1});
+	queue.enqueue(third, {id: 'third', priority: 1});
+
+	queue.setPriority('first', 1);
+	queue.setPriority('second', 1);
+
+	assert.deepEqual([queue.dequeue(), queue.dequeue(), queue.dequeue()], [first, second, third]);
+});
+
+test('PriorityQueue setPriority with the current priority still throws for an unknown id', () => {
+	const queue = new PriorityQueue();
+	queue.enqueue(createRun('first'), {id: 'first', priority: 1});
+
+	assert.throws(() => {
+		queue.setPriority('missing', 1);
+	}, ReferenceError);
+});

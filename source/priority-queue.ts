@@ -53,7 +53,8 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 
 		// Binary insertion must run on the live sorted range only.
 		this.#compact();
-		const index = lowerBound(this.#queue, element, (a: Readonly<PriorityQueueOptions>, b: Readonly<PriorityQueueOptions>) => b.priority! - a.priority!);
+		// Equal priorities compare as `0` first, because `Infinity - Infinity` is `NaN`.
+		const index = lowerBound(this.#queue, element, (a: Readonly<PriorityQueueOptions>, b: Readonly<PriorityQueueOptions>) => a.priority === b.priority ? 0 : b.priority! - a.priority!);
 		this.#queue.splice(index, 0, element);
 	}
 
@@ -62,6 +63,11 @@ export default class PriorityQueue implements Queue<RunFunction, PriorityQueueOp
 		const index = this.#queue.findIndex((element: Readonly<PriorityQueueOptions>, index) => index >= this.#head && element.id === id);
 		if (index === -1) {
 			throw new ReferenceError(`No promise function with the id "${id}" exists in the queue.`);
+		}
+
+		// Moving it would put it behind the tasks with the same priority.
+		if (this.#queue[index]!.priority === priority) {
+			return;
 		}
 
 		const [item] = this.#queue.splice(index, 1);
