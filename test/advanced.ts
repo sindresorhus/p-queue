@@ -293,6 +293,23 @@ test('should skip an aborted job', async () => {
 	await assert.rejects(queue.add(() => {}, {signal: controller.signal}));
 });
 
+for (const timeout of [undefined, 5000]) {
+	test(`a signal that aborts while the task starts rejects and frees the slot (timeout: ${timeout})`, {timeout: 2000}, async () => {
+		const queue = new PQueue({concurrency: 1, timeout});
+		const controller = new AbortController();
+		const reason = new Error('Aborted while starting');
+
+		const promise = queue.add(async () => {
+			controller.abort(reason);
+			return new Promise(() => {}); // eslint-disable-line @typescript-eslint/no-empty-function
+		}, {signal: controller.signal});
+
+		await assert.rejects(promise, reason);
+		assert.equal(await queue.add(async () => '🦄'), '🦄');
+		assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+	});
+}
+
 test('should reject when signal is aborted while task is waiting in queue', async () => {
 	const queue = new PQueue({concurrency: 1});
 	const controller = new AbortController();

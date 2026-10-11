@@ -506,6 +506,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 							};
 
 							signal.addEventListener('abort', eventListener, {once: true});
+
+							// The task can abort the signal while it starts, before this listener exists, and an `AbortSignal` does not fire the event again.
+							if (signal.aborted) {
+								eventListener();
+							}
 						})]);
 					}
 
