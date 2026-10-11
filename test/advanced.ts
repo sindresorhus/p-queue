@@ -2185,3 +2185,24 @@ test('a task that throws synchronously emits `error` after `active`, so `.onErro
 	assert.deepEqual(await run({}), expected);
 	assert.deepEqual(await run({timeout: 1000}), expected);
 });
+
+test('.add() with an already aborted signal rejects without adding the task or emitting events', async () => {
+	const queue = new PQueue();
+	const events: string[] = [];
+	for (const name of ['add', 'active', 'empty', 'idle', 'next', 'error'] as const) {
+		queue.addEventListener(name, () => {
+			events.push(name);
+		});
+	}
+
+	let hasRun = false;
+	const reason = new Error('🦄');
+	await assert.rejects(queue.add(() => {
+		hasRun = true;
+	}, {signal: AbortSignal.abort(reason)}), reason);
+
+	assert.equal(hasRun, false);
+	assert.deepEqual(events, []);
+	assert.equal(queue.size, 0);
+	assert.equal(queue.pending, 0);
+});

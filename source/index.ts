@@ -429,6 +429,29 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		this.#timeoutId = undefined;
 	}
 
+	// Emits `empty`, and `idle` when no tasks run. For when the queue has no waiting tasks.
+	#emitEmptyAndIdle(): void {
+		// We can clear the interval ("pause")
+		// Because we can redo it later ("resume")
+		this.#clearIntervalTimer();
+		this.#emit('empty');
+
+		// An `empty` listener can add a task that waits for the rate limit, so check the size again.
+		if (this.#pending > 0 || this.#queue.size > 0) {
+			return;
+		}
+
+		// Clear timeout as well when completely idle
+		this.#clearTimeoutTimer();
+
+		// Compact strict ticks when idle to free memory
+		if (this.#strict) {
+			this.#cleanupStrictTicks(Date.now());
+		}
+
+		this.#emit('idle');
+	}
+
 	#tryToStartAnother(): boolean {
 		// A loop, not recursion, because many tasks can be skipped.
 		let isStarted: boolean | undefined;
@@ -442,25 +465,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	// Returns `undefined` when it skipped a task whose signal aborted while it waited.
 	#startNextTask(): boolean | undefined {
 		if (this.#queue.size === 0) {
-			// We can clear the interval ("pause")
-			// Because we can redo it later ("resume")
-			this.#clearIntervalTimer();
-			this.#emit('empty');
-
-			// An `empty` listener can add a task that waits for the rate limit, so check the size again.
-			if (this.#pending === 0 && this.#queue.size === 0) {
-				// Clear timeout as well when completely idle
-				this.#clearTimeoutTimer();
-
-				// Compact strict ticks when idle to free memory
-				if (this.#strict && this.#strictTicksStartIndex > 0) {
-					const now = Date.now();
-					this.#cleanupStrictTicks(now);
-				}
-
-				this.#emit('idle');
-			}
-
+			this.#emitEmptyAndIdle();
 			return false;
 		}
 
@@ -582,6 +587,12 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		waitingTask.priority = options.priority ?? 0; // Match priority-queue default
 
 		return new Promise<Awaited<TaskResultType>>((resolve, reject) => {
+			// A task with an already aborted signal is never added, so it emits no events.
+			if (options.signal?.aborted) {
+				reject(options.signal.reason);
+				return;
+			}
+
 			// Create a unique symbol for tracking this task
 			const taskSymbol = Symbol(`task-${id}`);
 
@@ -718,11 +729,6 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					signal.removeEventListener('abort', queueAbortHandler);
 					this.#queueAbortListenerCleanupFunctions.delete(cleanupQueueAbortHandler);
 				};
-
-				if (signal.aborted) {
-					queueAbortHandler();
-					return;
-				}
 
 				signal.addEventListener('abort', queueAbortHandler, {once: true});
 				this.#queueAbortListenerCleanupFunctions.add(cleanupQueueAbortHandler);
@@ -910,10 +916,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 		this.#waitingTasks.clear();
 
-		// Clear interval timer since queue is now empty (consistent with #tryToStartAnother)
-		this.#clearIntervalTimer();
-
-		// Note: We preserve strict mode rate-limiting state (ticks and timeout)
+		// Note: We preserve strict mode rate-limiting state (ticks)
 		// because clear() only clears queued tasks, not rate limit history.
 		// This ensures that rate limits are still enforced after clearing the queue.
 
@@ -924,13 +927,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		this.#updateRateLimitState();
 
 		// Emit events so waiters (onEmpty, onIdle, onSizeLessThan) can resolve
-		this.#emit('empty');
-
-		// An `empty` listener can add a task that waits for the rate limit, so check the size again.
-		if (this.#pending === 0 && this.#queue.size === 0) {
-			this.#clearTimeoutTimer();
-			this.#emit('idle');
-		}
+		this.#emitEmptyAndIdle();
 
 		this.#emit('next');
 	}
