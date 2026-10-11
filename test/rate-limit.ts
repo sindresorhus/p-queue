@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import delay from 'delay';
+import pDefer from 'p-defer';
 import PQueue from '../source/index.js';
 
 test('rate-limit rapid pause/start cycles', async () => {
@@ -337,4 +338,94 @@ test('onRateLimit() resolves when rate limit is triggered', async () => {
 
 	// Clean up
 	await queue.onIdle();
+});
+
+test('rate-limit does not reset the count when it resumes at the window boundary', async t => {
+	const startTime = 1_000_000;
+	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date'], now: startTime});
+
+	const queue = new PQueue({
+		concurrency: 1,
+		interval: 100,
+		intervalCap: 2,
+	});
+
+	const startTimes: number[] = [];
+	const task = async () => {
+		startTimes.push(Date.now() - startTime);
+	};
+
+	queue.add(task);
+	queue.add(task);
+	await queue.onIdle();
+
+	// The window is full, so this task waits for the window boundary.
+	t.mock.timers.tick(7);
+	const task3 = queue.add(task);
+	t.mock.timers.tick(93);
+	await task3;
+
+	// Only one of these tasks fits in the rest of the window.
+	t.mock.timers.tick(50);
+	queue.add(task);
+	queue.add(task);
+	await new Promise(resolve => {
+		setImmediate(resolve);
+	});
+
+	t.assert.deepStrictEqual(startTimes, [0, 0, 100, 150]);
+
+	t.mock.timers.tick(50);
+	await queue.onIdle();
+	t.assert.deepStrictEqual(startTimes, [0, 0, 100, 150, 200]);
+});
+
+test('rate-limit does not reset the count when a completion starts the next window before the resume timeout fires', async t => {
+	const startTime = 1_000_000;
+	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date'], now: startTime});
+
+	const queue = new PQueue({
+		concurrency: 1,
+		interval: 100,
+		intervalCap: 1,
+	});
+
+	const startTimes: number[] = [];
+	const flush = async () => new Promise(resolve => {
+		setImmediate(resolve);
+	});
+
+	const task1 = pDefer();
+	const task2 = pDefer();
+	const task = (promise?: Promise<void>) => async () => {
+		startTimes.push(Date.now() - startTime);
+		await promise;
+	};
+
+	queue.add(task(task1.promise));
+	queue.add(task(task2.promise));
+
+	// Tick to the window boundary first, because the mocked `Date.now()` in a timer callback returns the end time of the whole tick.
+	t.mock.timers.tick(100);
+	t.mock.timers.tick(50);
+	task1.resolve();
+	await flush();
+
+	// The window is full, so these tasks wait for the resume timeout at the window boundary.
+	t.mock.timers.tick(10);
+	queue.add(task());
+	queue.add(task());
+
+	// The second task finishes after the boundary but before the resume timeout fires, so it starts the next window.
+	t.mock.timers.setTime(startTime + 201);
+	task2.resolve();
+	await flush();
+	t.mock.timers.tick(0);
+	await flush();
+
+	t.assert.deepStrictEqual(startTimes, [0, 150, 201]);
+
+	t.mock.timers.tick(100);
+	await queue.onIdle();
+	t.assert.deepStrictEqual(startTimes, [0, 150, 201, 301]);
 });

@@ -328,7 +328,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			this.#emit('pendingZero');
 		}
 
-		this.#tryToStartAnother();
+		this.#processQueue();
 		this.#emit('next');
 	}
 
@@ -459,6 +459,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		if (this.#isIntervalIgnored || this.#intervalId !== undefined || this.#strict) {
 			return;
 		}
+
+		// A new window starts now, so a timeout that waits for the end of an earlier window is stale. If it fired, it would reset the count in the middle of this window.
+		this.#clearTimeoutTimer();
 
 		this.#intervalId = setInterval(
 			() => {
@@ -851,7 +854,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	/**
-	Returns a promise that resolves when the queue is empty. Tasks can still be running. If the last waiting task starts because another task finished, the promise resolves when the next task finishes, not when the last waiting task starts.
+	Returns a promise that resolves when the queue is empty. Tasks can still be running.
 
 	The promise resolves once. Call `.onEmpty()` again to wait for the next time, or use the `empty` event to get every time.
 	*/

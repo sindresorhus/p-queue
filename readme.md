@@ -260,7 +260,7 @@ Returns `this` (the instance).
 
 #### .onEmpty()
 
-Returns a promise that resolves when the queue is empty. Tasks can still be running. If the last waiting task starts because another task finished, the promise resolves when the next task finishes, not when the last waiting task starts.
+Returns a promise that resolves when the queue is empty. Tasks can still be running.
 
 > [!NOTE]
 > The promise resolves **once**. Call `.onEmpty()` again to wait for the next time, or use the [`empty` event](#empty) to get every time.
@@ -583,7 +583,7 @@ queue.add(() => Promise.reject(new Error('error'))).catch(() => {});
 
 #### empty
 
-Emitted every time the queue is checked and found empty, for example when a task finishes and no tasks are waiting, and on `.clear()`. It can fire more than once while the queue stays empty. Tasks can still be running.
+Emitted every time the queue is checked and found empty, for example when the last waiting task starts, when a task finishes and no tasks are waiting, and on `.clear()`. It can fire more than once while the queue stays empty. Tasks can still be running.
 
 #### idle
 

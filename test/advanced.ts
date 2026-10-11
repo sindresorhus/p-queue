@@ -139,14 +139,14 @@ test('should emit empty event when empty', async () => {
 
 	assert.equal(queue.size, 0);
 	assert.equal(queue.pending, 1);
-	assert.equal(timesCalled, 0);
+	assert.equal(timesCalled, 1);
 
 	resolveJob2();
 	await job2;
 
 	assert.equal(queue.size, 0);
 	assert.equal(queue.pending, 0);
-	assert.equal(timesCalled, 1);
+	assert.equal(timesCalled, 2);
 });
 
 test('should emit add event when adding task', async () => {

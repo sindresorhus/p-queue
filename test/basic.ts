@@ -386,6 +386,31 @@ test('.onEmpty()', async () => {
 	assert.equal(queue.size, 0);
 });
 
+test('.onEmpty() resolves when the last waiting task starts', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const job1 = pDefer();
+	const job2 = pDefer();
+
+	queue.add(async () => job1.promise);
+	const job2Result = queue.add(async () => job2.promise);
+
+	let isEmpty = false;
+	(async () => {
+		await queue.onEmpty();
+		isEmpty = true;
+	})();
+
+	job1.resolve();
+	await delay(10);
+
+	assert.ok(isEmpty);
+	assert.equal(queue.size, 0);
+	assert.equal(queue.pending, 1);
+
+	job2.resolve();
+	await job2Result;
+});
+
 test('.onIdle()', async () => {
 	const queue = new PQueue({concurrency: 2});
 
