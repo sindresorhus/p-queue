@@ -2117,3 +2117,40 @@ test('rate-limit when all queued tasks are aborted', async () => {
 	assert.equal(queue.isRateLimited, false);
 	assert.equal(events[1], 'rateLimitCleared');
 });
+
+test('an `idle` listener can set `concurrency`, call `.clear()`, or pause and start without infinite recursion', async () => {
+	const queue = new PQueue({concurrency: 2});
+	let idleCount = 0;
+	queue.addEventListener('idle', () => {
+		idleCount++;
+		queue.concurrency = 2;
+		queue.clear();
+		queue.pause();
+		queue.start();
+	});
+
+	assert.equal(await queue.add(async () => '🦄'), '🦄');
+	await queue.onIdle();
+	assert.equal(idleCount, 1);
+
+	// The queue still works afterwards.
+	assert.equal(await queue.add(async () => '🐴'), '🐴');
+	assert.equal(idleCount, 2);
+});
+
+test('changing `concurrency`, `.clear()`, or `.start()` on an empty queue emits no `empty` or `idle`', () => {
+	const queue = new PQueue({autoStart: false});
+	const events: string[] = [];
+	queue.addEventListener('empty', () => {
+		events.push('empty');
+	});
+	queue.addEventListener('idle', () => {
+		events.push('idle');
+	});
+
+	queue.concurrency = 5;
+	queue.clear();
+	queue.start();
+
+	assert.deepEqual(events, []);
+});

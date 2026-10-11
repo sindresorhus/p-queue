@@ -585,11 +585,11 @@ queue.add(() => Promise.reject(new Error('error'))).catch(() => {});
 
 #### empty
 
-Emitted every time the queue is checked and found empty, for example when the last waiting task starts, when a task finishes and no tasks are waiting, and on `.clear()`. It can fire more than once while the queue stays empty. Tasks can still be running.
+Emitted every time the queue is checked and found empty, for example when the last waiting task starts, when a task finishes and no tasks are waiting, and when `.clear()` removes tasks. It can fire more than once while the queue stays empty. Tasks can still be running.
 
 #### idle
 
-Emitted every time the queue is empty and no tasks are running: `queue.size === 0 && queue.pending === 0`. It can also fire on a queue that never had a task, for example after `.clear()` or a change of `concurrency`.
+Emitted every time the queue is empty and no tasks are running: `queue.size === 0 && queue.pending === 0`.
 
 Unlike `empty`, it waits for running tasks to finish.
 
@@ -626,7 +626,7 @@ Emitted every time a task is added.
 
 #### next
 
-Emitted every time a task finishes, with or without an error. Also emitted when a waiting task is aborted, and by `.clear()`.
+Emitted every time a task finishes, with or without an error. Also emitted when a waiting task is aborted, and when `.clear()` removes tasks.
 
 ```js
 import delay from 'delay';

@@ -523,6 +523,13 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		while (this.#tryToStartAnother()) {}
 	}
 
+	// On an empty queue, `#processQueue()` emits `empty` and `idle`. An `idle` listener that sets `concurrency` or calls `.start()` would then recurse without end.
+	#processWaitingTasks(): void {
+		if (this.#queue.size > 0) {
+			this.#processQueue();
+		}
+	}
+
 	async #add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType>, waitingTask: WaitingTask): Promise<TaskResultType> {
 		// Create a copy to avoid mutating the original options object
 		options = {
@@ -704,7 +711,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 		this.#concurrency = newConcurrency;
 
-		this.#processQueue();
+		this.#processWaitingTasks();
 	}
 
 	/**
@@ -809,7 +816,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 		this.#isPaused = false;
 
-		this.#processQueue();
+		this.#processWaitingTasks();
 		return this;
 	}
 
@@ -847,6 +854,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	```
 	*/
 	clear(): void {
+		// Nothing to clear. Emitting `empty` and `idle` here would recurse without end when an `idle` listener calls `.clear()`.
+		if (this.#queue.size === 0) {
+			return;
+		}
+
 		for (const cleanupQueueAbortHandler of this.#queueAbortListenerCleanupFunctions) {
 			cleanupQueueAbortHandler();
 		}
