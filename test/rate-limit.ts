@@ -429,3 +429,79 @@ test('rate-limit does not reset the count when a completion starts the next wind
 	await queue.onIdle();
 	t.assert.deepStrictEqual(startTimes, [0, 150, 201, 301]);
 });
+
+test('rate-limit starts a new window when tasks start exactly at the window end', async t => {
+	const startTime = 1_000_000;
+	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date'], now: startTime});
+
+	const queue = new PQueue({
+		concurrency: 2,
+		interval: 100,
+		intervalCap: 1,
+	});
+
+	const startTimes: number[] = [];
+	const task = async () => {
+		startTimes.push(Date.now() - startTime);
+	};
+
+	const flush = async () => new Promise(resolve => {
+		setImmediate(resolve);
+	});
+
+	queue.add(task);
+	queue.add(task);
+	queue.add(task);
+	queue.pause();
+
+	// Tick 1 ms at a time, because the mocked `Date.now()` in a timer callback returns the end time of the whole tick. The recurring timer stops at the end of the second window, because nothing ran in it. Then `start()` runs in the same millisecond.
+	for (let time = 0; time < 400; time++) {
+		if (time === 200) {
+			queue.start();
+		}
+
+		t.mock.timers.tick(1);
+		// eslint-disable-next-line no-await-in-loop
+		await flush();
+	}
+
+	t.assert.deepStrictEqual(startTimes, [0, 200, 300]);
+});
+
+test('rate-limit runs a task that an `empty` listener adds when the last task finishes', async t => {
+	const startTime = 1_000_000;
+	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date'], now: startTime});
+
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 1,
+	});
+
+	const startTimes: number[] = [];
+	const task = async () => {
+		startTimes.push(Date.now() - startTime);
+	};
+
+	let isAdded = false;
+	queue.addEventListener('empty', () => {
+		if (isAdded || queue.pending > 0) {
+			return;
+		}
+
+		isAdded = true;
+		queue.add(task);
+	});
+
+	const flush = async () => new Promise(resolve => {
+		setImmediate(resolve);
+	});
+
+	await queue.add(task);
+	await flush();
+
+	t.mock.timers.tick(100);
+	await flush();
+
+	t.assert.deepStrictEqual(startTimes, [0, 100]);
+	t.assert.strictEqual(queue.size, 0);
+});

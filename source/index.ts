@@ -361,7 +361,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		// Fixed window mode. While the recurring timer runs it already governs the windows, so pausing is only decided here when the queue is idle (the timer is absent) and we rely on `#intervalEnd`.
 		if (this.#intervalId === undefined) {
 			const delay = this.#intervalEnd - now;
-			if (delay < 0) {
+			if (delay <= 0) {
 				// The interval expired while idle, so reset the count for the new window.
 				this.#intervalCount = this.#carryoverIntervalCount ? this.#pending : 0;
 			} else {
@@ -409,7 +409,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			this.#clearIntervalTimer();
 			this.#emit('empty');
 
-			if (this.#pending === 0) {
+			// An `empty` listener can add a task that waits for the rate limit, so check the size again.
+			if (this.#pending === 0 && this.#queue.size === 0) {
 				// Clear timeout as well when completely idle
 				this.#clearTimeoutTimer();
 
@@ -845,7 +846,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		// Emit events so waiters (onEmpty, onIdle, onSizeLessThan) can resolve
 		this.#emit('empty');
 
-		if (this.#pending === 0) {
+		// An `empty` listener can add a task that waits for the rate limit, so check the size again.
+		if (this.#pending === 0 && this.#queue.size === 0) {
 			this.#clearTimeoutTimer();
 			this.#emit('idle');
 		}
