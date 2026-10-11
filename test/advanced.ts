@@ -2154,3 +2154,34 @@ test('changing `concurrency`, `.clear()`, or `.start()` on an empty queue emits 
 
 	assert.deepEqual(events, []);
 });
+
+test('a task that throws synchronously emits `error` after `active`, so `.onError()` catches it', async () => {
+	const error = new Error('🦄');
+	const run = async (options: {timeout?: number}) => {
+		const queue = new PQueue(options);
+		const events: string[] = [];
+		for (const name of ['add', 'active', 'error'] as const) {
+			queue.addEventListener(name, () => {
+				events.push(name);
+			});
+		}
+
+		const promise = queue.add(() => {
+			throw error;
+		});
+		events.push('add() returned');
+
+		const raceError = await Promise.race([queue.onError(), queue.onIdle()]).catch((error_: unknown) => error_);
+		const taskError = await promise.catch((error_: unknown) => error_);
+		return {events, raceError, taskError};
+	};
+
+	const expected = {
+		events: ['add', 'active', 'add() returned', 'error'],
+		raceError: error,
+		taskError: error,
+	};
+
+	assert.deepEqual(await run({}), expected);
+	assert.deepEqual(await run({timeout: 1000}), expected);
+});

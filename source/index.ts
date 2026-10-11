@@ -623,7 +623,12 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 						// The `async` function turns a synchronous throw of the task into a rejection, so that `abortPromise` always has a handler.
 						operation = Promise.race([abortPromise, (async () => function_({signal}))()]);
 					} else {
-						operation = function_({signal});
+						// A synchronous throw becomes a rejection, so that `error` comes after `active` and after `.add()` returns, like for a task that rejects.
+						try {
+							operation = function_({signal});
+						} catch (error) {
+							operation = Promise.reject(error);
+						}
 					}
 
 					const result = await operation;
