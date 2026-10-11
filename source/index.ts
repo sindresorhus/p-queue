@@ -1081,8 +1081,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	```
 	*/
 	get isSaturated(): boolean {
-		return (this.#pending === this.#concurrency && this.#queue.size > 0)
-			|| (this.isRateLimited && this.#queue.size > 0);
+		// `>=`, because lowering `concurrency` does not stop the tasks that already run.
+		return this.#queue.size > 0 && (this.#pending >= this.#concurrency || this.isRateLimited);
 	}
 
 	/**

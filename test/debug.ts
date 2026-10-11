@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import delay from 'delay';
+import pDefer from 'p-defer';
 import PQueue from '../source/index.js';
 
 test('runningTasks returns current running tasks', async () => {
@@ -279,6 +280,25 @@ test('isSaturated with rate-limited queue', async () => {
 	assert.equal(queue.isSaturated, true);
 
 	await queue.onIdle();
+});
+
+test('isSaturated when concurrency is lowered below the running tasks', async () => {
+	const queue = new PQueue({concurrency: 2});
+	const {promise, resolve} = pDefer();
+
+	queue.add(async () => promise);
+	queue.add(async () => promise);
+	queue.add(async () => promise);
+	assert.equal(queue.isSaturated, true);
+
+	queue.concurrency = 1;
+	assert.equal(queue.pending, 2);
+	assert.equal(queue.size, 1);
+	assert.equal(queue.isSaturated, true);
+
+	resolve();
+	await queue.onIdle();
+	assert.equal(queue.isSaturated, false);
 });
 
 test('timeout error has the queue state at the time of the timeout', async () => {
