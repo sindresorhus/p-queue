@@ -351,10 +351,30 @@ Await it before you add a task, to keep the queue from growing beyond a size. It
 
 #### .clear()
 
-Removes all waiting tasks.
+Removes all waiting tasks. Running tasks continue.
 
-> [!WARNING]
-> The promises returned by `.add()` for the removed tasks **never settle**. This can cause "unsettled top-level await" warnings or make the process hang. To cancel tasks so that their promises reject, use [`signal`](#signal).
+The promises returned by `.add()` for the removed tasks reject with an `AbortError`, which is a `DOMException`. The removed tasks do not run, and they do not emit the [`error` event](#error).
+
+```js
+import PQueue from 'p-queue';
+
+const queue = new PQueue({concurrency: 1});
+
+queue.add(() => doWork());
+const promise = queue.add(() => doWork());
+
+queue.clear();
+
+try {
+	await promise;
+} catch (error) {
+	console.log(error.name);
+	//=> 'AbortError'
+}
+```
+
+> [!NOTE]
+> If you ignore such a promise, its rejection is not reported as unhandled. This does not apply to a promise made from it, like the one from `queue.add(fn).then(…)` or from `.addAll()`, so handle the rejection of that promise.
 
 #### .size
 
@@ -858,7 +878,7 @@ With rate limiting, you can also use [`.onRateLimit()`](#onratelimit).
 
 #### How do I cancel or remove a queued task?
 
-Use [`signal`](#signal). When it aborts, a waiting task is removed and its `.add()` promise rejects. To cancel many tasks, give them the same `AbortController` signal. Do not use `.clear()` to cancel: it removes waiting tasks, but their `.add()` promises never settle.
+Use [`signal`](#signal). When it aborts, a waiting task is removed and its `.add()` promise rejects. To cancel many tasks, give them the same `AbortController` signal. To remove all waiting tasks, use [`.clear()`](#clear). Their `.add()` promises reject too, but `.clear()` does not signal the running tasks.
 
 Aborting a running task rejects its `.add()` promise and frees its concurrency slot, but does not stop the work. The task must handle `signal` itself.
 
@@ -891,7 +911,7 @@ queue.add(({signal}) => doWork(signal), {signal: controller.signal}).catch(() =>
 controller.abort();
 ```
 
-There is no method to remove a task directly, because it would expose internals and leave promises that never settle.
+There is no method to remove one task directly, because it would expose internals.
 
 #### How do I get results in the order they were added?
 

@@ -654,21 +654,7 @@ test('clear() removes queued abort listeners', async () => {
 
 	controller.abort();
 
-	assert.equal(await Promise.race([
-		(async () => {
-			try {
-				await queuedTask;
-			} catch {
-				return 'settled';
-			}
-
-			return 'settled';
-		})(),
-		(async () => {
-			await delay(50);
-			return 'pending';
-		})(),
-	]), 'pending');
+	await assert.rejects(queuedTask, {name: 'AbortError', message: 'The queue was cleared'});
 });
 
 test('clear() removes queued abort listeners for shared signals', () => {
@@ -699,21 +685,7 @@ test('clear() lets the same signal be reused without stale queued listeners', as
 	controller.abort();
 
 	await assert.rejects(activeTask, {name: 'AbortError'});
-	assert.equal(await Promise.race([
-		(async () => {
-			try {
-				await clearedTask;
-			} catch {
-				return 'settled';
-			}
-
-			return 'settled';
-		})(),
-		(async () => {
-			await delay(50);
-			return 'pending';
-		})(),
-	]), 'pending');
+	await assert.rejects(clearedTask, {name: 'AbortError', message: 'The queue was cleared'});
 });
 
 test('clear() keeps the running task abort listener while removing queued ones', async () => {
@@ -736,21 +708,7 @@ test('clear() keeps the running task abort listener while removing queued ones',
 
 	assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
 
-	assert.equal(await Promise.race([
-		(async () => {
-			try {
-				await Promise.all([queuedTask1, queuedTask2]);
-			} catch {
-				return 'settled';
-			}
-
-			return 'settled';
-		})(),
-		(async () => {
-			await delay(50);
-			return 'pending';
-		})(),
-	]), 'pending');
+	await assert.rejects(Promise.all([queuedTask1, queuedTask2]), {name: 'AbortError', message: 'The queue was cleared'});
 });
 
 test('clear() only leaves the running task affected when a shared signal aborts later', async () => {
@@ -770,21 +728,7 @@ test('clear() only leaves the running task affected when a shared signal aborts 
 	controller.abort(abortReason);
 
 	await assert.rejects(runningTask, {message: 'later abort'});
-	assert.equal(await Promise.race([
-		(async () => {
-			try {
-				await queuedTask;
-			} catch {
-				return 'settled';
-			}
-
-			return 'settled';
-		})(),
-		(async () => {
-			await delay(50);
-			return 'pending';
-		})(),
-	]), 'pending');
+	await assert.rejects(queuedTask, {name: 'AbortError', message: 'The queue was cleared'});
 });
 
 test('clear() does not accumulate abort listeners across repeated discard cycles', () => {

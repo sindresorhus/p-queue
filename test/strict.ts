@@ -814,8 +814,8 @@ test('strict mode clear with pending timeout', async () => {
 
 	assert.ok(elapsed >= 150, `Task should be rate limited after clear, took ${elapsed}ms`);
 
-	// Original task promise won't resolve since it was cleared
-	// Just verify the queue works correctly after clear
+	// Original task promise rejects since it was cleared
+	await assert.rejects(taskPromise, {name: 'AbortError'});
 });
 
 test('strict mode handles edge case of exactly intervalCap tasks', async () => {

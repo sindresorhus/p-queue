@@ -1,5 +1,6 @@
 /* eslint-disable no-new -- constructing without assigning is the behaviour under test */
 import process from 'node:process';
+import {spawnSync} from 'node:child_process';
 import {test} from 'node:test';
 import {getEventListeners} from 'node:events';
 import assert from 'node:assert/strict';
@@ -849,6 +850,110 @@ test('.clear()', () => {
 	assert.equal(queue.pending, 2);
 	queue.clear();
 	assert.equal(queue.size, 0);
+});
+
+test('.clear() rejects the removed tasks and lets the running tasks finish', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const runningTaskDeferred = pDefer<string>();
+	const results: unknown[] = [];
+	const errors: unknown[] = [];
+	let didRemovedTaskRun = false;
+
+	queue.addEventListener('completed', event => {
+		results.push(event.detail);
+	});
+
+	queue.addEventListener('error', event => {
+		errors.push(event.detail);
+	});
+
+	const runningTask = queue.add(async () => runningTaskDeferred.promise);
+	const removedTask = queue.add(() => {
+		didRemovedTaskRun = true;
+	});
+	const removedTasks = queue.addAll([
+		() => {
+			didRemovedTaskRun = true;
+		},
+	]);
+
+	queue.clear();
+
+	await assert.rejects(removedTask, error => error instanceof DOMException && error.name === 'AbortError' && error.message === 'The queue was cleared');
+	await assert.rejects(removedTasks, {name: 'AbortError'});
+
+	runningTaskDeferred.resolve('🦄');
+	assert.equal(await runningTask, '🦄');
+	await queue.onIdle();
+
+	assert.equal(didRemovedTaskRun, false);
+	assert.deepEqual(results, ['🦄']);
+	assert.deepEqual(errors, []);
+});
+
+test('.clear() does not cause an unhandled rejection for an ignored promise', async () => {
+	const reasons: unknown[] = [];
+	const onUnhandledRejection = (reason: unknown) => {
+		reasons.push(reason);
+	};
+
+	process.on('unhandledRejection', onUnhandledRejection);
+
+	const promises: Array<Promise<void>> = [];
+
+	try {
+		const queue = new PQueue({autoStart: false});
+		promises.push(queue.add(() => {})); // eslint-disable-line @typescript-eslint/no-empty-function
+
+		// The promise of the second task does not exist yet when this listener clears the queue.
+		queue.addEventListener('add', () => {
+			queue.clear();
+		}, {once: true});
+
+		promises.push(queue.add(() => {}), queue.add(() => {})); // eslint-disable-line @typescript-eslint/no-empty-function
+		queue.clear();
+
+		await delay(10);
+	} finally {
+		process.off('unhandledRejection', onUnhandledRejection);
+	}
+
+	assert.deepEqual(reasons, []);
+
+	await Promise.all(promises.map(async promise => assert.rejects(promise, {name: 'AbortError'})));
+});
+
+test('an ignored promise of a failed task is still an unhandled rejection', () => {
+	// In a child process, because the test runner fails any test that has an unhandled rejection.
+	const code = `
+		import PQueue from ${JSON.stringify(new URL('../source/index.ts', import.meta.url).href)};
+		new PQueue().add(() => {
+			throw new Error('Task failed');
+		});
+	`;
+
+	const {status, stderr} = spawnSync(process.execPath, ['--import=tsx/esm', '--input-type=module', '--eval', code], {encoding: 'utf8'});
+
+	assert.equal(status, 1);
+	assert.match(stderr, /Task failed/v);
+});
+
+// Guards the timing of the promise that `.add()` returns. If it settles earlier, for example because it is no longer returned through an `async` function, the caller continues before the queue starts the next task.
+test('.add() - the next waiting task has started when the promise resolves', async () => {
+	const queue = new PQueue({concurrency: 1});
+	let didSecondTaskStart = false;
+
+	const firstTask = queue.add(async () => {}); // eslint-disable-line @typescript-eslint/no-empty-function
+	const secondTask = queue.add(async () => {
+		didSecondTaskStart = true;
+	});
+
+	await firstTask;
+	assert.ok(didSecondTaskStart);
+	assert.equal(queue.size, 0);
+
+	await secondTask;
+	assert.equal(queue.pending, 0);
 });
 
 test('.clear() resolves onEmpty() and onIdle() waiters', async () => {

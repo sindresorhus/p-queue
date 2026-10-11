@@ -21,6 +21,13 @@ type EventMap = {
 
 type EventName = keyof EventMap;
 
+// A task that waits in the queue. `promise` is the promise that `.add()` returned, and `reject` rejects it. `.clear()` marks the promise as handled before it rejects it, so that a caller that ignores the promise does not get an unhandled rejection, which can make the process exit. A caller that handles the promise still gets the error.
+type WaitingTask = {
+	promise?: Promise<unknown>;
+	reject?: (reason: unknown) => void;
+	isCleared?: boolean;
+};
+
 /**
 Promise queue with concurrency control.
 
@@ -80,6 +87,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}>();
 
 	readonly #queueAbortListenerCleanupFunctions = new Set<() => void>();
+
+	// The waiting tasks, so that `.clear()` can reject their promises.
+	readonly #waitingTasks = new Set<WaitingTask>();
 
 	/**
 	Get or set the default timeout. A change applies to tasks added after it.
@@ -488,74 +498,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		while (this.#tryToStartAnother()) {}
 	}
 
-	get concurrency(): number {
-		return this.#concurrency;
-	}
-
-	set concurrency(newConcurrency: number) {
-		if (!(typeof newConcurrency === 'number' && newConcurrency >= 1)) {
-			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${newConcurrency}\` (${typeof newConcurrency})`);
-		}
-
-		this.#concurrency = newConcurrency;
-
-		this.#processQueue();
-	}
-
-	/**
-	Changes the priority of a waiting task, found by its `id`. Throws a `ReferenceError` if no waiting task has that `id`, for example because it already started. Throws a `TypeError` if `priority` is not a finite number. Tasks only wait when the queue has a `concurrency` limit, is paused, or is rate-limited.
-
-	@example
-	```
-	// Raise the priority to run a task earlier
-	import PQueue from 'p-queue';
-
-	const queue = new PQueue({concurrency: 1});
-
-	queue.add(async () => '🦄', {priority: 1});
-	queue.add(async () => '🦀', {priority: 0, id: '🦀'});
-	queue.add(async () => '🦄', {priority: 1});
-	queue.add(async () => '🦄', {priority: 1});
-
-	queue.setPriority('🦀', 2);
-	// '🦀' runs second
-	```
-
-	@example
-	```
-	// Lower the priority to run a task later
-	import PQueue from 'p-queue';
-
-	const queue = new PQueue({concurrency: 1});
-
-	queue.add(async () => '🦄', {priority: 1});
-	queue.add(async () => '🦀', {priority: 1, id: '🦀'});
-	queue.add(async () => '🦄');
-	queue.add(async () => '🦄', {priority: 0});
-
-	queue.setPriority('🦀', -1);
-	// '🦀' runs last
-	```
-	*/
-	setPriority(id: string, priority: number) {
-		if (typeof priority !== 'number' || !Number.isFinite(priority)) {
-			throw new TypeError(`Expected \`priority\` to be a finite number, got \`${priority}\` (${typeof priority})`);
-		}
-
-		this.#queue.setPriority(id, priority);
-	}
-
-	/**
-	Adds a sync or async task to the queue.
-
-	Returns a promise that settles with the result of `fn` when the task completes, not when it is added. The function gets `{signal}` as its first argument. The signal is set when the task has a `signal` or a `timeout`, and aborts when either one does. Pass it on, for example to `fetch()`, to stop the work.
-
-	If you `await` each `.add()` call before the next, the tasks run one after the other, whatever the `concurrency`.
-
-	Handle rejections of the returned promise. Otherwise, they are unhandled rejections, which can make the process exit.
-	*/
-	async add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<TaskResultType>;
-	async add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType> {
+	async #add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType>, waitingTask: WaitingTask): Promise<TaskResultType> {
 		// Create a copy to avoid mutating the original options object
 		options = {
 			timeout: this.timeout,
@@ -576,6 +519,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			const run = async () => {
 				// Task is now running, so remove the queued-state abort listener
 				cleanupQueueAbortHandler();
+				this.#waitingTasks.delete(waitingTask);
 
 				this.#pending++;
 
@@ -675,6 +619,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			};
 
 			this.#queue.enqueue(run, options);
+			waitingTask.reject = reject;
+			this.#waitingTasks.add(waitingTask);
 
 			const removeQueuedTask = () => {
 				if (this.#queue instanceof PriorityQueue) {
@@ -691,6 +637,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 				const queueAbortHandler = () => {
 					cleanupQueueAbortHandler();
+					this.#waitingTasks.delete(waitingTask);
 					removeQueuedTask();
 					reject(signal.reason);
 					this.#tryToStartAnother();
@@ -715,6 +662,87 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 			this.#tryToStartAnother();
 		});
+	}
+
+	get concurrency(): number {
+		return this.#concurrency;
+	}
+
+	set concurrency(newConcurrency: number) {
+		if (!(typeof newConcurrency === 'number' && newConcurrency >= 1)) {
+			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${newConcurrency}\` (${typeof newConcurrency})`);
+		}
+
+		this.#concurrency = newConcurrency;
+
+		this.#processQueue();
+	}
+
+	/**
+	Changes the priority of a waiting task, found by its `id`. Throws a `ReferenceError` if no waiting task has that `id`, for example because it already started. Throws a `TypeError` if `priority` is not a finite number. Tasks only wait when the queue has a `concurrency` limit, is paused, or is rate-limited.
+
+	@example
+	```
+	// Raise the priority to run a task earlier
+	import PQueue from 'p-queue';
+
+	const queue = new PQueue({concurrency: 1});
+
+	queue.add(async () => '🦄', {priority: 1});
+	queue.add(async () => '🦀', {priority: 0, id: '🦀'});
+	queue.add(async () => '🦄', {priority: 1});
+	queue.add(async () => '🦄', {priority: 1});
+
+	queue.setPriority('🦀', 2);
+	// '🦀' runs second
+	```
+
+	@example
+	```
+	// Lower the priority to run a task later
+	import PQueue from 'p-queue';
+
+	const queue = new PQueue({concurrency: 1});
+
+	queue.add(async () => '🦄', {priority: 1});
+	queue.add(async () => '🦀', {priority: 1, id: '🦀'});
+	queue.add(async () => '🦄');
+	queue.add(async () => '🦄', {priority: 0});
+
+	queue.setPriority('🦀', -1);
+	// '🦀' runs last
+	```
+	*/
+	setPriority(id: string, priority: number) {
+		if (typeof priority !== 'number' || !Number.isFinite(priority)) {
+			throw new TypeError(`Expected \`priority\` to be a finite number, got \`${priority}\` (${typeof priority})`);
+		}
+
+		this.#queue.setPriority(id, priority);
+	}
+
+	/**
+	Adds a sync or async task to the queue.
+
+	Returns a promise that settles with the result of `fn` when the task completes, not when it is added. The function gets `{signal}` as its first argument. The signal is set when the task has a `signal` or a `timeout`, and aborts when either one does. Pass it on, for example to `fetch()`, to stop the work.
+
+	If you `await` each `.add()` call before the next, the tasks run one after the other, whatever the `concurrency`.
+
+	Handle rejections of the returned promise. Otherwise, they are unhandled rejections, which can make the process exit.
+	*/
+	add<TaskResultType>(function_: Task<TaskResultType>, options?: Partial<EnqueueOptionsType>): Promise<TaskResultType>;
+	// Not `async`, so that `.clear()` gets the same promise as the caller and can mark it as handled. An `async` wrapper would return a different promise.
+	add<TaskResultType>(function_: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType> { // eslint-disable-line @typescript-eslint/promise-function-async
+		const waitingTask: WaitingTask = {};
+		const promise = this.#add(function_, options, waitingTask);
+		waitingTask.promise = promise;
+
+		// An `add` event listener can call `.clear()` before the promise exists.
+		if (waitingTask.isCleared) {
+			promise.catch(() => undefined);
+		}
+
+		return promise;
 	}
 
 	/**
@@ -757,9 +785,30 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	/**
-	Removes all waiting tasks.
+	Removes all waiting tasks. Running tasks continue.
 
-	The promises returned by `.add()` for the removed tasks never settle. This can cause "unsettled top-level await" warnings or make the process hang. To cancel tasks so that their promises reject, use the `signal` option.
+	The promises returned by `.add()` for the removed tasks reject with an `AbortError`, which is a `DOMException`. The removed tasks do not run, and they do not emit the `error` event.
+
+	If you ignore such a promise, its rejection is not reported as unhandled. This does not apply to a promise made from it, like the one from `queue.add(fn).then(…)` or from `.addAll()`, so handle the rejection of that promise.
+
+	@example
+	```
+	import PQueue from 'p-queue';
+
+	const queue = new PQueue({concurrency: 1});
+
+	queue.add(() => doWork());
+	const promise = queue.add(() => doWork());
+
+	queue.clear();
+
+	try {
+		await promise;
+	} catch (error) {
+		console.log(error.name);
+		//=> 'AbortError'
+	}
+	```
 	*/
 	clear(): void {
 		for (const cleanupQueueAbortHandler of this.#queueAbortListenerCleanupFunctions) {
@@ -767,6 +816,15 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		}
 
 		this.#queue = new this.#queueClass();
+
+		const error = new DOMException('The queue was cleared', 'AbortError');
+		for (const waitingTask of this.#waitingTasks) {
+			waitingTask.isCleared = true;
+			waitingTask.promise?.catch(() => undefined);
+			waitingTask.reject!(error);
+		}
+
+		this.#waitingTasks.clear();
 
 		// Clear interval timer since queue is now empty (consistent with #tryToStartAnother)
 		this.#clearIntervalTimer();
