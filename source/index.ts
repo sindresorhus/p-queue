@@ -202,32 +202,33 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		});
 	}
 
-	#updateRateLimitState(): void {
-		const wasRateLimited = this.#rateLimitedInInterval;
-
-		// Early exit if rate limiting is disabled or queue is empty
+	// From the current state. `#rateLimitedInInterval` is what the events last reported, and it updates in a microtask.
+	get #isRateLimitedNow(): boolean {
 		if (this.#isIntervalIgnored || this.#queue.size === 0) {
-			if (wasRateLimited) {
-				this.#rateLimitedInInterval = false;
-				this.#emit('rateLimitCleared');
-			}
-
-			return;
+			return false;
 		}
 
-		// Get the current count based on mode
-		let count: number;
+		const now = Date.now();
 		if (this.#strict) {
-			const now = Date.now();
 			this.#cleanupStrictTicks(now);
-			count = this.#getActiveTicksCount();
-		} else {
-			count = this.#intervalCount;
+			return this.#getActiveTicksCount() >= this.#intervalCap;
 		}
 
-		const shouldBeRateLimited = count >= this.#intervalCap;
+		// Without the recurring timer, the count of an ended window is reset later, by the resume timeout or when the next task starts.
+		const isWindowOver = this.#intervalId === undefined && this.#intervalEnd <= now;
+		const count = isWindowOver ? this.#intervalCountAtWindowStart : this.#intervalCount;
+		return count >= this.#intervalCap;
+	}
 
-		if (shouldBeRateLimited === wasRateLimited) {
+	// The tasks that still run count against the new window with `carryoverIntervalCount`.
+	get #intervalCountAtWindowStart(): number {
+		return this.#carryoverIntervalCount ? this.#pending : 0;
+	}
+
+	#updateRateLimitState(): void {
+		const shouldBeRateLimited = this.#isRateLimitedNow;
+
+		if (shouldBeRateLimited === this.#rateLimitedInInterval) {
 			return;
 		}
 
@@ -264,7 +265,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		}
 
 		// Wire up to lifecycle events that affect rate limit state
-		// Only 'add' and 'next' can actually change rate limit state
+		// Other changes, like a task that starts or a new window, schedule the update directly
 		this.addEventListener('add', () => {
 			if (this.#queue.size > 0) {
 				this.#scheduleRateLimitUpdate();
@@ -333,7 +334,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			return true;
 		}
 
-		// Cleanup of expired strict ticks already happens in #isIntervalPausedAt before this is called.
+		// Expired strict ticks still count until `#cleanupStrictTicks()`, which `#isIntervalPausedAt` and `#isRateLimitedNow` call.
 		const count = this.#strict ? this.#getActiveTicksCount() : this.#intervalCount;
 		return count < this.#intervalCap;
 	}
@@ -354,11 +355,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	#onResumeInterval(): void {
-		// Clear timeout ID before processing to prevent race condition
-		// Must clear before #onInterval to allow new timeouts to be scheduled
+		// The timeout fired, so clear its ID before `#onInterval()`, which can schedule a new one
 		this.#timeoutId = undefined;
 		this.#onInterval();
-		this.#initializeIntervalIfNeeded();
+
+		// A paused queue needs no recurring timer, which would keep the process alive. `.start()` starts a new window.
+		if (!this.#isPaused) {
+			this.#initializeIntervalIfNeeded();
+		}
 	}
 
 	#isIntervalPausedAt(now: number): boolean {
@@ -384,7 +388,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			const delay = this.#intervalEnd - now;
 			if (delay <= 0) {
 				// The interval expired while idle, so reset the count for the new window.
-				this.#intervalCount = this.#carryoverIntervalCount ? this.#pending : 0;
+				this.#intervalCount = this.#intervalCountAtWindowStart;
 			} else {
 				// Still inside the previous window; wait out the remaining time before starting the next task.
 				this.#createIntervalTimeout(delay);
@@ -424,6 +428,17 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	#tryToStartAnother(): boolean {
+		// A loop, not recursion, because many tasks can be skipped.
+		let isStarted: boolean | undefined;
+		do {
+			isStarted = this.#startNextTask();
+		} while (isStarted === undefined);
+
+		return isStarted;
+	}
+
+	// Returns `undefined` when it skipped a task whose signal aborted while it waited.
+	#startNextTask(): boolean | undefined {
 		if (this.#queue.size === 0) {
 			// We can clear the interval ("pause")
 			// Because we can redo it later ("resume")
@@ -448,6 +463,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		}
 
 		if (this.#isPaused) {
+			// Still schedule the end of the window when rate-limited. Otherwise a paused queue stays rate-limited until `.start()`.
+			if (!this.#doesIntervalAllowAnother) {
+				this.#isIntervalPausedAt(Date.now());
+			}
+
 			return false;
 		}
 
@@ -467,7 +487,15 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			}
 
 			// The task is started before the event, so that a listener which enqueues more work sees the concurrency slot already taken. Emitting first let a listener start a second task past the limit.
+			const pendingBefore = this.#pending;
 			job();
+
+			// `run` did not start a task whose signal aborted while it waited.
+			if (this.#pending === pendingBefore) {
+				this.#emit('next');
+				return;
+			}
+
 			this.#emit('active');
 
 			return true;
@@ -508,7 +536,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				}
 			}
 
-			this.#intervalCount = this.#carryoverIntervalCount ? this.#pending : 0;
+			this.#intervalCount = this.#intervalCountAtWindowStart;
 		}
 
 		this.#processQueue();
@@ -559,6 +587,13 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				cleanupQueueAbortHandler();
 				this.#waitingTasks.delete(waitingTask);
 
+				// The signal aborted while the task waited, but its abort listener did not run yet, for example because another listener of the signal started the queue. Like an abort while waiting, the task does not start.
+				if (options.signal?.aborted) {
+					this.#rollbackIntervalConsumption();
+					reject(options.signal.reason);
+					return;
+				}
+
 				this.#pending++;
 
 				// Track this running task
@@ -575,18 +610,6 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				let timeoutId: NodeJS.Timeout | undefined;
 
 				try {
-					// Check the abort signal. If it is aborted, decrement the counter that was incremented in tryToStartAnother.
-					try {
-						options.signal?.throwIfAborted();
-					} catch (error) {
-						this.#rollbackIntervalConsumption();
-
-						// Clean up tracking before throwing
-						this.#runningTasks.delete(taskSymbol);
-
-						throw error;
-					}
-
 					// The task gets one signal that aborts on the user's signal or on the timeout. Not `AbortSignal.timeout()`, because its timer does not keep the process alive (by design: https://github.com/nodejs/node/issues/46417), so the process could exit before a hanging task times out. Not `AbortSignal.any()`, because Node.js then keeps some memory for each task for as long as the user's signal lives, which grows without limit with a long-lived signal.
 					if (options.timeout !== undefined) {
 						const {signal: userSignal, timeout} = options;
@@ -987,6 +1010,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	```
 	*/
 	async onRateLimit(): Promise<void> {
+		// Emit a batched change now, so that the state here and the events agree. Otherwise the change could be undone before its event, and no event would come.
+		this.#updateRateLimitState();
+
 		if (this.isRateLimited) {
 			return;
 		}
@@ -1006,6 +1032,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	```
 	*/
 	async onRateLimitCleared(): Promise<void> {
+		// Emit a batched change now, so that the state here and the events agree. Otherwise the change could be undone before its event, and no event would come.
+		this.#updateRateLimitState();
+
 		if (!this.isRateLimited) {
 			return;
 		}
@@ -1102,7 +1131,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	Whether the queue is rate-limited: the number of tasks started in the current interval has reached `intervalCap`, and tasks are waiting.
 	*/
 	get isRateLimited(): boolean {
-		return this.#rateLimitedInInterval;
+		return this.#isRateLimitedNow;
 	}
 
 	/**

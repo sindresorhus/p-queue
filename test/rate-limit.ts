@@ -505,3 +505,151 @@ test('rate-limit runs a task that an `empty` listener adds when the last task fi
 	t.assert.deepStrictEqual(startTimes, [0, 100]);
 	t.assert.strictEqual(queue.size, 0);
 });
+
+test('aborting waiting tasks that share a signal does not start them or emit `error`', async t => {
+	const startTime = 1_000_000;
+	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date'], now: startTime});
+
+	const queue = new PQueue({interval: 50, intervalCap: 1});
+	const events: string[] = [];
+	queue.addEventListener('active', () => {
+		events.push('active');
+	});
+	queue.addEventListener('error', () => {
+		events.push('error');
+	});
+
+	await queue.add(() => 'first');
+
+	const controller = new AbortController();
+	let hasRun = false;
+	const task = () => {
+		hasRun = true;
+	};
+
+	const second = queue.add(task, {signal: controller.signal});
+	const third = queue.add(task, {signal: controller.signal});
+
+	// The window ended, but the resume timeout has not fired yet.
+	t.mock.timers.setTime(startTime + 60);
+	controller.abort();
+
+	await t.assert.rejects(second, {name: 'AbortError'});
+	await t.assert.rejects(third, {name: 'AbortError'});
+	t.assert.strictEqual(hasRun, false);
+	t.assert.deepStrictEqual(events, ['active']);
+	t.assert.strictEqual(queue.pending, 0);
+	t.assert.strictEqual(queue.size, 0);
+
+	// Nothing starts later either.
+	t.mock.timers.tick(100);
+	await new Promise(resolve => {
+		setImmediate(resolve);
+	});
+	t.assert.strictEqual(hasRun, false);
+	t.assert.deepStrictEqual(events, ['active']);
+});
+
+test('rate limit clears at the window end while paused, also after the queue drained', async t => {
+	const startTime = 1_000_000;
+	// eslint-disable-next-line node-test/require-mock-timers-advance -- `run()` ticks.
+	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date'], now: startTime});
+	const flush = async () => new Promise(resolve => {
+		setImmediate(resolve);
+	});
+
+	const run = async (isStrict: boolean) => {
+		const queue = new PQueue({intervalCap: 1, interval: 1000, strict: isStrict});
+		const events: string[] = [];
+		queue.addEventListener('rateLimit', () => {
+			events.push('rateLimit');
+		});
+		queue.addEventListener('rateLimitCleared', () => {
+			events.push('rateLimitCleared');
+		});
+
+		queue.add(() => 'first');
+		await flush();
+		queue.pause();
+		const second = queue.add(() => 'second');
+		await flush();
+
+		const isRateLimitedBefore = queue.isRateLimited;
+		t.mock.timers.tick(1000);
+		await flush();
+
+		const state = {
+			isRateLimitedBefore,
+			isRateLimited: queue.isRateLimited,
+			isSaturated: queue.isSaturated,
+			events,
+			size: queue.size,
+		};
+
+		queue.start();
+		return {state, result: await second};
+	};
+
+	const expected = {
+		state: {
+			isRateLimitedBefore: true,
+			isRateLimited: false,
+			isSaturated: false,
+			events: ['rateLimit', 'rateLimitCleared'],
+			size: 1,
+		},
+		result: 'second',
+	};
+
+	t.assert.deepStrictEqual(await run(false), expected);
+	t.assert.deepStrictEqual(await run(true), expected);
+});
+
+test('isRateLimited and isSaturated are up to date right after `.add()`', () => {
+	const run = (isStrict: boolean) => {
+		const queue = new PQueue({intervalCap: 2, interval: 1000, strict: isStrict});
+		let addedCount = 0;
+		while (!queue.isSaturated && addedCount < 100) {
+			queue.add(() => undefined);
+			addedCount++;
+		}
+
+		const state = {addedCount, isRateLimited: queue.isRateLimited, size: queue.size};
+		queue.clear();
+		return {...state, isRateLimitedAfterClear: queue.isRateLimited};
+	};
+
+	const expected = {
+		addedCount: 3,
+		isRateLimited: true,
+		size: 1,
+		isRateLimitedAfterClear: false,
+	};
+
+	assert.deepEqual(run(false), expected);
+	assert.deepEqual(run(true), expected);
+});
+
+test('onRateLimitCleared() resolves after `.clear()` or an abort in the same tick as the adds', async () => {
+	const run = async (removeWaitingTask: (queue: PQueue, controller: AbortController) => void) => {
+		const queue = new PQueue({intervalCap: 1, interval: 1000});
+		const controller = new AbortController();
+		queue.add(() => undefined);
+		queue.add(() => undefined, {signal: controller.signal}).catch(() => undefined);
+
+		const isRateLimited = queue.isRateLimited; // eslint-disable-line prefer-destructuring
+		const cleared = queue.onRateLimitCleared();
+		removeWaitingTask(queue, controller);
+
+		const result = await Promise.race([cleared.then(() => 'cleared'), delay(100).then(() => 'pending')]);
+		return {isRateLimited, result};
+	};
+
+	const expected = {isRateLimited: true, result: 'cleared'};
+	assert.deepEqual(await run(queue => {
+		queue.clear();
+	}), expected);
+	assert.deepEqual(await run((_queue, controller) => {
+		controller.abort();
+	}), expected);
+});
