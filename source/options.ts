@@ -6,6 +6,8 @@ type TimeoutOptions = {
 
 	The time starts when the task starts running, not when it is added. Override it for one task with the `timeout` option of `.add()`.
 
+	Maximum: `2147483647` (about 24.8 days).
+
 	@default undefined
 
 	@example
@@ -35,7 +37,7 @@ type TimeoutOptions = {
 
 export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOptions extends QueueAddOptions> = {
 	/**
-	The maximum number of tasks that run at the same time.
+	The maximum number of tasks that run at the same time. Must be an integer or `Infinity`.
 
 	Minimum: `1`.
 
@@ -56,7 +58,7 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOpt
 	readonly queueClass?: new () => QueueType;
 
 	/**
-	The maximum number of tasks that start in each `interval`.
+	The maximum number of tasks that start in each `interval`. Must be an integer or `Infinity`.
 
 	Minimum: `1`.
 
@@ -65,9 +67,10 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOpt
 	readonly intervalCap?: number;
 
 	/**
-	The length of the rate-limit interval in milliseconds. Must be finite. `0` disables rate limiting.
+	The length of the rate-limit interval in milliseconds. `0` disables rate limiting.
 
 	Minimum: `0`.
+	Maximum: `2147483647` (about 24.8 days).
 
 	@default 0
 	*/

@@ -93,12 +93,13 @@ Type: `number`\
 Default: `Infinity`\
 Minimum: `1`
 
-The maximum number of tasks that run at the same time.
+The maximum number of tasks that run at the same time. Must be an integer or `Infinity`.
 
 ##### timeout
 
 Type: `number`\
-Default: `undefined`
+Default: `undefined`\
+Maximum: `2147483647` (about 24.8 days)
 
 The time in milliseconds a task can run. When the time is up, the `signal` of the task aborts and `.add()` rejects with a `TimeoutError`, which is a `DOMException`. Like with the [`signal`](#signal) option of `.add()`, the concurrency slot is freed, but the task keeps running unless it handles its `signal`.
 
@@ -123,15 +124,16 @@ Type: `number`\
 Default: `Infinity`\
 Minimum: `1`
 
-The maximum number of tasks that start in each `interval`.
+The maximum number of tasks that start in each `interval`. Must be an integer or `Infinity`.
 
 ##### interval
 
 Type: `number`\
 Default: `0`\
-Minimum: `0`
+Minimum: `0`\
+Maximum: `2147483647` (about 24.8 days)
 
-The length of the rate-limit interval in milliseconds. Must be finite. `0` disables rate limiting.
+The length of the rate-limit interval in milliseconds. `0` disables rate limiting.
 
 ##### carryoverIntervalCount
 

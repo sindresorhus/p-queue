@@ -21,6 +21,23 @@ type EventMap = {
 
 type EventName = keyof EventMap;
 
+// Timers fire after 1 ms for a longer delay, so a longer timeout would fail the task at once, and a longer interval would not limit anything.
+const maximumTimerDelay = 2_147_483_647;
+
+const validateTimeout = (timeout: number | undefined): void => {
+	if (timeout !== undefined && !(Number.isFinite(timeout) && timeout > 0 && timeout <= maximumTimerDelay)) {
+		throw new TypeError(`Expected \`timeout\` to be a positive finite number up to ${maximumTimerDelay}, got \`${timeout}\` (${typeof timeout})`);
+	}
+};
+
+// A fraction would let one more task through, because the checks are `count < limit`.
+// Not `Number.isSafeInteger()`, because a larger integer, like `Number.MAX_VALUE`, is a valid limit.
+const validateLimit = (name: string, value: unknown): void => {
+	if (!(typeof value === 'number' && value >= 1 && (value === Infinity || Number.isInteger(value)))) { // eslint-disable-line unicorn/prefer-number-is-safe-integer
+		throw new TypeError(`Expected \`${name}\` to be an integer from 1 and up or \`Infinity\`, got \`${String(value)}\` (${typeof value})`);
+	}
+};
+
 // A task that waits in the queue. `promise` is the promise that `.add()` returned, and `reject` rejects it. `.clear()` marks the promise as handled before it rejects it, so that a caller that ignores the promise does not get an unhandled rejection, which can make the process exit. A caller that handles the promise still gets the error.
 type WaitingTask = {
 	id?: string;
@@ -124,12 +141,15 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			...options,
 		} as Options<QueueType, EnqueueOptionsType>;
 
-		if (!(typeof options.intervalCap === 'number' && options.intervalCap >= 1)) {
-			throw new TypeError(`Expected \`intervalCap\` to be a number from 1 and up, got \`${options.intervalCap?.toString() ?? ''}\` (${typeof options.intervalCap})`);
-		}
+		validateLimit('intervalCap', options.intervalCap);
 
 		if (options.interval === undefined || !(Number.isFinite(options.interval) && options.interval >= 0)) {
 			throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${options.interval?.toString() ?? ''}\` (${typeof options.interval})`);
+		}
+
+		// Only rate limiting uses a timer for the interval.
+		if (options.intervalCap !== Infinity && options.interval > maximumTimerDelay) {
+			throw new TypeError(`Expected \`interval\` to be at most ${maximumTimerDelay} with an \`intervalCap\`, got \`${options.interval}\``);
 		}
 
 		if (options.strict && options.interval === 0) {
@@ -142,16 +162,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 		this.#carryoverIntervalCount = options.carryoverIntervalCount ?? false;
 		this.#isIntervalIgnored = options.intervalCap === Infinity || options.interval === 0;
-		this.#intervalCap = options.intervalCap;
+		this.#intervalCap = options.intervalCap!;
 		this.#interval = options.interval;
 		this.#strict = options.strict!;
 		this.#queue = new options.queueClass!();
 		this.#queueClass = options.queueClass!;
 		this.concurrency = options.concurrency!;
 
-		if (options.timeout !== undefined && !(Number.isFinite(options.timeout) && options.timeout > 0)) {
-			throw new TypeError(`Expected \`timeout\` to be a positive finite number, got \`${options.timeout}\` (${typeof options.timeout})`);
-		}
+		validateTimeout(options.timeout);
 
 		this.timeout = options.timeout;
 		this.#isPaused = options.autoStart === false;
@@ -514,9 +532,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			id: options.id ?? (this.#idAssigner++).toString(),
 		};
 
-		if (options.timeout !== undefined && !(Number.isFinite(options.timeout) && options.timeout > 0)) {
-			throw new TypeError(`Expected \`timeout\` to be a positive finite number, got \`${options.timeout}\` (${typeof options.timeout})`);
-		}
+		validateTimeout(options.timeout);
 
 		// A `NaN` priority breaks the order of the queue, also for the other tasks. `Infinity` is fine.
 		if (options.priority !== undefined && (typeof options.priority !== 'number' || Number.isNaN(options.priority))) {
@@ -684,9 +700,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	set concurrency(newConcurrency: number) {
-		if (!(typeof newConcurrency === 'number' && newConcurrency >= 1)) {
-			throw new TypeError(`Expected \`concurrency\` to be a number from 1 and up, got \`${newConcurrency}\` (${typeof newConcurrency})`);
-		}
+		validateLimit('concurrency', newConcurrency);
 
 		this.#concurrency = newConcurrency;
 

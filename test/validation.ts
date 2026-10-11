@@ -224,3 +224,75 @@ test('priority validation in add', async () => {
 	assert.equal(await queue.add(async () => '🦄', {priority: -Infinity}), '🦄');
 	assert.equal(await queue.add(async () => '🦄', {priority: undefined}), '🦄');
 });
+
+test('fractional concurrency and intervalCap are rejected', () => {
+	assert.throws(() => {
+		new PQueue({concurrency: 1.5}); // eslint-disable-line no-new
+	}, {name: 'TypeError', message: /Expected `concurrency` to be an integer from 1 and up or `Infinity`/v});
+
+	assert.throws(() => {
+		(new PQueue()).concurrency = 2.5;
+	}, {name: 'TypeError', message: /Expected `concurrency` to be an integer from 1 and up or `Infinity`/v});
+
+	assert.throws(() => {
+		new PQueue({intervalCap: 1.5, interval: 1000}); // eslint-disable-line no-new
+	}, {name: 'TypeError', message: /Expected `intervalCap` to be an integer from 1 and up or `Infinity`/v});
+});
+
+test('a rejected fractional concurrency keeps the previous limit', async () => {
+	const queue = new PQueue({concurrency: 1});
+	assert.throws(() => {
+		queue.concurrency = 1.5;
+	}, TypeError);
+
+	let maximumRunning = 0;
+	await Promise.all(Array.from({length: 3}, async () => queue.add(async () => {
+		maximumRunning = Math.max(maximumRunning, queue.pending);
+		await delay(5);
+	})));
+
+	assert.equal(maximumRunning, 1);
+});
+
+test('timeout above the maximum timer delay is rejected instead of timing out at once', async () => {
+	const maximumDelay = 2_147_483_647;
+	const expectedError = {
+		name: 'TypeError',
+		message: /Expected `timeout` to be a positive finite number up to 2147483647/v,
+	};
+
+	assert.throws(() => {
+		new PQueue({timeout: maximumDelay + 1}); // eslint-disable-line no-new
+	}, expectedError);
+
+	const queue = new PQueue();
+	await assert.rejects(queue.add(async () => '🦄', {timeout: Number.MAX_SAFE_INTEGER}), expectedError);
+
+	// The maximum still works, and the task does not time out.
+	const maximumQueue = new PQueue({timeout: maximumDelay});
+	assert.equal(await maximumQueue.add(async () => {
+		await delay(20);
+		return '🦄';
+	}), '🦄');
+});
+
+test('interval above the maximum timer delay is rejected instead of resetting every 1 ms', async () => {
+	assert.throws(() => {
+		new PQueue({interval: 2_147_483_648, intervalCap: 1}); // eslint-disable-line no-new
+	}, {name: 'TypeError', message: /Expected `interval` to be at most 2147483647 with an `intervalCap`/v});
+
+	// The maximum still rate-limits.
+	const queue = new PQueue({interval: 2_147_483_647, intervalCap: 1});
+	let startedCount = 0;
+	const task = () => {
+		startedCount++;
+	};
+
+	queue.add(task);
+	queue.add(task);
+	queue.add(task);
+
+	await delay(20);
+	assert.equal(startedCount, 1);
+	queue.clear();
+});
