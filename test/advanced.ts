@@ -610,7 +610,8 @@ test('clear() removes queued abort listeners for shared signals', () => {
 	queue.add(async () => '2', {signal: controller.signal});
 	queue.add(async () => '3', {signal: controller.signal});
 
-	assert.equal(getEventListeners(controller.signal, 'abort').length, 3);
+	// The tasks share one listener.
+	assert.equal(getEventListeners(controller.signal, 'abort').length, 1);
 
 	queue.clear();
 
@@ -642,7 +643,8 @@ test('clear() keeps the running task abort listener while removing queued ones',
 	const queuedTask1 = queue.add(async () => '1', {signal: controller.signal});
 	const queuedTask2 = queue.add(async () => '2', {signal: controller.signal});
 
-	assert.equal(getEventListeners(controller.signal, 'abort').length, 3);
+	// The tasks share one listener, which stays for the running task.
+	assert.equal(getEventListeners(controller.signal, 'abort').length, 1);
 
 	queue.clear();
 
@@ -690,7 +692,7 @@ test('clear() does not accumulate abort listeners across repeated discard cycles
 		listenerCounts.push(getEventListeners(controller.signal, 'abort').length);
 	}
 
-	assert.deepEqual(listenerCounts, [2, 0, 2, 0, 2, 0, 2, 0, 2, 0], 'Listeners should be added per queued task and removed on clear');
+	assert.deepEqual(listenerCounts, [1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 'The queued tasks should share one listener, which clear removes');
 });
 
 test('should pass AbortSignal instance to job', async () => {
@@ -2304,4 +2306,119 @@ test('a task runs in the async context of its `.add()` call, also when it starts
 	}
 
 	t.assert.deepStrictEqual(await result, []);
+});
+
+// The time to add and run tasks without a signal, to compare with, so that a slow or busy machine does not fail the tests that check for O(n²) time.
+const measureTasksWithoutSignal = async (count: number) => {
+	const queue = new PQueue({concurrency: 1});
+	const start = performance.now();
+	const tasks = Array.from({length: count}, async () => queue.add(() => undefined));
+	await Promise.all(tasks);
+	return performance.now() - start;
+};
+
+test('aborting many waiting tasks is fast, with one shared signal and with a signal for each task', async () => {
+	const count = 50_000;
+	const run = async (isShared: boolean) => {
+		const queue = new PQueue({concurrency: 1});
+		const sharedController = new AbortController();
+		const controllers: AbortController[] = [];
+		const blocker = pDefer();
+		const running = queue.add(async () => blocker.promise);
+		const tasks: Array<Promise<unknown>> = [];
+		for (let index = 0; index < count; index++) {
+			const controller = isShared ? sharedController : new AbortController();
+			controllers.push(controller);
+			tasks.push(queue.add(() => undefined, {signal: controller.signal}).catch((error: unknown) => (error as Error).name));
+		}
+
+		const start = performance.now();
+		for (const controller of controllers) {
+			controller.abort();
+		}
+
+		const duration = performance.now() - start;
+		const {size} = queue;
+		blocker.resolve();
+		await running;
+		const results = await Promise.all(tasks);
+		return {duration, size, isEveryTaskAborted: results.every(result => result === 'AbortError')};
+	};
+
+	// Each abort was O(n) before, so this took more than twenty times as long as running the tasks.
+	const shared = await run(true);
+	const own = await run(false);
+	const limit = (await measureTasksWithoutSignal(count) * 5) + 100;
+	assert.ok(shared.duration < limit, `Took ${Math.round(shared.duration)} ms with a shared signal, limit ${Math.round(limit)} ms`);
+	assert.ok(own.duration < limit, `Took ${Math.round(own.duration)} ms with a signal for each task, limit ${Math.round(limit)} ms`);
+	assert.deepEqual([shared.size, shared.isEveryTaskAborted, own.size, own.isEveryTaskAborted], [0, true, 0, true]);
+});
+
+test('adding and running many tasks with one shared signal is fast', async () => {
+	const count = 50_000;
+	const run = async (options: {timeout?: number; isPrioritized?: boolean}) => {
+		const queue = new PQueue({concurrency: 1, autoStart: false});
+		const controller = new AbortController();
+
+		let start = performance.now();
+		const tasks: Array<Promise<unknown>> = [];
+		for (let index = 0; index < count; index++) {
+			tasks.push(queue.add(() => undefined, {signal: controller.signal, timeout: options.timeout, priority: options.isPrioritized ? index % 2 : 0}));
+		}
+
+		const durationOfAdding = performance.now() - start;
+
+		start = performance.now();
+		queue.start();
+		await Promise.all(tasks);
+		return {durationOfAdding, durationOfRunning: performance.now() - start};
+	};
+
+	// Each task added and removed its own listener on the signal, and Node.js searches all the listeners of a signal for that, so this took more than twenty times as long as without a signal.
+	const durations = [await run({}), await run({timeout: 10_000}), await run({isPrioritized: true})];
+	const limit = (await measureTasksWithoutSignal(count) * 5) + 100;
+	const slowDurations = durations.filter(({durationOfAdding, durationOfRunning}) => durationOfAdding >= limit || durationOfRunning >= limit);
+	assert.deepEqual(slowDurations, [], `Limit ${Math.round(limit)} ms`);
+});
+
+test('tasks that share a signal add at most one listener to it, and remove it when they are done', async () => {
+	const controller = new AbortController();
+	const {signal} = controller;
+	const listenerCount = () => getEventListeners(signal, 'abort').length;
+
+	// Waiting and running.
+	const queue = new PQueue({concurrency: 2});
+	const blockers = [pDefer(), pDefer()];
+	const tasks = [
+		...blockers.map(async ({promise}) => queue.add(async () => promise, {signal})),
+		...Array.from({length: 5}, async () => queue.add(() => undefined, {signal})),
+		queue.add(() => undefined, {signal, timeout: 1000}),
+	];
+	assert.equal(listenerCount(), 1);
+
+	for (const {resolve} of blockers) {
+		resolve();
+	}
+
+	await Promise.all(tasks);
+	assert.equal(listenerCount(), 0);
+
+	// `.clear()`
+	queue.pause();
+	const cleared = queue.add(() => undefined, {signal}).catch(() => undefined);
+	assert.equal(listenerCount(), 1);
+	queue.clear();
+	await cleared;
+	assert.equal(listenerCount(), 0);
+
+	// An abort of waiting and running tasks.
+	queue.concurrency = 1;
+	queue.start();
+	const running = queue.add(async () => pDefer().promise, {signal});
+	const waiting = Array.from({length: 3}, async () => queue.add(() => undefined, {signal}));
+	assert.equal(listenerCount(), 1);
+	controller.abort();
+	const results = await Promise.allSettled([running, ...waiting]);
+	assert.ok(results.every(result => result.status === 'rejected'));
+	assert.equal(listenerCount(), 0);
 });

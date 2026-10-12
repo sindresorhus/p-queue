@@ -347,3 +347,39 @@ test('tasks that ran can be garbage collected while other tasks still wait', asy
 	resolve();
 	await waiting;
 });
+
+test('PriorityQueue removes the first item, also after dequeues and compaction, and keeps the order', () => {
+	const queue = new PriorityQueue();
+	const runs = Array.from({length: 300}, (_, index) => createRun(String(index)));
+	for (const [index, run] of runs.entries()) {
+		queue.enqueue(run, {id: String(index)});
+	}
+
+	// Past the compaction threshold, then remove the first live item by function and by id.
+	for (let index = 0; index < 150; index++) {
+		queue.dequeue();
+	}
+
+	queue.remove(runs[150]!);
+	queue.remove('151');
+	// Not the first item.
+	queue.remove('153');
+	assert.equal(queue.size, 147);
+
+	const high = createRun('high');
+	queue.enqueue(high, {priority: 1});
+	queue.setPriority('299', 2);
+	assert.equal(queue.dequeue(), runs[299]);
+	assert.equal(queue.dequeue(), high);
+	assert.equal(queue.dequeue(), runs[152]);
+	assert.equal(queue.dequeue(), runs[154]);
+
+	// Removing the only item empties the queue.
+	const single = new PriorityQueue();
+	single.enqueue(runs[0]!, {id: 'only'});
+	single.remove('only');
+	assert.equal(single.size, 0);
+	assert.equal(single.dequeue(), undefined);
+	single.enqueue(runs[1]!);
+	assert.equal(single.dequeue(), runs[1]);
+});

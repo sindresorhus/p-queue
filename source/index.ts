@@ -84,6 +84,8 @@ type WaitingTask = {
 	priority?: number;
 	promise?: Promise<unknown>;
 	reject?: (reason: unknown) => void;
+	// Stops listening for the abort of the `signal` of the task, when it starts or `.clear()` removes it.
+	stopListeningForAbort?: () => void;
 	isCleared?: boolean;
 };
 
@@ -145,7 +147,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		timeout: number | undefined;
 	}>();
 
-	readonly #queueAbortListenerCleanupFunctions = new Set<() => void>();
+	// The `abort` listener of each signal, with the callbacks of the tasks that use the signal.
+	readonly #abortListeners = new Map<AbortSignal, {callbacks: Set<() => void>; dispatch: () => void}>();
 
 	// The waiting tasks, so that `.clear()` can reject their promises.
 	readonly #waitingTasks = new Set<WaitingTask>();
@@ -184,6 +187,41 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		this.#isPaused = !autoStart;
 
 		this.#setupRateLimitTracking();
+	}
+
+	// Calls `callback` when `signal` aborts, and returns a function that stops it. The tasks that share a signal share one listener on it, because Node.js searches all the listeners of a signal to add or remove one, so a listener for each task takes O(n²) time with many tasks.
+	#onAbort(signal: AbortSignal, callback: () => void): () => void {
+		let listener = this.#abortListeners.get(signal);
+		if (!listener) {
+			const callbacks = new Set<() => void>();
+			const dispatch = () => {
+				this.#abortListeners.delete(signal);
+
+				// Not a copy, so that a callback that an earlier callback removes is not called.
+				for (const abortCallback of callbacks) {
+					abortCallback();
+				}
+			};
+
+			listener = {callbacks, dispatch};
+			this.#abortListeners.set(signal, listener);
+			signal.addEventListener('abort', dispatch, {once: true});
+		}
+
+		const currentListener = listener;
+		currentListener.callbacks.add(callback);
+
+		return () => {
+			currentListener.callbacks.delete(callback);
+
+			// Not after the abort, when the listener is already gone, and a new one can be in the map.
+			if (currentListener.callbacks.size > 0 || this.#abortListeners.get(signal) !== currentListener) {
+				return;
+			}
+
+			this.#abortListeners.delete(signal);
+			signal.removeEventListener('abort', currentListener.dispatch);
+		};
 	}
 
 	#emit(event: EventName, detail?: unknown): void {
@@ -603,10 +641,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			// Create a unique symbol for tracking this task
 			const taskSymbol = Symbol(`task-${id}`);
 
-			let cleanupQueueAbortHandler = () => undefined;
 			const run = bindAsyncContext(async () => {
 				// Task is now running, so remove the queued-state abort listener
-				cleanupQueueAbortHandler();
+				waitingTask.stopListeningForAbort?.();
 				this.#waitingTasks.delete(waitingTask);
 
 				// The signal aborted while the task waited, but its abort listener did not run yet, for example because another listener of the signal started the queue. Like an abort while waiting, the task does not start.
@@ -627,8 +664,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				});
 
 				let {signal} = options;
-				let eventListener: (() => void) | undefined;
-				let forwardAbort: (() => void) | undefined;
+				let stopListeningForAbort: (() => void) | undefined;
+				let stopForwardingAbort: (() => void) | undefined;
 				let timeoutId: NodeJS.Timeout | undefined;
 
 				try {
@@ -641,11 +678,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 						}, timeout);
 
 						if (userSignal) {
-							forwardAbort = () => {
+							stopForwardingAbort = this.#onAbort(userSignal, () => {
 								taskController.abort(userSignal.reason);
-							};
-
-							userSignal.addEventListener('abort', forwardAbort, {once: true});
+							});
 						}
 
 						signal = taskController.signal;
@@ -658,11 +693,9 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 						// Listen before the task starts, so that an abort while the task starts is not missed, and so that the abort comes before the abort listeners of the task. The abort is first in the race, so it also wins when both are already settled.
 						const abortPromise = new Promise<never>((_resolve, rejectWithReason) => {
-							eventListener = () => {
+							stopListeningForAbort = this.#onAbort(abortSignal, () => {
 								rejectWithReason(abortSignal.reason);
-							};
-
-							abortSignal.addEventListener('abort', eventListener, {once: true});
+							});
 						});
 
 						// The `async` function turns a synchronous throw of the task into a rejection, so that `abortPromise` always has a handler.
@@ -688,13 +721,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					clearTimeout(timeoutId);
 
 					// Clean up abort event listeners
-					if (eventListener) {
-						signal?.removeEventListener('abort', eventListener);
-					}
-
-					if (forwardAbort) {
-						options.signal?.removeEventListener('abort', forwardAbort);
-					}
+					stopListeningForAbort?.();
+					stopForwardingAbort?.();
 
 					// Remove from running tasks
 					this.#runningTasks.delete(taskSymbol);
@@ -711,36 +739,23 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			waitingTask.reject = reject;
 			this.#waitingTasks.add(waitingTask);
 
-			const removeQueuedTask = () => {
-				if (this.#queue instanceof PriorityQueue) {
-					this.#queue.remove(run);
-					return;
-				}
-
-				this.#queue.remove(id);
-			};
-
 			// Handle abort while task is waiting in the queue
 			if (options.signal) {
 				const {signal} = options;
-
-				const queueAbortHandler = () => {
-					cleanupQueueAbortHandler();
+				waitingTask.stopListeningForAbort = this.#onAbort(signal, () => {
 					this.#waitingTasks.delete(waitingTask);
-					removeQueuedTask();
+
+					if (this.#queue instanceof PriorityQueue) {
+						this.#queue.remove(run);
+					} else {
+						this.#queue.remove(id);
+					}
+
 					reject(signal.reason);
 					// Not only one task: at the end of a window, the first start clears the resume timeout, which would start the others.
 					this.#processQueue();
 					this.#emit('next');
-				};
-
-				cleanupQueueAbortHandler = () => {
-					signal.removeEventListener('abort', queueAbortHandler);
-					this.#queueAbortListenerCleanupFunctions.delete(cleanupQueueAbortHandler);
-				};
-
-				signal.addEventListener('abort', queueAbortHandler, {once: true});
-				this.#queueAbortListenerCleanupFunctions.add(cleanupQueueAbortHandler);
+				});
 			}
 
 			this.#emit('add');
@@ -937,14 +952,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			return;
 		}
 
-		for (const cleanupQueueAbortHandler of this.#queueAbortListenerCleanupFunctions) {
-			cleanupQueueAbortHandler();
-		}
-
 		this.#queue = new this.#queueClass();
 
 		const error = new DOMException('The queue was cleared', 'AbortError');
 		for (const waitingTask of this.#waitingTasks) {
+			waitingTask.stopListeningForAbort?.();
 			waitingTask.isCleared = true;
 			waitingTask.promise?.catch(() => undefined);
 			waitingTask.reject!(error);
