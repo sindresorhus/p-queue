@@ -817,37 +817,42 @@ For other scheduling policies, give a class as the `queueClass` option:
 ```js
 import PQueue from 'p-queue';
 
-class QueueClass {
-	constructor() {
-		this._queue = [];
-	}
+// Runs the tasks in the order they were added, whatever their priority
+class FifoQueue {
+	#items = [];
 
 	enqueue(run, options) {
-		this._queue.push(run);
+		this.#items.push({run, id: options.id, priority: options.priority ?? 0});
 	}
 
 	dequeue() {
-		return this._queue.shift();
+		return this.#items.shift()?.run;
 	}
 
 	get size() {
-		return this._queue.length;
+		return this.#items.length;
 	}
 
+	// Called by `queue.sizeBy()`
 	filter(options) {
-		return this._queue;
+		return this.#items.filter(item => item.priority === options.priority).map(item => item.run);
 	}
 
+	// Called by `queue.setPriority()`
 	setPriority(id, priority) {
-		// Called by `queue.setPriority()`
+		this.#items.find(item => item.id === id).priority = priority;
 	}
 
+	// Called when the `signal` of a waiting task aborts
 	remove(id) {
-		// Called when the `signal` of a waiting task aborts
+		const index = this.#items.findIndex(item => item.id === id);
+		if (index !== -1) {
+			this.#items.splice(index, 1);
+		}
 	}
 }
 
-const queue = new PQueue({queueClass: QueueClass});
+const queue = new PQueue({queueClass: FifoQueue});
 ```
 
 `p-queue` calls these methods to add, take, count, reorder, and remove tasks.
