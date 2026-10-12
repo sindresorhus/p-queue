@@ -991,7 +991,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			return;
 		}
 
-		await this.#onEvent('empty');
+		// Also `active`, because a task that starts at once, like one added to an empty queue, emits no `empty`.
+		await this.#onEvent(['empty', 'active'], () => this.#queue.size === 0);
 	}
 
 	/**

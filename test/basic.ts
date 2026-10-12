@@ -411,6 +411,29 @@ test('.onEmpty() resolves when the last waiting task starts', async () => {
 	await job2Result;
 });
 
+test('.onEmpty() called in an `add` listener resolves when the task starts, not when it finishes', async () => {
+	const queue = new PQueue();
+	const {promise, resolve} = pDefer();
+	let isEmpty = false;
+
+	queue.addEventListener('add', () => {
+		(async () => {
+			await queue.onEmpty();
+			isEmpty = true;
+		})();
+	}, {once: true});
+
+	const task = queue.add(async () => promise);
+	await delay(10);
+
+	assert.equal(queue.size, 0);
+	assert.equal(queue.pending, 1);
+	assert.ok(isEmpty);
+
+	resolve();
+	await task;
+});
+
 test('.onIdle()', async () => {
 	const queue = new PQueue({concurrency: 2});
 
