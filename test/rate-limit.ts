@@ -993,3 +993,63 @@ test('.clear() on a paused rate-limited queue removes the timer for the window e
 	queue.clear();
 	t.assert.strictEqual(countTimers(), timersBefore);
 });
+
+test('a task that a `rateLimitCleared` listener adds during `.clear()` runs at the window end, and `empty` is not emitted while it waits', async t => {
+	const startTime = 1_000_000;
+	// eslint-disable-next-line node-test/require-mock-timers-advance -- `run()` ticks.
+	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date'], now: startTime});
+
+	const run = async (isStrict: boolean) => {
+		const queue = new PQueue({intervalCap: 1, interval: 100, strict: isStrict});
+		const queueStartTime = Date.now();
+
+		queue.add(() => undefined);
+		const cleared = queue.add(() => undefined).catch((error: unknown) => (error as Error).name);
+		await flush();
+
+		const emptySizes: number[] = [];
+		queue.addEventListener('empty', () => {
+			emptySizes.push(queue.size);
+		});
+
+		let startedAt: number | undefined;
+		queue.addEventListener('rateLimitCleared', () => {
+			queue.add(() => {
+				startedAt = Date.now() - queueStartTime;
+			}).catch(() => undefined);
+		}, {once: true});
+
+		queue.clear();
+		const sizeAfterClear = queue.size;
+
+		for (let index = 0; index < 3; index++) {
+			t.mock.timers.tick(100);
+			await flush(); // eslint-disable-line no-await-in-loop
+		}
+
+		const state = {
+			clearedError: await cleared,
+			sizeAfterClear,
+			startedAt,
+			emptySizes: emptySizes.filter(size => size > 0),
+			size: queue.size,
+			pending: queue.pending,
+		};
+
+		// Before the fix, the task never started.
+		queue.clear();
+		return state;
+	};
+
+	const expected = {
+		clearedError: 'AbortError',
+		sizeAfterClear: 1,
+		startedAt: 100,
+		emptySizes: [],
+		size: 0,
+		pending: 0,
+	};
+
+	t.assert.deepStrictEqual(await run(false), expected);
+	t.assert.deepStrictEqual(await run(true), expected);
+});

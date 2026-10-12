@@ -923,11 +923,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		// Note: We don't clear #runningTasks as those tasks are still running
 		// They will be removed when they complete in the finally block
 
+		// Emit events so waiters (onEmpty, onIdle, onSizeLessThan) can resolve. Before the rate-limit update, because `#emitEmptyAndIdle()` clears the interval timer: a `rateLimitCleared` listener that adds a task would otherwise see the timer of the current window, schedule no resume, and the task would never start.
+		this.#emitEmptyAndIdle();
+
 		// Force synchronous update since clear() should have immediate effect
 		this.#updateRateLimitState();
-
-		// Emit events so waiters (onEmpty, onIdle, onSizeLessThan) can resolve
-		this.#emitEmptyAndIdle();
 
 		this.#emit('next');
 	}
