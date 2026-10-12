@@ -2,10 +2,11 @@ import process from 'node:process';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {getEventListeners} from 'node:events';
+import {AsyncLocalStorage} from 'node:async_hooks';
 import delay from 'delay';
 import pDefer from 'p-defer';
 import PQueue from '../source/index.js';
-import {countTimers, FifoQueue} from './helpers.js';
+import {countTimers, FifoQueue, flush} from './helpers.js';
 
 test('clear interval on pause', async () => {
 	const queue = new PQueue({
@@ -2258,4 +2259,49 @@ test('.add() with an already aborted signal rejects without adding the task or e
 	assert.deepEqual(events, []);
 	assert.equal(queue.size, 0);
 	assert.equal(queue.pending, 0);
+});
+
+test('a task runs in the async context of its `.add()` call, also when it starts later', async t => {
+	const store = new AsyncLocalStorage<string>();
+	const run = async (queue: PQueue, start?: () => void) => {
+		const seen: Array<[string, string | undefined]> = [];
+		const tasks = ['a', 'b', 'c', 'd'].map(async name => store.run(name, async () => queue.add(async () => {
+			seen.push([name, store.getStore()]);
+			await delay(1);
+		})));
+
+		store.run('other', () => {
+			start?.();
+		});
+
+		await Promise.all(tasks);
+		return seen.filter(([name, context]) => name !== context);
+	};
+
+	// A finished task starts the next one.
+	t.assert.deepStrictEqual(await run(new PQueue({concurrency: 1})), []);
+
+	// `.start()` and the `concurrency` setter start them.
+	const pausedQueue = new PQueue({autoStart: false});
+	t.assert.deepStrictEqual(await run(pausedQueue, () => {
+		pausedQueue.start();
+	}), []);
+	const limitedQueue = new PQueue({concurrency: 1});
+	t.assert.deepStrictEqual(await run(limitedQueue, () => {
+		limitedQueue.concurrency = Infinity;
+	}), []);
+
+	// The timer of the rate limit starts them.
+	// eslint-disable-next-line node-test/require-mock-timers-advance -- The loop ticks.
+	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date']});
+	const rateLimitedQueue = new PQueue({intervalCap: 1, interval: 100});
+	const result = run(rateLimitedQueue);
+	for (let index = 0; index < 4; index++) {
+		await flush(); // eslint-disable-line no-await-in-loop
+		store.run('other', () => {
+			t.mock.timers.tick(100);
+		});
+	}
+
+	t.assert.deepStrictEqual(await result, []);
 });

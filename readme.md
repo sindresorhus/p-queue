@@ -181,7 +181,7 @@ Returns a promise that settles with the result of `fn` when the task completes, 
 
 Type: `Function`
 
-A sync or async function. It gets `{signal}` as its first argument. The signal is set when the task has a `signal` or a `timeout`, and aborts when either one does. Pass it on, for example to `fetch()`, to stop the work.
+A sync or async function. It gets `{signal}` as its first argument. The signal is set when the task has a `signal` or a `timeout`, and aborts when either one does. Pass it on, for example to `fetch()`, to stop the work. The function runs in the async context of the `.add()` call (in Node.js 22.3 and later, Deno, and Bun), so it sees the [`AsyncLocalStorage`](https://nodejs.org/api/async_context.html#class-asynclocalstorage) values of the caller, also when it starts later.
 
 #### options
 

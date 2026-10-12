@@ -29,6 +29,19 @@ type QueueEventListener<Name extends EventName> = ((event: EventMap[Name]) => vo
 // Timers fire after 1 ms for a longer delay, so a longer timeout would fail the task at once, and a longer interval would not limit anything.
 const maximumTimerDelay = 2_147_483_647;
 
+// Not imported, so that it still works in browsers, which have no async context to keep.
+const asyncHooks = globalThis.process?.getBuiltinModule?.('node:async_hooks'); // eslint-disable-line n/prefer-global/process
+
+// Binds a function to the async context of the caller. A task can start later from another task, a timer, or `.start()`, and it must still see the `AsyncLocalStorage` values of its `.add()` call, not those of the code that started it. Not `AsyncResource.bind()`, which is about 15 times slower.
+const bindAsyncContext = <ReturnType>(function_: () => ReturnType): (() => ReturnType) => {
+	if (asyncHooks === undefined) {
+		return function_;
+	}
+
+	const asyncResource = new asyncHooks.AsyncResource('PQueueTask');
+	return () => asyncResource.runInAsyncScope(function_);
+};
+
 const validateTimeout = (timeout: number | undefined): void => {
 	if (timeout !== undefined && !(Number.isFinite(timeout) && timeout > 0 && timeout <= maximumTimerDelay)) {
 		throw new TypeError(`Expected \`timeout\` to be a positive finite number up to ${maximumTimerDelay}, got \`${timeout}\` (${typeof timeout})`);
@@ -591,7 +604,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			const taskSymbol = Symbol(`task-${id}`);
 
 			let cleanupQueueAbortHandler = () => undefined;
-			const run = async () => {
+			const run = bindAsyncContext(async () => {
 				// Task is now running, so remove the queued-state abort listener
 				cleanupQueueAbortHandler();
 				this.#waitingTasks.delete(waitingTask);
@@ -691,7 +704,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 						this.#next();
 					});
 				}
-			};
+			});
 
 			this.#queue.enqueue(run, options);
 			waitingTask.reject = reject;
@@ -821,7 +834,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	/**
 	Adds a sync or async task to the queue.
 
-	Returns a promise that settles with the result of `fn` when the task completes, not when it is added. The function gets `{signal}` as its first argument. The signal is set when the task has a `signal` or a `timeout`, and aborts when either one does. Pass it on, for example to `fetch()`, to stop the work.
+	Returns a promise that settles with the result of `fn` when the task completes, not when it is added. The function gets `{signal}` as its first argument. The signal is set when the task has a `signal` or a `timeout`, and aborts when either one does. Pass it on, for example to `fetch()`, to stop the work. The function runs in the async context of the `.add()` call (in Node.js 22.3 and later, Deno, and Bun), so it sees the [`AsyncLocalStorage`](https://nodejs.org/api/async_context.html#class-asynclocalstorage) values of the caller, also when it starts later.
 
 	If you `await` each `.add()` call before the next, the tasks run one after the other, whatever the `concurrency`.
 
