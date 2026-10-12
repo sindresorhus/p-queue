@@ -36,7 +36,7 @@ type TimeoutOptions = {
 	timeout?: number | undefined;
 };
 
-// The defaults match `PQueue`, so that `Options` without type arguments is for the default queue.
+// The defaults match `PQueue`, so that `Options` without type arguments is for the default queue. `QueueOptions` is not inferred from `queueClass`, because TypeScript does not infer from a constraint, and a default that infers it with a conditional type would break generic code, which then cannot pass any options to `.add()`.
 export type Options<QueueType extends Queue<RunFunction, QueueOptions> = PriorityQueue, QueueOptions extends QueueAddOptions = QueueAddOptions> = {
 	/**
 	The maximum number of tasks that run at the same time. Must be an integer or `Infinity`.
@@ -69,10 +69,10 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions> = Priorit
 	readonly intervalCap?: number | undefined;
 
 	/**
-	The length of the rate-limit interval in milliseconds. `0` disables rate limiting.
+	The length of the rate-limit interval in milliseconds. `0` disables rate limiting. The rate limit uses the system clock (`Date.now()`), so if the clock goes back, tasks can wait for as long as it went back.
 
 	Minimum: `0`.
-	Maximum: `2147483647` (about 24.8 days) with a finite `intervalCap`.
+	Maximum: `2147483647` (about 24.8 days) with a finite `intervalCap`, else any finite number.
 
 	@default 0
 	*/
@@ -105,7 +105,7 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions> = Priorit
 
 export type QueueAddOptions = {
 	/**
-	Tasks with a higher priority start first. `Infinity` and `-Infinity` work. `.add()` rejects with a `TypeError` when it is `NaN` or not a number.
+	Tasks with a higher priority start first. `Infinity` and `-Infinity` work. `.add()` rejects with a `TypeError` when it is `NaN` or not a number. The waiting tasks are kept sorted, so a task with a higher priority than the last waiting task takes time in proportion to the number of waiting tasks to add. For tens of thousands of waiting tasks with many different priorities, use a custom `queueClass`.
 
 	@default 0
 	*/

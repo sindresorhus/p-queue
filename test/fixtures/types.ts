@@ -166,3 +166,43 @@ const errorListener = {
 };
 queue.addEventListener('error', errorListener, {signal: controller.signal});
 queue.removeEventListener('error', errorListener);
+
+// A custom queue class with more enqueue options.
+type GroupOptions = QueueAddOptions & {group?: string};
+class GroupQueue implements Queue<RunFunction, GroupOptions> {
+	readonly #items: Array<{run: RunFunction; group: string | undefined}> = [];
+
+	get size() {
+		return this.#items.length;
+	}
+
+	enqueue(run: RunFunction, options?: Partial<GroupOptions>) {
+		this.#items.push({run, group: options?.group});
+	}
+
+	dequeue() {
+		return this.#items.shift()?.run;
+	}
+
+	filter(options: Readonly<Partial<GroupOptions>>) {
+		return this.#items.filter(item => item.group === options.group).map(item => item.run);
+	}
+
+	setPriority() {}
+
+	remove() {}
+}
+
+// The options type must be given, because TypeScript does not infer it from the constraint of the queue type. A default inferred with a conditional type would break generic code, like `addToAnyQueue()` below, because TypeScript defers a conditional type on a type parameter.
+const groupQueue = new PQueue<GroupQueue, GroupOptions>({queueClass: GroupQueue});
+const groupResult = groupQueue.add(async () => 1, {group: 'a', priority: 1});
+expectType<Equal<typeof groupResult, Promise<number>>>();
+groupQueue.sizeBy({group: 'a'});
+// @ts-expect-error Testing
+groupQueue.add(async () => 1, {group: 1});
+
+// Generic code that takes a queue with any queue class can pass the common options.
+export async function addToAnyQueue<QueueType extends Queue<RunFunction, QueueAddOptions>>(anyQueue: PQueue<QueueType>) {
+	await anyQueue.add(async () => 1, {priority: 1, id: 'id'});
+	anyQueue.sizeBy({priority: 1});
+}

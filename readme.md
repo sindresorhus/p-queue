@@ -131,9 +131,9 @@ The maximum number of tasks that start in each `interval`. Must be an integer or
 Type: `number`\
 Default: `0`\
 Minimum: `0`\
-Maximum: `2147483647` (about 24.8 days) with a finite `intervalCap`
+Maximum: `2147483647` (about 24.8 days) with a finite `intervalCap`, else any finite number
 
-The length of the rate-limit interval in milliseconds. `0` disables rate limiting.
+The length of the rate-limit interval in milliseconds. `0` disables rate limiting. The rate limit uses the system clock (`Date.now()`), so if the clock goes back, tasks can wait for as long as it went back.
 
 ##### carryoverIntervalCount
 
@@ -192,7 +192,7 @@ Type: `object`
 Type: `number`\
 Default: `0`
 
-Tasks with a higher priority start first. `Infinity` and `-Infinity` work. `.add()` rejects with a `TypeError` when it is `NaN` or not a number.
+Tasks with a higher priority start first. `Infinity` and `-Infinity` work. `.add()` rejects with a `TypeError` when it is `NaN` or not a number. The waiting tasks are kept sorted, so a task with a higher priority than the last waiting task takes time in proportion to the number of waiting tasks to add. For tens of thousands of waiting tasks with many different priorities, use a [custom `queueClass`](#custom-queueclass).
 
 ##### id
 
@@ -280,7 +280,7 @@ Unlike `.onEmpty()`, it waits for running tasks to finish.
 
 Returns a promise that resolves when no tasks are running: `queue.pending === 0`.
 
-Unlike `.onIdle()`, it ignores queued tasks. Use it to let running tasks finish before you change shared state.
+Unlike `.onIdle()`, it ignores queued tasks. Use it to let running tasks finish before you change shared state. A task that timed out, or whose `signal` aborted while it ran, no longer counts, although its function can still run.
 
 ```js
 queue.pause();
@@ -324,7 +324,7 @@ console.log('The rate limit is cleared');
 
 Returns a promise that rejects when a task fails: it throws, times out, or its `signal` aborts while it runs. It rejects with the error of the task, or with `null` if the error is `undefined`, like the `error` event.
 
-Use `Promise.race([queue.onError(), queue.onIdle()])` to stop at the first error, and to resolve normally when the queue becomes idle.
+Use `Promise.race([queue.onError(), queue.onIdle()])` to stop at the first error, and to resolve normally when the queue becomes idle. Each call adds an `error` listener that stays until a task fails, so to get every error, for example in a loop, use the `error` event instead.
 
 > [!IMPORTANT]
 > The promises returned by `.add()` still reject. Handle each of them (for example with `.catch(() => {})`) to prevent unhandled rejections.
@@ -473,7 +473,7 @@ Whether the queue is paused.
 
 #### .isRateLimited
 
-Whether the queue is rate-limited: the number of tasks started in the current interval has reached `intervalCap`, and tasks are waiting.
+Whether the queue is rate-limited: the number of tasks started in the current interval, plus the tasks still running from earlier intervals with `carryoverIntervalCount`, has reached `intervalCap`, and tasks are waiting.
 
 #### .isSaturated
 
@@ -667,7 +667,7 @@ await queue.add(() => delay(600));
 
 #### rateLimit
 
-Emitted when the queue becomes rate-limited: `intervalCap` tasks have started in the current interval, and tasks are waiting.
+Emitted when the queue becomes rate-limited: `intervalCap` tasks have started in the current interval (or still run from earlier intervals, with `carryoverIntervalCount`), and tasks are waiting.
 
 Useful for backpressure, when tasks are added faster than they run.
 

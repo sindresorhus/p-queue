@@ -2422,3 +2422,41 @@ test('tasks that share a signal add at most one listener to it, and remove it wh
 	assert.ok(results.every(result => result.status === 'rejected'));
 	assert.equal(listenerCount(), 0);
 });
+
+test('a signal shared by two queues aborts the waiting and running tasks of both, and each queue removes its listener', async () => {
+	const controller = new AbortController();
+	const {signal} = controller;
+	const queues = [new PQueue({concurrency: 1}), new PQueue({concurrency: 1})];
+	const tasks = queues.flatMap(queue => [
+		queue.add(async () => pDefer().promise, {signal}),
+		queue.add(() => 'waiting', {signal}),
+		queue.add(() => 'waiting', {signal, timeout: 1000}),
+	]);
+	const otherTasks = queues.map(async queue => queue.add(() => 'other'));
+
+	assert.equal(getEventListeners(signal, 'abort').length, 2);
+
+	const reason = new Error('Stop');
+	controller.abort(reason);
+
+	const results = await Promise.allSettled(tasks);
+	assert.deepEqual(results.map(result => result.status === 'rejected' && result.reason), Array.from({length: 6}, () => reason));
+	assert.deepEqual(await Promise.all(otherTasks), ['other', 'other']);
+	assert.equal(getEventListeners(signal, 'abort').length, 0);
+});
+
+test('a task with a signal and a timeout runs in the async context of its `.add()` call', async () => {
+	const store = new AsyncLocalStorage<string>();
+	const queue = new PQueue({concurrency: 1});
+	const {signal} = new AbortController();
+	const seen: Array<string | undefined> = [];
+
+	const tasks = ['a', 'b', 'c'].map(async name => store.run(name, async () => queue.add(async () => {
+		seen.push(store.getStore());
+		await delay(1);
+		seen.push(store.getStore());
+	}, {signal, timeout: 1000})));
+
+	await Promise.all(tasks);
+	assert.deepEqual(seen, ['a', 'a', 'b', 'b', 'c', 'c']);
+});

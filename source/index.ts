@@ -140,7 +140,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	#idAssigner = 1n;
 
 	// Track currently running tasks for debugging
-	readonly #runningTasks = new Map<symbol, {
+	readonly #runningTasks = new Set<{
 		id: string;
 		priority: number;
 		startTime: number;
@@ -638,9 +638,6 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				return;
 			}
 
-			// Create a unique symbol for tracking this task
-			const taskSymbol = Symbol(`task-${id}`);
-
 			const run = bindAsyncContext(async () => {
 				// Task is now running, so remove the queued-state abort listener
 				waitingTask.stopListeningForAbort?.();
@@ -656,12 +653,13 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				this.#pending++;
 
 				// Track this running task
-				this.#runningTasks.set(taskSymbol, {
+				const runningTask = {
 					id,
 					priority: waitingTask.priority!,
 					startTime: Date.now(),
 					timeout: options.timeout,
-				});
+				};
+				this.#runningTasks.add(runningTask);
 
 				let {signal} = options;
 				let stopListeningForAbort: (() => void) | undefined;
@@ -725,7 +723,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					stopForwardingAbort?.();
 
 					// Remove from running tasks
-					this.#runningTasks.delete(taskSymbol);
+					this.#runningTasks.delete(runningTask);
 
 					// Use queueMicrotask to prevent deep recursion while maintaining timing
 					queueMicrotask(() => {
@@ -1029,7 +1027,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	/**
 	Returns a promise that resolves when no tasks are running: `queue.pending === 0`.
 
-	Unlike `.onIdle()`, it ignores queued tasks. Use it to let running tasks finish before you change shared state.
+	Unlike `.onIdle()`, it ignores queued tasks. Use it to let running tasks finish before you change shared state. A task that timed out, or whose `signal` aborted while it ran, no longer counts, although its function can still run.
 
 	@example
 	```
@@ -1103,7 +1101,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	/**
 	Returns a promise that rejects when a task fails: it throws, times out, or its `signal` aborts while it runs. It rejects with the error of the task, or with `null` if the error is `undefined`, like the `error` event.
 
-	Use `Promise.race([queue.onError(), queue.onIdle()])` to stop at the first error, and to resolve normally when the queue becomes idle.
+	Use `Promise.race([queue.onError(), queue.onIdle()])` to stop at the first error, and to resolve normally when the queue becomes idle. Each call adds an `error` listener that stays until a task fails, so to get every error, for example in a loop, use the `error` event instead.
 
 	Important: The promises returned by `.add()` still reject. Handle each of them (for example with `.catch(() => {})`) to prevent unhandled rejections.
 
@@ -1190,7 +1188,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	/**
-	Whether the queue is rate-limited: the number of tasks started in the current interval has reached `intervalCap`, and tasks are waiting.
+	Whether the queue is rate-limited: the number of tasks started in the current interval, plus the tasks still running from earlier intervals with `carryoverIntervalCount`, has reached `intervalCap`, and tasks are waiting.
 	*/
 	get isRateLimited(): boolean {
 		return this.#isRateLimitedNow;
@@ -1261,7 +1259,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		readonly timeoutRemaining: number | undefined;
 	}> {
 		// Return fresh array with fresh objects to prevent mutations
-		return Array.from(this.#runningTasks.values(), task => ({
+		return Array.from(this.#runningTasks, task => ({
 			...task,
 			timeoutRemaining: task.timeout === undefined ? undefined : Math.max(0, task.startTime + task.timeout - Date.now()),
 		}));
