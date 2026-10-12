@@ -155,9 +155,10 @@ test('timeout up to the maximum timer delay is accepted, and a larger one is rej
 	await assert.rejects(queue.add(async () => 'ignored', {timeout: maximumDelay + 1}), expectedError);
 	await assert.rejects(queue.add(async () => 'ignored', {timeout: Number.MAX_SAFE_INTEGER}), expectedError);
 
-	// The setter does not validate, so the next `.add()` rejects instead.
-	queue.timeout = maximumDelay + 1;
-	await assert.rejects(queue.add(async () => 'ignored'), expectedError);
+	assert.throws(() => {
+		queue.timeout = maximumDelay + 1;
+	}, expectedError);
+	assert.equal(queue.timeout, undefined);
 	assert.equal(addedCount, 0);
 	assert.equal(queue.pending, 0);
 	assert.equal(queue.size, 0);
@@ -385,4 +386,31 @@ test('interval must be a finite number from 0 and up', () => {
 
 	new PQueue({interval: 0}); // eslint-disable-line no-new
 	new PQueue({interval: 10}); // eslint-disable-line no-new
+});
+
+test('setting an invalid `timeout` on the queue throws and keeps the previous value', async () => {
+	const queue = new PQueue({timeout: 1000});
+
+	const assertRejected = (timeout: unknown) => {
+		assert.throws(() => {
+			queue.timeout = timeout as number;
+		}, {name: 'TypeError', message: /Expected `timeout` to be a positive finite number/v});
+	};
+
+	assertRejected(0);
+	assertRejected(-1);
+	assertRejected(NaN);
+	assertRejected(Infinity);
+	assertRejected(2_147_483_648);
+	assertRejected('1000');
+
+	assert.equal(queue.timeout, 1000);
+	assert.equal(await queue.add(() => '🦄'), '🦄');
+
+	queue.timeout = 2000;
+	assert.equal(queue.timeout, 2000);
+
+	queue.timeout = undefined;
+	assert.equal(queue.timeout, undefined);
+	assert.equal(await queue.add(() => '🦄'), '🦄');
 });

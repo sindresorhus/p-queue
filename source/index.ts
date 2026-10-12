@@ -113,17 +113,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	// The waiting tasks, so that `.clear()` can reject their promises.
 	readonly #waitingTasks = new Set<WaitingTask>();
 
-	/**
-	Get or set the default timeout. A change applies to tasks added after it.
-
-	@example
-	```
-	const queue = new PQueue({timeout: 5000});
-
-	queue.timeout = 10000;
-	```
-	*/
-	timeout?: number | undefined;
+	#timeout: number | undefined;
 
 	constructor(options?: Options<QueueType, EnqueueOptionsType>) {
 		super();
@@ -170,9 +160,6 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		this.#queue = new options.queueClass!();
 		this.#queueClass = options.queueClass!;
 		this.concurrency = options.concurrency!;
-
-		validateTimeout(options.timeout);
-
 		this.timeout = options.timeout;
 		this.#isPaused = options.autoStart === false;
 
@@ -571,7 +558,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 		// Create a copy to avoid mutating the original options object
 		options = {
-			timeout: this.timeout,
+			timeout: this.#timeout,
 			...options,
 			id,
 		};
@@ -738,6 +725,26 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 			this.#tryToStartAnother();
 		});
+	}
+
+	/**
+	Get or set the default timeout. A change applies to tasks added after it.
+
+	@example
+	```
+	const queue = new PQueue({timeout: 5000});
+
+	queue.timeout = 10000;
+	```
+	*/
+	get timeout(): number | undefined {
+		return this.#timeout;
+	}
+
+	// Validated here, not only in `.add()`, so that an invalid value throws where it is set, instead of making every later `.add()` reject.
+	set timeout(timeout: number | undefined) {
+		validateTimeout(timeout);
+		this.#timeout = timeout;
 	}
 
 	get concurrency(): number {
