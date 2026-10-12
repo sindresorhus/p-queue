@@ -792,14 +792,16 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			throw new TypeError(`Expected \`priority\` to be a finite number, got \`${priority}\` (${typeof priority})`);
 		}
 
-		this.#queue.setPriority(id, priority);
-
+		// Checked here, not only in `PriorityQueue`, so that it also throws with a custom queue class.
 		for (const waitingTask of this.#waitingTasks) {
 			if (waitingTask.id === id) {
+				this.#queue.setPriority(id, priority);
 				waitingTask.priority = priority;
-				break;
+				return;
 			}
 		}
+
+		throw new ReferenceError(`No promise function with the id "${id}" exists in the queue.`);
 	}
 
 	/**

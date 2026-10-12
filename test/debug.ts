@@ -403,3 +403,41 @@ test('runningTasks has the priority set by setPriority with a custom queue class
 	// The custom queue ignores priorities, so the tasks run in the order they were added.
 	assert.deepEqual(started, [{id: 'first', priority: 4}, {id: 'second', priority: 9}]);
 });
+
+test('setPriority throws a `ReferenceError` for an id that is not waiting, also with a custom queue class', async () => {
+	const calls: string[] = [];
+	class RecordingQueue extends FifoQueue {
+		override setPriority(id: string) {
+			calls.push(id);
+		}
+	}
+
+	const queue = new PQueue({concurrency: 1, queueClass: RecordingQueue});
+	const {promise, resolve} = pDefer();
+	const controller = new AbortController();
+
+	const running = queue.add(async () => promise, {id: 'running', priority: 3});
+	const aborted = queue.add(() => undefined, {id: 'aborted', signal: controller.signal});
+	const waiting = queue.add(() => queue.runningTasks[0]?.priority, {id: 'waiting'});
+	controller.abort();
+	await assert.rejects(aborted, {name: 'AbortError'});
+
+	const assertNotWaiting = (id: string) => {
+		assert.throws(() => {
+			queue.setPriority(id, 7);
+		}, ReferenceError);
+	};
+
+	assertNotWaiting('unknown');
+	assertNotWaiting('running');
+	assertNotWaiting('aborted');
+
+	assert.equal(queue.runningTasks[0]?.priority, 3);
+
+	queue.setPriority('waiting', 7);
+	assert.deepEqual(calls, ['waiting']);
+
+	resolve();
+	await running;
+	assert.equal(await waiting, 7);
+});
