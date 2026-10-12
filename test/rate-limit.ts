@@ -1053,3 +1053,97 @@ test('a task that a `rateLimitCleared` listener adds during `.clear()` runs at t
 	t.assert.deepStrictEqual(await run(false), expected);
 	t.assert.deepStrictEqual(await run(true), expected);
 });
+
+test('an `.add()` or an abort right after the window ended, before the resume timeout runs, starts all the waiting tasks that the new window allows', async t => {
+	// eslint-disable-next-line node-test/require-mock-timers-advance -- `run()` ticks.
+	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date'], now: 0});
+
+	const run = async (isStrict: boolean, action: 'add' | 'abort') => {
+		const queue = new PQueue({interval: 100, intervalCap: 2, strict: isStrict});
+		const queueStartTime = Date.now();
+		const starts: Array<[string, number]> = [];
+		// The tasks run long, so that a finished task does not start the next one.
+		const task = (name: string) => async () => {
+			starts.push([name, Date.now() - queueStartTime]);
+			await new Promise(resolve => {
+				setTimeout(resolve, 1000);
+			});
+		};
+
+		// The first window is used up, and the queue goes idle, which clears the interval timer.
+		queue.add(() => undefined);
+		queue.add(() => undefined);
+		await flush();
+
+		// They wait for the resume timeout at the window end.
+		t.mock.timers.tick(50);
+		const controller = new AbortController();
+		queue.add(task('c'));
+		queue.add(task('d'));
+		queue.add(task('aborted'), {signal: controller.signal}).catch(() => undefined);
+		queue.add(task('e'));
+
+		// The window ended, but the resume timeout did not run yet, for example because an I/O callback runs first.
+		t.mock.timers.setTime(queueStartTime + 100);
+		if (action === 'add') {
+			queue.add(task('f'));
+		} else {
+			controller.abort();
+		}
+
+		t.mock.timers.tick(0);
+		await flush();
+
+		const result = starts;
+		queue.clear();
+		return result;
+	};
+
+	const expected = [['c', 100], ['d', 100]];
+	t.assert.deepStrictEqual(await run(false, 'add'), expected);
+	t.assert.deepStrictEqual(await run(false, 'abort'), expected);
+	t.assert.deepStrictEqual(await run(true, 'add'), expected);
+	t.assert.deepStrictEqual(await run(true, 'abort'), expected);
+});
+
+test('`.onEmpty()` resolves when an `.add()` or an abort at the window end starts the last waiting task', async t => {
+	// eslint-disable-next-line node-test/require-mock-timers-advance -- `run()` ticks.
+	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date'], now: 0});
+
+	const run = async (action: 'add' | 'abort') => {
+		const queue = new PQueue({interval: 100, intervalCap: 2});
+		const queueStartTime = Date.now();
+		const neverEnding = async () => new Promise(() => {}); // eslint-disable-line @typescript-eslint/no-empty-function
+		queue.add(() => undefined);
+		queue.add(() => undefined);
+		await flush();
+
+		t.mock.timers.tick(50);
+		const controller = new AbortController();
+		queue.add(neverEnding);
+		queue.add(neverEnding, {signal: controller.signal}).catch(() => undefined);
+		if (action === 'add') {
+			controller.abort();
+		}
+
+		let isEmpty = false;
+		queue.onEmpty().then(() => {
+			isEmpty = true;
+		});
+
+		t.mock.timers.setTime(queueStartTime + 100);
+		if (action === 'add') {
+			queue.add(neverEnding);
+		} else {
+			controller.abort();
+		}
+
+		await flush();
+		const state = {isEmpty, size: queue.size, pending: queue.pending};
+		queue.clear();
+		return state;
+	};
+
+	t.assert.deepStrictEqual(await run('add'), {isEmpty: true, size: 0, pending: 2});
+	t.assert.deepStrictEqual(await run('abort'), {isEmpty: true, size: 0, pending: 1});
+});

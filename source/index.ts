@@ -706,6 +706,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				}
 			});
 
+			const hasWaitingTasks = this.#queue.size > 0;
 			this.#queue.enqueue(run, options);
 			waitingTask.reject = reject;
 			this.#waitingTasks.add(waitingTask);
@@ -728,7 +729,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 					this.#waitingTasks.delete(waitingTask);
 					removeQueuedTask();
 					reject(signal.reason);
-					this.#tryToStartAnother();
+					// Not only one task: at the end of a window, the first start clears the resume timeout, which would start the others.
+					this.#processQueue();
 					this.#emit('next');
 				};
 
@@ -743,7 +745,12 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 			this.#emit('add');
 
-			this.#tryToStartAnother();
+			// Not only one task: at the end of a window, the first start clears the resume timeout, which would start the others. Only one task without other waiting tasks, so that an `.add()` whose task starts at once does not emit `empty`.
+			if (hasWaitingTasks) {
+				this.#processQueue();
+			} else {
+				this.#tryToStartAnother();
+			}
 		});
 	}
 
