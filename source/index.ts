@@ -23,6 +23,9 @@ type EventMap = {
 
 type EventName = keyof EventMap;
 
+// A function or an object with a `handleEvent()` method, like for any `EventTarget`.
+type QueueEventListener<Name extends EventName> = ((event: EventMap[Name]) => void) | {handleEvent(event: EventMap[Name]): void};
+
 // Timers fire after 1 ms for a longer delay, so a longer timeout would fail the task at once, and a longer interval would not limit anything.
 const maximumTimerDelay = 2_147_483_647;
 
@@ -1263,6 +1266,6 @@ export {type QueueAddOptions, type Options, type TaskOptions} from './options.js
 // Typed event listeners. Only types, the methods are the native ones from `EventTarget`. It must be an interface to merge with the class.
 // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export default interface PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = QueueAddOptions> { // eslint-disable-line @typescript-eslint/naming-convention
-	addEventListener<Name extends EventName>(type: Name, listener: (event: EventMap[Name]) => void, options?: boolean | AddEventListenerOptions): void;
-	removeEventListener<Name extends EventName>(type: Name, listener: (event: EventMap[Name]) => void, options?: boolean | EventListenerOptions): void;
+	addEventListener<Name extends EventName>(type: Name, listener: QueueEventListener<Name>, options?: boolean | AddEventListenerOptions): void;
+	removeEventListener<Name extends EventName>(type: Name, listener: QueueEventListener<Name>, options?: boolean | EventListenerOptions): void;
 }

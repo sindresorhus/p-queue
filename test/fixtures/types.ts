@@ -147,3 +147,22 @@ expectType<Equal<typeof runningTask, {
 	readonly timeout: number | undefined;
 	readonly timeoutRemaining: number | undefined;
 } | undefined>>();
+
+// Event listeners get the type of their event.
+queue.addEventListener('completed', event => {
+	expectType<Equal<typeof event, CustomEvent<unknown>>>();
+});
+queue.addEventListener('idle', event => {
+	expectType<Equal<typeof event, Event>>();
+}, {once: true});
+// @ts-expect-error Testing
+queue.addEventListener('unknown', () => {});
+
+// A listener object works, like for any `EventTarget`.
+const errorListener = {
+	handleEvent(event: CustomEvent<unknown>) {
+		console.log(event.detail);
+	},
+};
+queue.addEventListener('error', errorListener, {signal: controller.signal});
+queue.removeEventListener('error', errorListener);
