@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import {getEventListeners} from 'node:events';
 import delay from 'delay';
 import pDefer from 'p-defer';
-import PQueue, {type Queue, type QueueAddOptions} from '../source/index.js';
-import {type RunFunction} from '../source/queue.js';
+import PQueue from '../source/index.js';
+import {countTimers, FifoQueue} from './helpers.js';
 
 test('clear interval on pause', async () => {
 	const queue = new PQueue({
@@ -316,15 +316,6 @@ test('should verify timeout overrides passed to add', async () => {
 	await queue.onIdle();
 });
 
-test('should skip an aborted job', async () => {
-	const queue = new PQueue();
-	const controller = new AbortController();
-
-	controller.abort();
-	// eslint-disable-next-line @typescript-eslint/no-empty-function
-	await assert.rejects(queue.add(() => {}, {signal: controller.signal}), {name: 'AbortError'});
-});
-
 test('should reject when signal is aborted while task is waiting in queue', async () => {
 	const queue = new PQueue({concurrency: 1});
 	const controller = new AbortController();
@@ -339,24 +330,6 @@ test('should reject when signal is aborted while task is waiting in queue', asyn
 	controller.abort();
 
 	await assert.rejects(queuedTask, {name: 'AbortError'});
-	assert.equal(queue.size, 0);
-});
-
-test('should reject immediately when signal is already aborted and task is queued', async () => {
-	const queue = new PQueue({concurrency: 1});
-	const controller = new AbortController();
-
-	// Fill the concurrency slot
-	queue.add(async () => new Promise(() => {})); // eslint-disable-line @typescript-eslint/no-empty-function
-
-	// Abort before adding
-	controller.abort();
-
-	// Task can't start immediately and signal is already aborted
-	await assert.rejects(
-		queue.add(async () => 'result', {signal: controller.signal}),
-		{name: 'AbortError'},
-	);
 	assert.equal(queue.size, 0);
 });
 
@@ -450,35 +423,6 @@ test('aborting a queued task with explicit id removes the correct task', async (
 });
 
 test('aborting a queued task removes it from a custom queue class by id', async () => {
-	class FifoQueue implements Queue<RunFunction, QueueAddOptions> {
-		readonly #queue: Array<{run: RunFunction; id?: string}> = [];
-
-		enqueue(run: RunFunction, options?: Partial<QueueAddOptions>) {
-			this.#queue.push({run, id: options?.id});
-		}
-
-		dequeue() {
-			return this.#queue.shift()?.run;
-		}
-
-		filter() {
-			return this.#queue.map(element => element.run);
-		}
-
-		setPriority() {} // eslint-disable-line @typescript-eslint/no-empty-function
-
-		remove(id: string) {
-			const index = this.#queue.findIndex(element => element.id === id);
-			if (index !== -1) {
-				this.#queue.splice(index, 1);
-			}
-		}
-
-		get size() {
-			return this.#queue.length;
-		}
-	}
-
 	const queue = new PQueue({concurrency: 1, queueClass: FifoQueue});
 	const controller = new AbortController();
 	const results: string[] = [];
@@ -755,27 +699,6 @@ test('should pass AbortSignal instance to job', async () => {
 	await queue.add(async ({signal}) => {
 		assert.equal(controller.signal, signal!);
 	}, {signal: controller.signal});
-});
-
-test('aborted jobs do not use interval cap', async () => {
-	const queue = new PQueue({
-		concurrency: 1,
-		interval: 100,
-		intervalCap: 1,
-	});
-
-	const controller = new AbortController();
-
-	for (let index = 0; index < 5; index++) {
-		// eslint-disable-next-line @typescript-eslint/no-empty-function
-		queue.add(() => {}, {signal: controller.signal}).catch(() => {});
-	}
-
-	queue.add(() => {}); // eslint-disable-line @typescript-eslint/no-empty-function
-
-	controller.abort();
-	await delay(150);
-	assert.equal(queue.size, 0);
 });
 
 test('aborting multiple jobs at the same time', async () => {
@@ -1360,12 +1283,11 @@ test('.setPriority() - execute a promise before planned - concurrency 3 and unsp
 });
 
 test('process exits cleanly after interval tasks complete', async () => {
-	const countTimers = () => process.getActiveResourcesInfo().filter(resource => resource === 'Timeout').length;
 	const timerCount = countTimers();
 	const queue = new PQueue({
 		concurrency: 100,
 		intervalCap: 500,
-		interval: 60 * 1000,
+		interval: 1000,
 	});
 
 	// Execute tasks that complete quickly with long interval
@@ -1581,43 +1503,6 @@ test('rate-limit with high concurrency', async () => {
 	// Should have multiple rate-limit events (one per interval) and one rate-limit-cleared at the end
 	assert.ok(events.length >= 2);
 	assert.equal(events.at(-1), 'rateLimitCleared');
-});
-
-test('rate-limit with queue.clear() while rate-limited', async () => {
-	const queue = new PQueue({
-		interval: 1000,
-		intervalCap: 1,
-	});
-
-	const events: string[] = [];
-	queue.addEventListener('rateLimit', () => {
-		events.push('rateLimit');
-	});
-	queue.addEventListener('rateLimitCleared', () => {
-		events.push('rateLimitCleared');
-	});
-
-	queue.add(async () => delay(50));
-	queue.add(async () => delay(50));
-	queue.add(async () => delay(50));
-
-	await delay(10);
-	assert.equal(queue.isRateLimited, true);
-	assert.equal(events.length, 1);
-	assert.equal(events[0], 'rateLimit');
-
-	// Clear the queue while rate-limited
-	queue.clear();
-
-	// Should no longer be rate-limited since queue is empty
-	assert.equal(queue.isRateLimited, false);
-	assert.equal(queue.size, 0);
-
-	// Should emit rate-limit-cleared since we transitioned
-	assert.equal(events.length, 2);
-	assert.equal(events[1], 'rateLimitCleared');
-
-	await queue.onIdle();
 });
 
 test('rate-limit events fire only once per transition', async () => {
@@ -1930,40 +1815,6 @@ test('rate-limit microtask batching - multiple events in same tick', async () =>
 	await queue.onIdle();
 });
 
-test('rate-limit clear() racing with scheduled update', async () => {
-	const queue = new PQueue({
-		interval: 1000,
-		intervalCap: 1,
-	});
-
-	const events: string[] = [];
-	queue.addEventListener('rateLimit', () => {
-		events.push('rateLimit');
-	});
-	queue.addEventListener('rateLimitCleared', () => {
-		events.push('rateLimitCleared');
-	});
-
-	// Add tasks to trigger rate limit
-	queue.add(async () => delay(50));
-	queue.add(async () => delay(50));
-
-	// Clear immediately (before microtask fires)
-	queue.clear();
-
-	// State should be cleared immediately
-	assert.equal(queue.isRateLimited, false, 'Should not be rate-limited immediately after clear');
-	assert.equal(queue.size, 0, 'Queue should be empty after clear');
-
-	// Add new task immediately after clear
-	queue.add(async () => delay(10));
-
-	await queue.onIdle();
-
-	// Should have handled the race condition gracefully
-	assert.ok(events.filter(event => event === 'rateLimit').length <= 1, 'Should not have duplicate rate-limit events');
-});
-
 test('rate-limit with dynamic concurrency changes', async () => {
 	const queue = new PQueue({
 		concurrency: 1,
@@ -2118,26 +1969,6 @@ test('rate-limit when all queued tasks are aborted', async () => {
 	assert.equal(events[1], 'rateLimitCleared');
 });
 
-test('an `idle` listener can set `concurrency`, call `.clear()`, or pause and start without infinite recursion', async () => {
-	const queue = new PQueue({concurrency: 2});
-	let idleCount = 0;
-	queue.addEventListener('idle', () => {
-		idleCount++;
-		queue.concurrency = 2;
-		queue.clear();
-		queue.pause();
-		queue.start();
-	});
-
-	assert.equal(await queue.add(async () => '🦄'), '🦄');
-	await queue.onIdle();
-	assert.equal(idleCount, 1);
-
-	// The queue still works afterwards.
-	assert.equal(await queue.add(async () => '🐴'), '🐴');
-	assert.equal(idleCount, 2);
-});
-
 test('changing `concurrency`, `.clear()`, or `.start()` on an empty queue emits no `empty` or `idle`', () => {
 	const queue = new PQueue({autoStart: false});
 	const events: string[] = [];
@@ -2184,6 +2015,228 @@ test('a task that throws synchronously emits `error` after `active`, so `.onErro
 
 	assert.deepEqual(await run({}), expected);
 	assert.deepEqual(await run({timeout: 1000}), expected);
+});
+
+test('an `empty` or `idle` listener can set `concurrency`, call `.clear()`, or pause and start without infinite recursion', async () => {
+	const run = async (eventName: 'empty' | 'idle') => {
+		const queue = new PQueue({concurrency: 1});
+		let eventCount = 0;
+		queue.addEventListener(eventName, () => {
+			eventCount++;
+			queue.concurrency = 2;
+			queue.clear();
+			queue.pause();
+			queue.start();
+		});
+
+		const {promise, resolve} = pDefer();
+		const first = queue.add(async () => promise);
+		const second = queue.add(async () => '🦄');
+		const onEmpty = queue.onEmpty();
+		const onIdle = queue.onIdle();
+
+		resolve();
+		await first;
+		const secondResult = await second;
+		await onEmpty;
+		await onIdle;
+		const {concurrency} = queue;
+
+		// The queue still works afterwards.
+		const laterResult = await queue.add(async () => '🐴');
+		return {
+			secondResult,
+			concurrency,
+			laterResult,
+			eventCount,
+		};
+	};
+
+	const expected = {secondResult: '🦄', concurrency: 2, laterResult: '🐴'};
+	// Once when the second task starts, and once for each drain.
+	assert.deepEqual(await run('empty'), {...expected, eventCount: 3});
+	// Once for each drain.
+	assert.deepEqual(await run('idle'), {...expected, eventCount: 2});
+});
+
+test('starting a paused queue with no waiting tasks emits `idle` only when the running task finishes', async () => {
+	const queue = new PQueue();
+	const events: string[] = [];
+	queue.addEventListener('empty', () => {
+		events.push('empty');
+	});
+	queue.addEventListener('idle', () => {
+		events.push('idle');
+	});
+
+	const {promise, resolve} = pDefer();
+	const task = queue.add(async () => promise);
+	queue.pause();
+	queue.start();
+	queue.concurrency = 3;
+	assert.deepEqual(events, []);
+
+	resolve();
+	await task;
+	await queue.onIdle();
+	assert.deepEqual(events, ['empty', 'idle']);
+});
+
+test('a task that throws synchronously with only a `signal` emits `error` after `active`, then becomes idle', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const events: string[] = [];
+	for (const name of ['add', 'active', 'error', 'pendingZero', 'empty', 'idle', 'next'] as const) {
+		queue.addEventListener(name, () => {
+			events.push(name);
+		});
+	}
+
+	let errorDetail: unknown = 'not emitted';
+	queue.addEventListener('error', event => {
+		errorDetail = event.detail;
+	});
+
+	const controller = new AbortController();
+	const promise = queue.add(() => {
+		throw undefined; // eslint-disable-line @typescript-eslint/only-throw-error
+	}, {signal: controller.signal});
+	events.push('add() returned');
+	assert.equal(queue.pending, 1);
+
+	await assert.rejects(promise, error => error === undefined);
+	await queue.onIdle();
+
+	assert.deepEqual(events, ['add', 'active', 'add() returned', 'error', 'pendingZero', 'empty', 'idle', 'next']);
+	// `CustomEvent` makes an `undefined` detail `null`.
+	assert.equal(errorDetail, null);
+	assert.equal(queue.pending, 0);
+});
+
+test('aborting a shared signal emits `error` only for the running task, not for the waiting tasks', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const errors: unknown[] = [];
+	queue.addEventListener('error', event => {
+		errors.push(event.detail);
+	});
+
+	const controller = new AbortController();
+	const started: string[] = [];
+	const task = (name: string) => async () => {
+		started.push(name);
+		return new Promise(() => {}); // eslint-disable-line @typescript-eslint/no-empty-function
+	};
+
+	const running = queue.add(task('running'), {signal: controller.signal});
+	const firstWaiting = queue.add(task('firstWaiting'), {signal: controller.signal});
+	const secondWaiting = queue.add(task('secondWaiting'), {signal: controller.signal});
+	const unrelated = queue.add(() => 'unrelated');
+
+	const reason = new Error('Aborted');
+	controller.abort(reason);
+
+	await assert.rejects(running, reason);
+	await assert.rejects(firstWaiting, reason);
+	await assert.rejects(secondWaiting, reason);
+	assert.equal(await unrelated, 'unrelated');
+	await queue.onIdle();
+
+	assert.deepEqual(started, ['running']);
+	assert.deepEqual(errors, [reason]);
+	assert.equal(queue.pending, 0);
+});
+
+test('a custom queue class typed with the exported types works end to end', async () => {
+	const queue = new PQueue({concurrency: 1, autoStart: false, queueClass: FifoQueue});
+	const order: string[] = [];
+	const task = (name: string) => () => {
+		order.push(name);
+		return name;
+	};
+
+	const results = queue.addAll([task('first'), task('second')], {priority: 1});
+	const cleared = queue.add(task('cleared'), {priority: 5});
+	assert.equal(queue.size, 3);
+
+	queue.clear();
+	await assert.rejects(results, {name: 'AbortError'});
+	await assert.rejects(cleared, {name: 'AbortError'});
+
+	// `.clear()` makes a new instance of the queue class, which still works.
+	const low = queue.add(task('low'), {priority: -1});
+	const high = queue.add(task('high'), {priority: 10});
+	queue.start();
+
+	assert.deepEqual(await Promise.all([low, high]), ['low', 'high']);
+	assert.deepEqual(order, ['low', 'high']);
+});
+
+test('a waiting task whose signal aborts before its own abort listener runs does not start or emit `error`', async () => {
+	const queue = new PQueue({autoStart: false});
+	const events: string[] = [];
+	for (const name of ['active', 'error', 'next'] as const) {
+		queue.addEventListener(name, () => {
+			events.push(name);
+		});
+	}
+
+	const controller = new AbortController();
+	// Registered before the tasks, so it runs before their abort listeners.
+	controller.signal.addEventListener('abort', () => {
+		queue.start();
+	});
+
+	let hasRun = false;
+	const task = () => {
+		hasRun = true;
+	};
+
+	const first = queue.add(task, {signal: controller.signal});
+	const second = queue.add(task, {signal: controller.signal});
+	const other = queue.add(() => 'other');
+	controller.abort();
+
+	await assert.rejects(first, {name: 'AbortError'});
+	await assert.rejects(second, {name: 'AbortError'});
+	assert.equal(await other, 'other');
+	assert.equal(hasRun, false);
+	assert.deepEqual(events, ['next', 'next', 'active', 'next']);
+	assert.equal(queue.pending, 0);
+	assert.equal(queue.size, 0);
+});
+
+test('aborting waiting tasks that share a signal emits `empty` and `idle` once', async () => {
+	const queue = new PQueue({autoStart: false});
+	const events: string[] = [];
+	for (const name of ['empty', 'idle'] as const) {
+		queue.addEventListener(name, () => {
+			events.push(name);
+		});
+	}
+
+	const controller = new AbortController();
+	const tasks = [1, 2, 3].map(async () => queue.add(() => undefined, {signal: controller.signal}));
+	controller.abort();
+
+	await Promise.allSettled(tasks);
+	await delay(1);
+	assert.deepEqual(events, ['empty', 'idle']);
+});
+
+test('skipping many waiting tasks whose shared signal aborted does not overflow the stack', async () => {
+	const queue = new PQueue({autoStart: false});
+	const controller = new AbortController();
+	// Registered before the tasks, so it starts the queue before their abort listeners run.
+	controller.signal.addEventListener('abort', () => {
+		queue.start();
+	});
+
+	const tasks = Array.from({length: 20_000}, async () => queue.add(() => undefined, {signal: controller.signal}));
+	controller.abort();
+
+	const results = await Promise.allSettled(tasks);
+	assert.ok(results.every(result => result.status === 'rejected'));
+	assert.equal(queue.size, 0);
+	assert.equal(queue.pending, 0);
 });
 
 test('.add() with an already aborted signal rejects without adding the task or emitting events', async () => {

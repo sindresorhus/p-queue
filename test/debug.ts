@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import delay from 'delay';
 import pDefer from 'p-defer';
 import PQueue from '../source/index.js';
+import {flush, FifoQueue} from './helpers.js';
 
 test('runningTasks returns current running tasks', async () => {
 	const queue = new PQueue({concurrency: 2});
@@ -78,7 +79,7 @@ test('runningTasks updates as tasks complete', async () => {
 	assert.equal(queue.runningTasks.length, 0);
 });
 
-test('runningTasks includes timeout information', async () => {
+test('runningTasks includes timeout and timeoutRemaining', async () => {
 	const queue = new PQueue({concurrency: 2, timeout: 1000});
 
 	queue.add(async () => delay(50), {id: 'with-queue-timeout'});
@@ -90,8 +91,17 @@ test('runningTasks includes timeout information', async () => {
 	const withQueueTimeout = running.find(t => t.id === 'with-queue-timeout');
 	const withCustomTimeout = running.find(t => t.id === 'with-custom-timeout');
 
-	assert.equal(withQueueTimeout?.timeout, 1000);
-	assert.equal(withCustomTimeout?.timeout, 500);
+	assert.ok(withQueueTimeout);
+	assert.equal(withQueueTimeout.timeout, 1000);
+	assert.equal(typeof withQueueTimeout.timeoutRemaining, 'number');
+	assert.ok(withQueueTimeout.timeoutRemaining > 0);
+	assert.ok(withQueueTimeout.timeoutRemaining <= 1000);
+
+	assert.ok(withCustomTimeout);
+	assert.equal(withCustomTimeout.timeout, 500);
+	assert.equal(typeof withCustomTimeout.timeoutRemaining, 'number');
+	assert.ok(withCustomTimeout.timeoutRemaining > 0);
+	assert.ok(withCustomTimeout.timeoutRemaining <= 500);
 
 	await queue.onIdle();
 });
@@ -115,31 +125,6 @@ test('runningTasks returns fresh arrays', async () => {
 	running1.push({id: 'fake', priority: 0, startTime: Date.now()});
 	assert.notDeepEqual(running1, running2);
 	assert.equal(queue.runningTasks.length, 1);
-
-	await queue.onIdle();
-});
-
-test('runningTasks includes timeoutRemaining for tasks with timeout', async () => {
-	const queue = new PQueue({concurrency: 2, timeout: 5000});
-
-	queue.add(async () => delay(200), {id: 'with-timeout'});
-	queue.add(async () => delay(200), {id: 'custom-timeout', timeout: 2000});
-
-	await delay(10);
-
-	const running = queue.runningTasks;
-	const withTimeout = running.find(t => t.id === 'with-timeout');
-	const customTimeout = running.find(t => t.id === 'custom-timeout');
-
-	assert.ok(withTimeout);
-	assert.equal(typeof withTimeout.timeoutRemaining, 'number');
-	assert.ok(withTimeout.timeoutRemaining > 0);
-	assert.ok(withTimeout.timeoutRemaining <= 5000);
-
-	assert.ok(customTimeout);
-	assert.equal(typeof customTimeout.timeoutRemaining, 'number');
-	assert.ok(customTimeout.timeoutRemaining > 0);
-	assert.ok(customTimeout.timeoutRemaining <= 2000);
 
 	await queue.onIdle();
 });
@@ -301,23 +286,6 @@ test('isSaturated when concurrency is lowered below the running tasks', async ()
 	assert.equal(queue.isSaturated, false);
 });
 
-test('runningTasks has the priority set by setPriority while the task waited', async () => {
-	const queue = new PQueue({concurrency: 1});
-	const {promise, resolve} = pDefer();
-
-	queue.add(async () => promise, {id: 'blocker'});
-	let priorityWhileRunning: number | undefined;
-	const task = queue.add(() => {
-		priorityWhileRunning = queue.runningTasks.find(({id}) => id === 'task')?.priority;
-	}, {id: 'task', priority: 1});
-
-	queue.setPriority('task', 5);
-	resolve();
-	await task;
-
-	assert.equal(priorityWhileRunning, 5);
-});
-
 test('timeout error has the queue state at the time of the timeout', async () => {
 	const queue = new PQueue({concurrency: 1, timeout: 20});
 
@@ -329,4 +297,109 @@ test('timeout error has the queue state at the time of the timeout', async () =>
 
 	await assert.rejects(slowTask, {message: 'Task timed out after 20ms (queue has 1 running, 2 waiting)'});
 	await Promise.all(waitingTasks);
+});
+
+test('isSaturated when concurrency is raised back after lowering it', async () => {
+	const queue = new PQueue({concurrency: 2});
+	const deferreds = [pDefer(), pDefer(), pDefer()];
+	const tasks = deferreds.map(async ({promise}) => queue.add(async () => promise));
+
+	queue.concurrency = 1;
+	assert.equal(queue.isSaturated, true);
+
+	queue.concurrency = 2;
+	assert.equal(queue.pending, 2);
+	assert.equal(queue.isSaturated, true);
+
+	queue.concurrency = 3;
+	assert.equal(queue.pending, 3);
+	assert.equal(queue.size, 0);
+	assert.equal(queue.isSaturated, false);
+
+	for (const {resolve} of deferreds) {
+		resolve();
+	}
+
+	await Promise.all(tasks);
+});
+
+test('lowering concurrency below the running tasks starts no waiting task until enough tasks finish', async () => {
+	const queue = new PQueue({concurrency: 2});
+	const deferreds = [pDefer(), pDefer(), pDefer()];
+	const tasks = deferreds.map(async ({promise}) => queue.add(async () => promise));
+
+	queue.concurrency = 1;
+
+	deferreds[0]!.resolve();
+	await tasks[0];
+	await flush();
+	assert.equal(queue.pending, 1);
+	assert.equal(queue.size, 1);
+	assert.equal(queue.isSaturated, true);
+
+	deferreds[1]!.resolve();
+	await tasks[1];
+	await flush();
+	assert.equal(queue.pending, 1);
+	assert.equal(queue.size, 0);
+	assert.equal(queue.isSaturated, false);
+
+	deferreds[2]!.resolve();
+	await queue.onIdle();
+});
+
+test('runningTasks has the last priority after several setPriority calls', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const {promise, resolve} = pDefer();
+
+	queue.add(async () => promise, {id: 'blocker'});
+	let priorityWhileRunning: number | undefined;
+	const task = queue.add(() => {
+		priorityWhileRunning = queue.runningTasks.find(({id}) => id === 'task')?.priority;
+	}, {id: 'task', priority: 1});
+
+	queue.setPriority('task', 5);
+	queue.setPriority('task', -2);
+	queue.setPriority('task', -2);
+	resolve();
+	await task;
+
+	assert.equal(priorityWhileRunning, -2);
+});
+
+test('runningTasks keeps the priority when setPriority throws for a running task', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const {promise, resolve} = pDefer();
+
+	const task = queue.add(async () => promise, {id: 'running', priority: 3});
+
+	assert.throws(() => {
+		queue.setPriority('running', 7);
+	}, ReferenceError);
+	assert.equal(queue.runningTasks[0]?.priority, 3);
+
+	resolve();
+	await task;
+});
+
+test('runningTasks has the priority set by setPriority with a custom queue class', async () => {
+	const queue = new PQueue({concurrency: 1, queueClass: FifoQueue});
+	const {promise, resolve} = pDefer();
+	const started: Array<{id: string | undefined; priority: number | undefined}> = [];
+	const task = () => {
+		const [{id, priority}] = queue.runningTasks;
+		started.push({id, priority});
+	};
+
+	queue.add(async () => promise);
+	queue.add(task, {id: 'first', priority: 1});
+	queue.add(task, {id: 'second'});
+
+	queue.setPriority('second', 9);
+	queue.setPriority('first', 4);
+	resolve();
+	await queue.onIdle();
+
+	// The custom queue ignores priorities, so the tasks run in the order they were added.
+	assert.deepEqual(started, [{id: 'first', priority: 4}, {id: 'second', priority: 9}]);
 });

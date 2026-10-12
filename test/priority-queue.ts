@@ -204,20 +204,39 @@ test('PriorityQueue orders `-Infinity` priorities last and keeps their FIFO orde
 	assert.deepEqual([queue.dequeue(), queue.dequeue(), queue.dequeue()], [normal, first, second]);
 });
 
-test('PriorityQueue setPriority with the current priority keeps the position', () => {
+test('PriorityQueue setPriority with the current priority keeps the position, also after partial dequeue and for `Infinity` or `-Infinity`', () => {
 	const queue = new PriorityQueue();
+	const firstHigh = createRun('firstHigh');
+	const secondHigh = createRun('secondHigh');
 	const first = createRun('first');
 	const second = createRun('second');
 	const third = createRun('third');
+	const fourth = createRun('fourth');
+	const firstLow = createRun('firstLow');
+	const secondLow = createRun('secondLow');
 
+	queue.enqueue(firstHigh, {id: 'firstHigh', priority: Infinity});
+	queue.enqueue(secondHigh, {id: 'secondHigh', priority: Infinity});
 	queue.enqueue(first, {id: 'first', priority: 1});
 	queue.enqueue(second, {id: 'second', priority: 1});
 	queue.enqueue(third, {id: 'third', priority: 1});
+	queue.enqueue(fourth, {id: 'fourth', priority: 1});
+	queue.enqueue(firstLow, {id: 'firstLow', priority: -Infinity});
+	queue.enqueue(secondLow, {id: 'secondLow', priority: -Infinity});
 
+	queue.setPriority('firstHigh', Infinity);
 	queue.setPriority('first', 1);
-	queue.setPriority('second', 1);
+	queue.setPriority('firstLow', -Infinity);
 
-	assert.deepEqual([queue.dequeue(), queue.dequeue(), queue.dequeue()], [first, second, third]);
+	assert.deepEqual([queue.dequeue(), queue.dequeue(), queue.dequeue()], [firstHigh, secondHigh, first]);
+
+	queue.setPriority('second', 1);
+	queue.setPriority('third', 1);
+
+	assert.deepEqual(
+		[queue.dequeue(), queue.dequeue(), queue.dequeue(), queue.dequeue(), queue.dequeue()],
+		[second, third, fourth, firstLow, secondLow],
+	);
 });
 
 test('PriorityQueue setPriority with the current priority still throws for an unknown id', () => {
@@ -227,4 +246,46 @@ test('PriorityQueue setPriority with the current priority still throws for an un
 	assert.throws(() => {
 		queue.setPriority('missing', 1);
 	}, ReferenceError);
+});
+
+test('PriorityQueue setPriority moves an `Infinity` priority item behind the items with its new priority', () => {
+	const queue = new PriorityQueue();
+	const firstHigh = createRun('firstHigh');
+	const secondHigh = createRun('secondHigh');
+	const normal = createRun('normal');
+	const low = createRun('low');
+
+	queue.enqueue(firstHigh, {id: 'firstHigh', priority: Infinity});
+	queue.enqueue(secondHigh, {id: 'secondHigh', priority: Infinity});
+	queue.enqueue(normal, {id: 'normal', priority: 0});
+	queue.enqueue(low, {id: 'low', priority: -Infinity});
+
+	queue.setPriority('firstHigh', 0);
+	queue.setPriority('low', 1);
+
+	assert.deepEqual(
+		[queue.dequeue(), queue.dequeue(), queue.dequeue(), queue.dequeue()],
+		[secondHigh, low, normal, firstHigh],
+	);
+});
+
+test('PriorityQueue keeps FIFO order among `Infinity` priorities inserted after partial dequeue', () => {
+	const queue = new PriorityQueue();
+	const first = createRun('first');
+	const second = createRun('second');
+	const firstHigh = createRun('firstHigh');
+	const secondHigh = createRun('secondHigh');
+	const thirdHigh = createRun('thirdHigh');
+
+	queue.enqueue(first, {priority: 0});
+	queue.enqueue(second, {priority: 0});
+	queue.enqueue(firstHigh, {priority: Infinity});
+
+	assert.equal(queue.dequeue(), firstHigh);
+	assert.equal(queue.dequeue(), first);
+
+	queue.enqueue(secondHigh, {priority: Infinity});
+	queue.enqueue(thirdHigh, {priority: Infinity});
+
+	assert.deepEqual([queue.dequeue(), queue.dequeue(), queue.dequeue()], [secondHigh, thirdHigh, second]);
 });

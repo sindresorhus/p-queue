@@ -95,9 +95,38 @@ const options: Options = {concurrency: 2, timeout: 1000};
 const queueFromOptions = new PQueue(options);
 expectType<Equal<typeof queueFromOptions, PQueue>>();
 
-// An explicit result type for a task that returns `T | Promise<T>`.
+// `.addAll()` with a tuple is not widened to an array.
+const emptyResults = queue.addAll([]);
+expectType<Equal<typeof emptyResults, Promise<[]>>>();
+const constTasks = [async () => 1, () => 'sync'] as const;
+const constResults = queue.addAll(constTasks);
+expectType<Equal<typeof constResults, Promise<[number, string]>>>();
+const maybeCachedMixedResults = queue.addAll([maybeCached, () => promiseLike, () => {}]); // eslint-disable-line @typescript-eslint/no-empty-function
+expectType<Equal<typeof maybeCachedMixedResults, Promise<[number, number, void]>>>();
+
+// The exported types for a custom queue class.
+const fifoOptions: Options<FifoQueue, QueueAddOptions> = {queueClass: FifoQueue, concurrency: 1, timeout: undefined};
+const fifoQueueFromOptions = new PQueue(fifoOptions);
+expectType<Equal<typeof fifoQueueFromOptions, PQueue<FifoQueue, QueueAddOptions>>>();
+const fifoAllResults = fifoQueue.addAll([task, async () => 1], {timeout: undefined, priority: undefined});
+expectType<Equal<typeof fifoAllResults, Promise<[boolean | undefined, number]>>>();
+
+// `priority` must be a number, which `.add()` also checks at runtime.
+// @ts-expect-error Testing
+queue.add(() => 1, {priority: '1'});
+// `setPriority()` takes a number.
+// @ts-expect-error Testing
+queue.setPriority('id', '1');
+
+// An explicit type argument is the result type, like in the published types.
+const explicitResult = queue.add<string>(async () => 'explicit');
+expectType<Equal<typeof explicitResult, Promise<string>>>();
+const explicitSyncResult = queue.add<number>(() => 1);
+expectType<Equal<typeof explicitSyncResult, Promise<number>>>();
 const explicitMaybeCachedResult = queue.add<number>(maybeCached);
 expectType<Equal<typeof explicitMaybeCachedResult, Promise<number>>>();
+const explicitResults = queue.addAll<string>([async () => 'a', () => 'b']);
+expectType<Equal<typeof explicitResults, Promise<string[]>>>();
 
 // A running task always has an `id`, and the `timeout` keys are there even without a timeout.
 const [runningTask] = queue.runningTasks;

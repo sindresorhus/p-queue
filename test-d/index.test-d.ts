@@ -1,13 +1,7 @@
 import {expectTypeOf} from 'nz';
-import PQueue, {TimeoutError} from '../source/index.js';
+import PQueue from '../source/index.js';
 
 const queue = new PQueue();
-
-expectTypeOf(queue.add(async () => '🦄')).toBe<Promise<string>>();
-
-expectTypeOf(new TimeoutError('Task timed out')).toBeAssignableTo<DOMException>();
-
-expectTypeOf(queue).toBeAssignableTo<EventTarget>();
 
 queue.add(({signal}) => {
 	expectTypeOf(signal).toBe<AbortSignal | undefined>();

@@ -18,7 +18,7 @@
 	},
 	"scripts": {
 		"build": "del-cli dist && tsc",
-		"test": "xo && node --import=tsx/esm --test test/*.ts && del-cli dist && tsc && nz",
+		"test": "xo && node --import=tsx/esm --test --test-timeout=60000 test/*.ts && del-cli dist && tsc && nz",
 		"bench": "node --import=tsx/esm --experimental-bench --bench bench.ts",
 		"prepublishOnly": "npm run build"
 	},

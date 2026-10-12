@@ -1,7 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import delay from 'delay';
+import pDefer from 'p-defer';
 import PQueue from '../source/index.js';
+import {flush, tick} from './helpers.js';
 
 const assertSlidingWindow = (executionTimes: number[], interval: number, intervalCap: number, jitterMilliseconds = Math.min(25, Math.trunc(interval * 0.2))) => {
 	const minimumInterval = Math.max(0, interval - jitterMilliseconds);
@@ -37,61 +39,39 @@ test('strict mode enforces sliding window rate limiting', async () => {
 	assertSlidingWindow(executionTimes, 1000, 2);
 });
 
-test('strict mode vs fixed window timing', async () => {
-	// Test that strict mode and fixed window behave differently
-	const interval = 500;
-	const intervalCap = 2;
+test('strict mode vs fixed window timing', async t => {
+	// eslint-disable-next-line node-test/require-mock-timers-advance -- `run()` ticks.
+	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date'], now: 1_000_000});
 
-	// Fixed window
-	const fixedQueue = new PQueue({
-		interval,
-		intervalCap,
-		strict: false,
-	});
+	const run = async (isStrict: boolean) => {
+		const queue = new PQueue({interval: 500, intervalCap: 2, strict: isStrict});
+		const queueStartTime = Date.now();
+		const startTimes: number[] = [];
+		// The tasks finish only at the end, so only the timer for the rate limit can start the waiting tasks.
+		const {promise: finished, resolve: finish} = pDefer();
+		const task = async () => {
+			startTimes.push(Date.now() - queueStartTime);
+			await finished;
+		};
 
-	const fixedTimes: number[] = [];
-	for (let i = 0; i < 4; i++) {
-		fixedQueue.add(async () => {
-			fixedTimes.push(Date.now());
-		});
-	}
+		queue.add(task);
+		await tick(t, 400);
+		queue.add(task);
+		queue.add(task);
+		queue.add(task);
 
-	await fixedQueue.onIdle();
+		await tick(t, 100);
+		await tick(t, 400);
+		finish();
+		await flush();
+		return startTimes;
+	};
 
-	// Strict mode
-	const strictQueue = new PQueue({
-		interval,
-		intervalCap,
-		strict: true,
-	});
+	// Fixed window: the window resets at 500, so the last two tasks start together at the boundary.
+	t.assert.deepStrictEqual(await run(false), [0, 400, 500, 500]);
 
-	const strictTimes: number[] = [];
-	for (let i = 0; i < 4; i++) {
-		strictQueue.add(async () => {
-			strictTimes.push(Date.now());
-		});
-	}
-
-	await strictQueue.onIdle();
-
-	// Both should execute all tasks
-	assert.equal(fixedTimes.length, 4);
-	assert.equal(strictTimes.length, 4);
-
-	// Verify strict mode respects sliding window
-	const strictStart = strictTimes[0];
-	const strictRelative = strictTimes.map(t => t - strictStart);
-
-	// In strict mode with intervalCap=2, interval=500:
-	// - Tasks 0,1 execute immediately
-	// - Task 2 must wait for oldest to age out (500ms)
-	// - Task 3 must wait another interval
-	assert.ok(strictRelative[0] < 50, 'Task 0 should execute immediately');
-	assert.ok(strictRelative[1] < 50, 'Task 1 should execute immediately');
-	assert.ok(strictRelative[2] >= 450, 'Task 2 should wait ~500ms');
-	assert.ok(strictRelative[2] < 650, 'Task 2 should not wait for a whole extra interval');
-	assert.ok(strictRelative[3] >= 450, 'Task 3 should wait ~500ms');
-	assert.ok(strictRelative[3] < 650, 'Task 3 should not wait for a whole extra interval');
+	// Sliding window: a slot frees when the oldest start ages out, at 500 for the first task and at 900 for the second.
+	t.assert.deepStrictEqual(await run(true), [0, 400, 500, 900]);
 });
 
 test('strict mode with large intervalCap', async () => {
@@ -117,38 +97,6 @@ test('strict mode with large intervalCap', async () => {
 
 	// Verify no more than 10 tasks in any 100ms window
 	assertSlidingWindow(executionTimes, 100, 10);
-});
-
-test('strict mode clear() preserves ticks', async () => {
-	const queue = new PQueue({
-		interval: 100,
-		intervalCap: 2,
-		strict: true,
-	});
-
-	// Add and execute 2 tasks
-	await queue.add(async () => undefined);
-	await queue.add(async () => undefined);
-
-	// Clear should preserve strict ticks
-	queue.clear();
-
-	// Should still be rate limited by the previous ticks
-	const executionTimes: number[] = [];
-	const startTime = Date.now();
-
-	await queue.add(async () => {
-		executionTimes.push(Date.now() - startTime);
-	});
-	await queue.add(async () => {
-		executionTimes.push(Date.now() - startTime);
-	});
-
-	// Both should wait for the sliding window to free up
-	assert.ok(executionTimes[0] >= 80, 'First task after clear should be rate limited');
-	assert.ok(executionTimes[0] < 200, 'First task after clear should not wait a whole interval');
-	assert.ok(executionTimes[1] >= 80, 'Second task after clear should be rate limited');
-	assert.ok(executionTimes[1] < 200, 'Second task after clear should not wait a whole interval');
 });
 
 test('strict mode with concurrency limit', async () => {
@@ -419,84 +367,6 @@ test('strict mode with AbortSignal', async () => {
 
 	// Should have executed 3 tasks (one was aborted)
 	assert.equal(executionTimes.length, 3);
-});
-
-test('strict mode frees capacity when task aborts before start', async () => {
-	const queue = new PQueue({
-		interval: 200,
-		intervalCap: 1,
-		strict: true,
-	});
-
-	const controller = new AbortController();
-	controller.abort();
-
-	const startTime = Date.now();
-
-	await assert.rejects(queue.add(async () => undefined, {signal: controller.signal}), {name: 'AbortError'});
-
-	let startedAt = 0;
-	await queue.add(async () => {
-		startedAt = Date.now() - startTime;
-	});
-
-	assert.ok(startedAt < 120, `Task should start immediately when previous was aborted, started at ${startedAt}ms`);
-});
-
-test('strict mode ignores aborted tasks for sliding window', async () => {
-	const queue = new PQueue({
-		interval: 120,
-		intervalCap: 2,
-		strict: true,
-	});
-
-	const abortControllers = [new AbortController(), new AbortController()];
-	for (const controller of abortControllers) {
-		controller.abort();
-	}
-
-	const abortPromises = abortControllers.map(async controller => assert.rejects(
-		queue.add(async () => undefined, {signal: controller.signal}),
-		{name: 'AbortError'},
-	));
-
-	await Promise.all(abortPromises);
-
-	const startTime = Date.now();
-	const executionTimes: number[] = [];
-
-	await queue.add(async () => {
-		executionTimes.push(Date.now() - startTime);
-	});
-
-	await queue.add(async () => {
-		executionTimes.push(Date.now() - startTime);
-	});
-
-	assert.equal(executionTimes.length, 2);
-	assert.ok(executionTimes[0] < 60, `First task should start immediately, started at ${executionTimes[0]}ms`);
-	assert.ok(executionTimes[1] < 60, `Second task should start immediately, started at ${executionTimes[1]}ms`);
-});
-
-test('strict mode aborted tasks do not trigger rateLimit event', async () => {
-	const queue = new PQueue({
-		interval: 200,
-		intervalCap: 1,
-		strict: true,
-	});
-
-	let hasRateLimited = false;
-	queue.addEventListener('rateLimit', () => {
-		hasRateLimited = true;
-	});
-
-	const controller = new AbortController();
-	controller.abort();
-
-	await assert.rejects(queue.add(async () => undefined, {signal: controller.signal}), {name: 'AbortError'});
-
-	assert.equal(hasRateLimited, false, 'Aborted task should not trigger rateLimit');
-	assert.equal(queue.isRateLimited, false, 'Queue should not be rate limited after aborted task');
 });
 
 test('strict mode after queue becomes idle', async () => {

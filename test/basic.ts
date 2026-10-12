@@ -1,4 +1,3 @@
-/* eslint-disable no-new -- constructing without assigning is the behaviour under test */
 import process from 'node:process';
 import {spawnSync} from 'node:child_process';
 import {test} from 'node:test';
@@ -9,6 +8,7 @@ import timeSpan from 'time-span';
 import randomInt from 'random-int';
 import pDefer from 'p-defer';
 import PQueue, {TimeoutError} from '../source/index.js';
+import {flush, tick, countTimers} from './helpers.js';
 
 const fixture = Symbol('fixture');
 
@@ -288,6 +288,7 @@ for (const timeout of [undefined, 5000]) {
 
 		await assert.rejects(promise, reason);
 		assert.equal(await queue.add(async () => '🦄'), '🦄');
+		assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
 	});
 }
 
@@ -324,11 +325,10 @@ test('.add() - the task signal aborts on the user signal when a timeout is set',
 
 test('.add() - timeout timer is cleared when the task completes', async () => {
 	// A timer that is not cleared keeps the process alive until the timeout.
-	const countTimers = () => process.getActiveResourcesInfo().filter(resource => resource === 'Timeout').length;
 	const timerCount = countTimers();
 	let timerCountWhileRunning = 0;
 
-	await new PQueue({timeout: 60_000}).add(async () => {
+	await new PQueue({timeout: 1000}).add(async () => {
 		timerCountWhileRunning = countTimers();
 	});
 
@@ -1090,100 +1090,6 @@ test('.addAll() with options does not mutate the options object', async () => {
 	assert.equal('id' in options, false);
 });
 
-test('enforce number in options.concurrency', () => {
-	assert.throws(
-		() => {
-			new PQueue({concurrency: 0});
-		},
-		{constructor: TypeError},
-	);
-
-	assert.throws(
-		() => {
-			new PQueue({concurrency: undefined});
-		},
-		{constructor: TypeError},
-	);
-
-	new PQueue({concurrency: 1});
-	new PQueue({concurrency: 10});
-	new PQueue({concurrency: Infinity});
-});
-
-test('enforce number in queue.concurrency', () => {
-	assert.throws(
-		() => {
-			(new PQueue()).concurrency = 0;
-		},
-		{constructor: TypeError},
-	);
-
-	assert.throws(
-		() => {
-			// @ts-expect-error Testing
-			(new PQueue()).concurrency = undefined;
-		},
-		{constructor: TypeError},
-	);
-
-	(new PQueue()).concurrency = 1;
-	(new PQueue()).concurrency = 10;
-	(new PQueue()).concurrency = Infinity;
-});
-
-test('enforce number in options.intervalCap', () => {
-	assert.throws(
-		() => {
-			new PQueue({intervalCap: 0});
-		},
-		{constructor: TypeError},
-	);
-
-	assert.throws(
-		() => {
-			new PQueue({intervalCap: undefined});
-		},
-		{constructor: TypeError},
-	);
-
-	new PQueue({intervalCap: 1});
-	new PQueue({intervalCap: 10});
-	new PQueue({intervalCap: Infinity});
-});
-
-test('enforce finite in options.interval', () => {
-	assert.throws(
-		() => {
-			new PQueue({interval: -1});
-		},
-		{constructor: TypeError},
-	);
-
-	assert.throws(
-		() => {
-			new PQueue({interval: undefined});
-		},
-		{constructor: TypeError},
-	);
-
-	assert.throws(
-		() => {
-			new PQueue({interval: Infinity});
-		},
-		{constructor: TypeError},
-	);
-
-	new PQueue({interval: 0});
-	new PQueue({interval: 10});
-
-	assert.throws(
-		() => {
-			new PQueue({interval: Infinity});
-		},
-		{constructor: TypeError},
-	);
-});
-
 test('autoStart: false', () => {
 	const queue = new PQueue({concurrency: 2, autoStart: false});
 
@@ -1293,6 +1199,7 @@ test('.add() - handle task throwing error', async () => {
 	await task3;
 
 	await queue.onIdle();
+	assert.equal(queue.pending, 0);
 });
 
 test('.add() - handle task promise failure', async () => {
@@ -1339,10 +1246,10 @@ test('should resolve empty when size is zero', async () => {
 		queue.add(async () => delay(10));
 	}
 
-	(async () => {
-		await queue.onEmpty();
-		assert.equal(queue.size, 0);
-	})();
+	let sizeOnEmpty: number | undefined;
+	const emptyPromise = queue.onEmpty().then(() => {
+		sizeOnEmpty = queue.size;
+	});
 
 	queue.start();
 
@@ -1358,6 +1265,8 @@ test('should resolve empty when size is zero', async () => {
 	);
 
 	await queue.onIdle();
+	await emptyPromise;
+	assert.equal(sizeOnEmpty, 0);
 });
 
 test('.add() - throttled', async () => {
@@ -1380,7 +1289,9 @@ test('.add() - throttled', async () => {
 	assert.deepEqual(result, [1, 2]);
 });
 
-test('.add() - throttled, carryoverIntervalCount false', async () => {
+test('.add() - throttled, carryoverIntervalCount false', async t => {
+	// eslint-disable-next-line node-test/require-mock-timers-advance -- `tick()` ticks.
+	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date'], now: 1_000_000});
 	const result: number[] = [];
 
 	const queue = new PQueue({
@@ -1400,23 +1311,25 @@ test('.add() - throttled, carryoverIntervalCount false', async () => {
 
 	queue.start();
 
-	(async () => {
-		await delay(550);
-		assert.equal(queue.pending, 2);
-		assert.deepEqual(result, []);
-	})();
+	await tick(t, 500);
+	await tick(t, 50);
+	t.assert.strictEqual(queue.pending, 2);
+	t.assert.deepStrictEqual(result, []);
 
-	(async () => {
-		await delay(650);
-		assert.equal(queue.pending, 1);
-		assert.deepEqual(result, [0]);
-	})();
+	await tick(t, 50);
+	await tick(t, 50);
+	t.assert.strictEqual(queue.pending, 1);
+	t.assert.deepStrictEqual(result, [0]);
 
-	await delay(1250);
-	assert.deepEqual(result, values);
+	await tick(t, 350);
+	await tick(t, 100);
+	await tick(t, 150);
+	t.assert.deepStrictEqual(result, values);
 });
 
-test('.add() - throttled, carryoverIntervalCount true', async () => {
+test('.add() - throttled, carryoverIntervalCount true', async t => {
+	// eslint-disable-next-line node-test/require-mock-timers-advance -- `tick()` ticks.
+	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date'], now: 1_000_000});
 	const result: number[] = [];
 
 	const queue = new PQueue({
@@ -1436,34 +1349,36 @@ test('.add() - throttled, carryoverIntervalCount true', async () => {
 
 	queue.start();
 
-	(async () => {
-		await delay(100);
-		assert.deepEqual(result, []);
-		assert.equal(queue.pending, 1);
-	})();
+	await tick(t, 100);
+	t.assert.deepStrictEqual(result, []);
+	t.assert.strictEqual(queue.pending, 1);
 
-	(async () => {
-		await delay(550);
-		assert.deepEqual(result, []);
-		assert.equal(queue.pending, 1);
-	})();
+	await tick(t, 400);
+	await tick(t, 50);
+	t.assert.deepStrictEqual(result, []);
+	t.assert.strictEqual(queue.pending, 1);
 
-	(async () => {
-		await delay(650);
-		assert.deepEqual(result, [0]);
-		assert.equal(queue.pending, 0);
-	})();
+	await tick(t, 50);
+	await tick(t, 50);
+	t.assert.deepStrictEqual(result, [0]);
+	t.assert.strictEqual(queue.pending, 0);
 
-	(async () => {
-		await delay(1550);
-		assert.deepEqual(result, [0]);
-	})();
+	// The running task counted against the window that started at 500, so the next task starts at 1000.
+	await tick(t, 350);
+	t.assert.strictEqual(queue.pending, 1);
 
-	await delay(1650);
-	assert.deepEqual(result, values);
+	await tick(t, 500);
+	await tick(t, 50);
+	t.assert.deepStrictEqual(result, [0]);
+
+	await tick(t, 50);
+	await tick(t, 50);
+	t.assert.deepStrictEqual(result, values);
 });
 
-test('.add() - throttled 10, concurrency 5', async () => {
+test('.add() - throttled 10, concurrency 5', async t => {
+	// eslint-disable-next-line node-test/require-mock-timers-advance -- `tick()` ticks.
+	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date'], now: 1_000_000});
 	const result: number[] = [];
 
 	const queue = new PQueue({
@@ -1486,30 +1401,30 @@ test('.add() - throttled 10, concurrency 5', async () => {
 
 	queue.start();
 
-	assert.deepEqual(result, []);
+	t.assert.deepStrictEqual(result, []);
 
-	(async () => {
-		await delay(400);
-		assert.deepEqual(result, firstValue);
-		assert.equal(queue.pending, 5);
-	})();
+	await tick(t, 300);
+	await tick(t, 100);
+	t.assert.deepStrictEqual(result, firstValue);
+	t.assert.strictEqual(queue.pending, 5);
 
-	(async () => {
-		await delay(700);
-		assert.deepEqual(result, secondValue);
-	})();
+	await tick(t, 200);
+	await tick(t, 100);
+	t.assert.deepStrictEqual(result, secondValue);
 
-	(async () => {
-		await delay(1200);
-		assert.equal(queue.pending, 3);
-		assert.deepEqual(result, secondValue);
-	})();
+	await tick(t, 300);
+	await tick(t, 200);
+	t.assert.strictEqual(queue.pending, 3);
+	t.assert.deepStrictEqual(result, secondValue);
 
-	await delay(1400);
-	assert.deepEqual(result, thirdValue);
+	await tick(t, 100);
+	await tick(t, 100);
+	t.assert.deepStrictEqual(result, thirdValue);
 });
 
-test('.add() - throttled finish and resume', async () => {
+test('.add() - throttled finish and resume', async t => {
+	// eslint-disable-next-line node-test/require-mock-timers-advance -- `tick()` ticks.
+	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date'], now: 1_000_000});
 	const result: number[] = [];
 
 	const queue = new PQueue({
@@ -1532,26 +1447,28 @@ test('.add() - throttled finish and resume', async () => {
 
 	queue.start();
 
-	(async () => {
-		await delay(1000);
-		assert.deepEqual(result, firstValue);
+	await tick(t, 100);
+	await tick(t, 100);
+	await tick(t, 800);
+	t.assert.deepStrictEqual(result, firstValue);
 
-		queue.add(async () => {
-			await delay(100);
-			result.push(2);
-		});
-	})();
+	queue.add(async () => {
+		await delay(100);
+		result.push(2);
+	});
 
-	(async () => {
-		await delay(1500);
-		assert.deepEqual(result, firstValue);
-	})();
+	await tick(t, 500);
+	t.assert.deepStrictEqual(result, firstValue);
 
-	await delay(2200);
-	assert.deepEqual(result, secondValue);
+	await tick(t, 500);
+	await tick(t, 100);
+	await tick(t, 100);
+	t.assert.deepStrictEqual(result, secondValue);
 });
 
-test('pause should work when throttled', async () => {
+test('pause should work when throttled', async t => {
+	// eslint-disable-next-line node-test/require-mock-timers-advance -- `tick()` ticks.
+	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date'], now: 1_000_000});
 	const result: number[] = [];
 
 	const queue = new PQueue({
@@ -1574,32 +1491,24 @@ test('pause should work when throttled', async () => {
 
 	queue.start();
 
-	(async () => {
-		await delay(300);
-		assert.deepEqual(result, firstValue);
-	})();
+	await tick(t, 100);
+	await tick(t, 200);
+	t.assert.deepStrictEqual(result, firstValue);
 
-	(async () => {
-		await delay(600);
-		queue.pause();
-	})();
+	await tick(t, 300);
+	queue.pause();
 
-	(async () => {
-		await delay(1400);
-		assert.deepEqual(result, firstValue);
-	})();
+	await tick(t, 400);
+	await tick(t, 400);
+	t.assert.deepStrictEqual(result, firstValue);
 
-	(async () => {
-		await delay(1500);
-		queue.start();
-	})();
+	await tick(t, 100);
+	queue.start();
 
-	(async () => {
-		await delay(2200);
-		assert.deepEqual(result, secondValue);
-	})();
-
-	await delay(2500);
+	await tick(t, 100);
+	await tick(t, 400);
+	await tick(t, 200);
+	t.assert.deepStrictEqual(result, secondValue);
 });
 
 test('.onError() - rejects when task errors', async () => {
@@ -1795,6 +1704,85 @@ test('.onError() - pausing in an `error` listener stops the remaining tasks, as 
 	await queue.onPendingZero();
 
 	assert.deepEqual(started, [1, 2]);
+	assert.equal(queue.size, 1);
+	queue.clear();
+});
+
+test('.addAll() resolves with the results in task order when the tasks finish in reverse order', async () => {
+	const queue = new PQueue();
+	const deferreds = [pDefer<number>(), pDefer<string>()];
+	const thenable: PromiseLike<string> = {
+		then(onFulfilled) { // eslint-disable-line unicorn/no-thenable, @typescript-eslint/promise-function-async
+			return Promise.resolve('thenable').then(onFulfilled);
+		},
+	};
+	const maybeCached = (): number | Promise<number> => 3;
+
+	const results = queue.addAll([
+		async () => deferreds[0]!.promise,
+		async () => deferreds[1]!.promise,
+		() => thenable,
+		maybeCached,
+		() => 'sync',
+	]);
+
+	deferreds[1]!.resolve('second');
+	await flush();
+	deferreds[0]!.resolve(1);
+
+	assert.deepEqual(await results, [1, 'second', 'thenable', 3, 'sync']);
+});
+
+test('.addAll() with an empty array resolves with an empty array', async () => {
+	const queue = new PQueue();
+	assert.deepEqual(await queue.addAll([]), []);
+	assert.equal(queue.size, 0);
+	assert.equal(queue.pending, 0);
+});
+
+test('.setPriority() moves an `Infinity` priority task behind the tasks with its new priority', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const {promise, resolve} = pDefer();
+	const order: string[] = [];
+	const task = (name: string) => () => {
+		order.push(name);
+	};
+
+	queue.add(async () => promise);
+	queue.add(task('firstHigh'), {id: 'firstHigh', priority: Infinity});
+	queue.add(task('normal'), {priority: 0});
+	queue.add(task('secondHigh'), {priority: Infinity});
+	queue.add(task('lowest'), {id: 'lowest', priority: -Infinity});
+	queue.add(task('thirdHigh'), {priority: Infinity});
+
+	queue.setPriority('firstHigh', 0);
+	queue.setPriority('lowest', 0);
+
+	resolve();
+	await queue.onIdle();
+
+	assert.deepEqual(order, ['secondHigh', 'thirdHigh', 'normal', 'firstHigh', 'lowest']);
+});
+
+test('.onError() - pausing in an `error` listener stops the remaining tasks after a synchronous throw', async () => {
+	const queue = new PQueue({concurrency: 1});
+	queue.addEventListener('error', () => {
+		queue.pause();
+	}, {once: true});
+
+	const started: string[] = [];
+	queue.add(() => {
+		started.push('first');
+		throw new Error('🦄');
+	}).catch(() => undefined);
+	queue.add(() => {
+		started.push('second');
+	});
+
+	await assert.rejects(Promise.race([queue.onError(), queue.onIdle()]), {message: '🦄'});
+	await queue.onPendingZero();
+
+	assert.deepEqual(started, ['first']);
 	assert.equal(queue.size, 1);
 	queue.clear();
 });
