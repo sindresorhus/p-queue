@@ -1,6 +1,15 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import v8 from 'node:v8';
+import {runInNewContext} from 'node:vm';
+import pDefer from 'p-defer';
+import PQueue from '../source/index.js';
 import PriorityQueue from '../source/priority-queue.js';
+import {flush} from './helpers.js';
+
+// The `gc` function, without starting Node.js with `--expose-gc`. The flag applies to new contexts.
+v8.setFlagsFromString('--expose-gc');
+const collectGarbage = runInNewContext('gc') as () => void;
 
 const createRun = (value: string) => async () => value;
 
@@ -288,4 +297,53 @@ test('PriorityQueue keeps FIFO order among `Infinity` priorities inserted after 
 	queue.enqueue(thirdHigh, {priority: Infinity});
 
 	assert.deepEqual([queue.dequeue(), queue.dequeue(), queue.dequeue()], [secondHigh, thirdHigh, second]);
+});
+
+test('PriorityQueue does not keep dequeued items, so their functions can be garbage collected', async () => {
+	const queue = new PriorityQueue();
+	const references: Array<WeakRef<Record<string, unknown>>> = [];
+
+	const enqueue = () => {
+		const payload = {};
+		references.push(new WeakRef(payload));
+		queue.enqueue(async () => payload);
+	};
+
+	for (let index = 0; index < 10; index++) {
+		enqueue();
+	}
+
+	for (let index = 0; index < 9; index++) {
+		queue.dequeue();
+	}
+
+	// A `WeakRef` target is kept until the current job ends.
+	await flush();
+	collectGarbage();
+
+	assert.equal(queue.size, 1);
+	assert.deepEqual(references.map(reference => reference.deref() === undefined), [...Array.from({length: 9}, () => true), false]);
+});
+
+test('tasks that ran can be garbage collected while other tasks still wait', async () => {
+	const queue = new PQueue({concurrency: 1});
+	const references: Array<WeakRef<Record<string, unknown>>> = [];
+	const {promise, resolve} = pDefer();
+
+	for (let index = 0; index < 10; index++) {
+		const payload = {};
+		references.push(new WeakRef(payload));
+		queue.add(() => payload);
+	}
+
+	queue.add(async () => promise);
+	const waiting = queue.add(() => undefined);
+	await flush();
+	assert.equal(queue.size, 1);
+
+	collectGarbage();
+	assert.ok(references.every(reference => reference.deref() === undefined));
+
+	resolve();
+	await waiting;
 });
