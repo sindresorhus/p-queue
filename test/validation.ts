@@ -364,7 +364,7 @@ test('intervalCap and concurrency accept large integers and `Infinity`, and reje
 	assertRejected(-Infinity);
 	assertRejected(NaN);
 	assertRejected('2');
-	assertRejected(undefined);
+	assertRejected(null);
 });
 
 test('interval above the maximum timer delay is accepted when rate limiting is off', async () => {
@@ -380,7 +380,7 @@ test('interval must be a finite number from 0 and up', () => {
 	};
 
 	assertRejected(-1);
-	assertRejected(undefined);
+	assertRejected(null);
 	assertRejected(Infinity);
 	assertRejected(NaN);
 
@@ -413,4 +413,37 @@ test('setting an invalid `timeout` on the queue throws and keeps the previous va
 	queue.timeout = undefined;
 	assert.equal(queue.timeout, undefined);
 	assert.equal(await queue.add(() => '🦄'), '🦄');
+});
+
+test('constructor options that are `undefined` use their defaults', async () => {
+	const queue = new PQueue({
+		concurrency: undefined,
+		intervalCap: undefined,
+		interval: undefined,
+		autoStart: undefined,
+		queueClass: undefined,
+		strict: undefined,
+		carryoverIntervalCount: undefined,
+		timeout: undefined,
+	});
+
+	assert.equal(queue.concurrency, Infinity);
+	assert.equal(queue.timeout, undefined);
+	assert.equal(queue.isPaused, false);
+
+	const results = await Promise.all([
+		queue.add(() => 'low', {priority: -1}),
+		queue.add(() => 'high', {priority: 1}),
+	]);
+	assert.deepEqual(results, ['low', 'high']);
+	assert.equal(queue.isRateLimited, false);
+
+	// Forwarding optional settings, which is the common case.
+	const createQueue = (options: {concurrency?: number; interval?: number; intervalCap?: number} = {}) => new PQueue({
+		concurrency: options.concurrency,
+		interval: options.interval,
+		intervalCap: options.intervalCap,
+	});
+	assert.equal(createQueue().concurrency, Infinity);
+	assert.equal(createQueue({concurrency: 2}).concurrency, 2);
 });

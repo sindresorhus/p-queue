@@ -40,6 +40,27 @@ const validateLimit = (name: string, value: unknown): void => {
 	}
 };
 
+const validateRateLimit = (interval: number, intervalCap: number, isStrict: boolean): void => {
+	validateLimit('intervalCap', intervalCap);
+
+	if (!(Number.isFinite(interval) && interval >= 0)) {
+		throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${String(interval)}\` (${typeof interval})`);
+	}
+
+	// Only rate limiting uses a timer for the interval.
+	if (intervalCap !== Infinity && interval > maximumTimerDelay) {
+		throw new TypeError(`Expected \`interval\` to be at most ${maximumTimerDelay} with an \`intervalCap\`, got \`${interval}\``);
+	}
+
+	if (isStrict && interval === 0) {
+		throw new TypeError('The `strict` option requires a non-zero `interval`');
+	}
+
+	if (isStrict && intervalCap === Infinity) {
+		throw new TypeError('The `strict` option requires a finite `intervalCap`');
+	}
+};
+
 // A task that waits in the queue. `promise` is the promise that `.add()` returned, and `reject` rejects it. `.clear()` marks the promise as handled before it rejects it, so that a caller that ignores the promise does not get an unhandled rejection, which can make the process exit. A caller that handles the promise still gets the error.
 type WaitingTask = {
 	id?: string;
@@ -121,47 +142,30 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		// Node.js warns when an event has more than 10 listeners, but many waiters, like `.onIdle()` calls, are normal. Not imported from `node:events`, so it still works in browsers.
 		globalThis.process?.getBuiltinModule?.('node:events')?.setMaxListeners(Infinity, this); // eslint-disable-line n/prefer-global/process
 
-		// eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-		options = {
-			carryoverIntervalCount: false,
-			intervalCap: Infinity,
-			interval: 0,
-			concurrency: Infinity,
-			autoStart: true,
-			queueClass: PriorityQueue,
-			strict: false,
-			...options,
-		} as Options<QueueType, EnqueueOptionsType>;
+		// Defaults in destructuring also apply to an option that is `undefined`, like `{concurrency: options.concurrency}` without a value.
+		const {
+			carryoverIntervalCount = false,
+			intervalCap = Infinity,
+			interval = 0,
+			concurrency = Infinity,
+			autoStart = true,
+			queueClass = PriorityQueue as unknown as new () => QueueType,
+			strict = false,
+			timeout,
+		} = options ?? {};
 
-		validateLimit('intervalCap', options.intervalCap);
+		validateRateLimit(interval, intervalCap, strict);
 
-		if (options.interval === undefined || !(Number.isFinite(options.interval) && options.interval >= 0)) {
-			throw new TypeError(`Expected \`interval\` to be a finite number >= 0, got \`${options.interval?.toString() ?? ''}\` (${typeof options.interval})`);
-		}
-
-		// Only rate limiting uses a timer for the interval.
-		if (options.intervalCap !== Infinity && options.interval > maximumTimerDelay) {
-			throw new TypeError(`Expected \`interval\` to be at most ${maximumTimerDelay} with an \`intervalCap\`, got \`${options.interval}\``);
-		}
-
-		if (options.strict && options.interval === 0) {
-			throw new TypeError('The `strict` option requires a non-zero `interval`');
-		}
-
-		if (options.strict && options.intervalCap === Infinity) {
-			throw new TypeError('The `strict` option requires a finite `intervalCap`');
-		}
-
-		this.#carryoverIntervalCount = options.carryoverIntervalCount ?? false;
-		this.#isIntervalIgnored = options.intervalCap === Infinity || options.interval === 0;
-		this.#intervalCap = options.intervalCap!;
-		this.#interval = options.interval;
-		this.#strict = options.strict!;
-		this.#queue = new options.queueClass!();
-		this.#queueClass = options.queueClass!;
-		this.concurrency = options.concurrency!;
-		this.timeout = options.timeout;
-		this.#isPaused = options.autoStart === false;
+		this.#carryoverIntervalCount = carryoverIntervalCount;
+		this.#isIntervalIgnored = intervalCap === Infinity || interval === 0;
+		this.#intervalCap = intervalCap;
+		this.#interval = interval;
+		this.#strict = strict;
+		this.#queueClass = queueClass;
+		this.#queue = new this.#queueClass();
+		this.concurrency = concurrency;
+		this.timeout = timeout;
+		this.#isPaused = !autoStart;
 
 		this.#setupRateLimitTracking();
 	}

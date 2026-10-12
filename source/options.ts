@@ -45,19 +45,19 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions> = Priorit
 
 	@default Infinity
 	*/
-	readonly concurrency?: number;
+	readonly concurrency?: number | undefined;
 
 	/**
 	Whether tasks start as soon as they are added. If `false`, call `.start()` to start them.
 
 	@default true
 	*/
-	readonly autoStart?: boolean;
+	readonly autoStart?: boolean | undefined;
 
 	/**
 	A class with `enqueue()`, `dequeue()`, `filter()`, `setPriority()`, and `remove()` methods and a `size` getter. See [Custom QueueClass](https://github.com/sindresorhus/p-queue#custom-queueclass).
 	*/
-	readonly queueClass?: new () => QueueType;
+	readonly queueClass?: (new () => QueueType) | undefined;
 
 	/**
 	The maximum number of tasks that start in each `interval`. Must be an integer or `Infinity`.
@@ -66,7 +66,7 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions> = Priorit
 
 	@default Infinity
 	*/
-	readonly intervalCap?: number;
+	readonly intervalCap?: number | undefined;
 
 	/**
 	The length of the rate-limit interval in milliseconds. `0` disables rate limiting.
@@ -76,14 +76,14 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions> = Priorit
 
 	@default 0
 	*/
-	readonly interval?: number;
+	readonly interval?: number | undefined;
 
 	/**
 	Whether tasks that are still running when an interval ends count against `intervalCap` in the next interval.
 
 	@default false
 	*/
-	readonly carryoverIntervalCount?: boolean;
+	readonly carryoverIntervalCount?: boolean | undefined;
 
 	/**
 	Whether to rate limit with a sliding window instead of fixed windows. Requires a non-zero `interval` and a finite `intervalCap`.
@@ -100,7 +100,7 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions> = Priorit
 
 	@default false
 	*/
-	readonly strict?: boolean;
+	readonly strict?: boolean | undefined;
 } & TimeoutOptions;
 
 export type QueueAddOptions = {

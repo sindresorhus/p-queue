@@ -37,6 +37,16 @@ queue.add(() => 1, {
 	signal: undefined,
 });
 new PQueue({timeout: undefined}); // eslint-disable-line no-new
+// The other constructor options too, which then use their defaults.
+new PQueue({ // eslint-disable-line no-new
+	concurrency: undefined,
+	intervalCap: undefined,
+	interval: undefined,
+	autoStart: undefined,
+	queueClass: undefined,
+	strict: undefined,
+	carryoverIntervalCount: undefined,
+});
 queue.timeout = undefined;
 
 // `.addAll()` keeps the result type of each task.
