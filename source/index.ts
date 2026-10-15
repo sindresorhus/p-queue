@@ -608,7 +608,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	#setupRateLimitTracking(): void {
-		// The interval cannot change, but an infinite cap can become finite later.
+		// Only schedule updates when rate limiting is enabled
 		if (this.#interval === 0) {
 			return;
 		}
