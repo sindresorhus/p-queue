@@ -1,0 +1,782 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import delay from 'delay';
+import pDefer from 'p-defer';
+import PQueue from '../source/index.js';
+import {flush, tick} from './helpers.js';
+
+const assertSlidingWindow = (executionTimes: number[], interval: number, intervalCap: number, jitterMilliseconds = Math.min(25, Math.trunc(interval * 0.2))) => {
+	const minimumInterval = Math.max(0, interval - jitterMilliseconds);
+
+	for (let index = intervalCap; index < executionTimes.length; index++) {
+		const delta = executionTimes[index] - executionTimes[index - intervalCap];
+		assert.ok(delta >= minimumInterval, `Task ${index} violated sliding window: ${delta}ms < ${minimumInterval}ms`);
+	}
+};
+
+test('strict mode enforces sliding window rate limiting', async () => {
+	const queue = new PQueue({
+		interval: 1000,
+		intervalCap: 2,
+		strict: true,
+	});
+
+	const executionTimes: number[] = [];
+
+	// Add 6 tasks
+	const promises = [];
+	for (let i = 0; i < 6; i++) {
+		promises.push(queue.add(async () => {
+			executionTimes.push(Date.now());
+		}));
+	}
+
+	await Promise.all(promises);
+
+	assert.equal(executionTimes.length, 6);
+
+	// Verify sliding window constraint: no more than 2 tasks in any 1000ms window
+	assertSlidingWindow(executionTimes, 1000, 2);
+});
+
+test('strict mode vs fixed window timing', async t => {
+	// eslint-disable-next-line node-test/require-mock-timers-advance -- `run()` ticks.
+	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date'], now: 1_000_000});
+
+	const run = async (isStrict: boolean) => {
+		const queue = new PQueue({interval: 500, intervalCap: 2, strict: isStrict});
+		const queueStartTime = Date.now();
+		const startTimes: number[] = [];
+		// The tasks finish only at the end, so only the timer for the rate limit can start the waiting tasks.
+		const {promise: finished, resolve: finish} = pDefer();
+		const task = async () => {
+			startTimes.push(Date.now() - queueStartTime);
+			await finished;
+		};
+
+		queue.add(task);
+		await tick(t, 400);
+		queue.add(task);
+		queue.add(task);
+		queue.add(task);
+
+		await tick(t, 100);
+		await tick(t, 400);
+		finish();
+		await flush();
+		return startTimes;
+	};
+
+	// Fixed window: the window resets at 500, so the last two tasks start together at the boundary.
+	t.assert.deepStrictEqual(await run(false), [0, 400, 500, 500]);
+
+	// Sliding window: a slot frees when the oldest start ages out, at 500 for the first task and at 900 for the second.
+	t.assert.deepStrictEqual(await run(true), [0, 400, 500, 900]);
+});
+
+test('strict mode with large intervalCap', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 10,
+		strict: true,
+	});
+
+	const executionTimes: number[] = [];
+
+	// Add 30 tasks
+	const promises = [];
+	for (let i = 0; i < 30; i++) {
+		promises.push(queue.add(async () => {
+			executionTimes.push(Date.now());
+		}));
+	}
+
+	await Promise.all(promises);
+
+	assert.equal(executionTimes.length, 30);
+
+	// Verify no more than 10 tasks in any 100ms window
+	assertSlidingWindow(executionTimes, 100, 10);
+});
+
+test('strict mode with concurrency limit', async () => {
+	const queue = new PQueue({
+		concurrency: 1,
+		interval: 100,
+		intervalCap: 3,
+		strict: true,
+	});
+
+	const executionTimes: number[] = [];
+
+	// Add 6 tasks
+	const promises = [];
+	for (let i = 0; i < 6; i++) {
+		promises.push(queue.add(async () => {
+			executionTimes.push(Date.now());
+			await delay(10);
+		}));
+	}
+
+	await Promise.all(promises);
+
+	// Should respect both concurrency and strict interval limits
+	assert.equal(executionTimes.length, 6);
+
+	// Verify sliding window
+	assertSlidingWindow(executionTimes, 100, 3);
+});
+
+test('strict mode rate limit events', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 2,
+		strict: true,
+	});
+
+	const events: string[] = [];
+
+	queue.addEventListener('rateLimit', () => {
+		events.push('rateLimit');
+	});
+	queue.addEventListener('rateLimitCleared', () => {
+		events.push('rateLimitCleared');
+	});
+
+	// Add 4 tasks
+	const promises = [];
+	for (let i = 0; i < 4; i++) {
+		promises.push(queue.add(async () => delay(10)));
+	}
+
+	await Promise.all(promises);
+
+	// Should have been rate limited and then cleared
+	assert.ok(events.includes('rateLimit'), 'Should emit rateLimit event');
+	assert.ok(events.includes('rateLimitCleared'), 'Should emit rateLimitCleared event');
+});
+
+test('strict mode isRateLimited property', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 2,
+		strict: true,
+	});
+
+	assert.equal(queue.isRateLimited, false, 'Should not be rate limited initially');
+
+	// Add 3 tasks to trigger rate limiting
+	queue.add(async () => undefined);
+	queue.add(async () => undefined);
+	queue.add(async () => undefined);
+
+	await delay(10);
+
+	assert.equal(queue.isRateLimited, true, 'Should be rate limited after exceeding cap');
+
+	await queue.onIdle();
+
+	assert.equal(queue.isRateLimited, false, 'Should not be rate limited after queue is idle');
+});
+
+test('strict mode with pause/start', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 2,
+		strict: true,
+		autoStart: false,
+	});
+
+	const executionTimes: number[] = [];
+
+	// Add tasks while paused
+	for (let i = 0; i < 4; i++) {
+		queue.add(async () => {
+			executionTimes.push(Date.now());
+		});
+	}
+
+	await delay(50);
+
+	// Should not have executed yet
+	assert.equal(executionTimes.length, 0);
+
+	// Start the queue
+	const startTime = Date.now();
+	queue.start();
+
+	await queue.onIdle();
+
+	// All tasks should have executed
+	assert.equal(executionTimes.length, 4);
+
+	// Verify sliding window
+	const relativeTimes = executionTimes.map(t => t - startTime);
+	assert.ok(relativeTimes[0] < 50, 'First two tasks should execute immediately');
+	assert.ok(relativeTimes[1] < 50);
+	assert.ok(relativeTimes[2] >= 80, 'Third task should wait for window');
+	assert.ok(relativeTimes[3] >= 80, 'Fourth task should wait for window');
+});
+
+test('strict mode throws error with interval=0', () => {
+	assert.throws(
+		() => new PQueue({
+			interval: 0,
+			intervalCap: 5,
+			strict: true,
+		}),
+		{
+			name: 'TypeError',
+			message: 'The `strict` option requires a non-zero `interval`',
+		},
+	);
+});
+
+test('strict mode with priority', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 2,
+		strict: true,
+	});
+
+	const results: number[] = [];
+
+	// Add tasks with different priorities
+	const promises = [
+		queue.add(async () => {
+			results.push(1);
+		}, {priority: 0}),
+		queue.add(async () => {
+			results.push(2);
+		}, {priority: 0}),
+		queue.add(async () => {
+			results.push(3);
+		}, {priority: 1}), // Higher priority
+		queue.add(async () => {
+			results.push(4);
+		}, {priority: 0}),
+	];
+
+	await Promise.all(promises);
+
+	// Higher priority task should execute before lower priority ones
+	// First 2 execute immediately, then task 3 (high priority) should execute before task 4
+	assert.equal(results.length, 4);
+	assert.ok(results.indexOf(3) < results.indexOf(4), 'Higher priority task should execute first');
+});
+
+test('strict mode with onRateLimit()', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 2,
+		strict: true,
+	});
+
+	// Add tasks to trigger rate limit
+	queue.add(async () => undefined);
+	queue.add(async () => undefined);
+
+	let hasRateLimitResolved = false;
+	const rateLimitPromise = (async () => {
+		await queue.onRateLimit();
+		hasRateLimitResolved = true;
+	})();
+
+	// Add one more task to trigger rate limit
+	queue.add(async () => undefined);
+
+	await delay(20);
+
+	assert.ok(hasRateLimitResolved, 'onRateLimit() should resolve when rate limited');
+
+	await queue.onIdle();
+});
+
+test('strict mode with carryoverIntervalCount', async () => {
+	// Note: In strict mode, carryoverIntervalCount doesn't apply
+	// because we track individual execution times, not pending counts
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 2,
+		strict: true,
+		carryoverIntervalCount: true,
+	});
+
+	const executionTimes: number[] = [];
+
+	// Add 4 tasks
+	for (let i = 0; i < 4; i++) {
+		queue.add(async () => {
+			executionTimes.push(Date.now());
+		});
+	}
+
+	await queue.onIdle();
+
+	assert.equal(executionTimes.length, 4);
+
+	// Verify sliding window is enforced regardless of carryoverIntervalCount
+	assertSlidingWindow(executionTimes, 100, 2);
+});
+
+test('strict mode throws error with intervalCap: Infinity', () => {
+	assert.throws(
+		() => new PQueue({
+			interval: 1000,
+			intervalCap: Infinity,
+			strict: true,
+		}),
+		{
+			name: 'TypeError',
+			message: 'The `strict` option requires a finite `intervalCap`',
+		},
+	);
+});
+
+test('strict mode with AbortSignal', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 2,
+		strict: true,
+	});
+
+	const controller = new AbortController();
+	const executionTimes: number[] = [];
+
+	// Add tasks, abort the third one
+	queue.add(async () => {
+		executionTimes.push(Date.now());
+	});
+	queue.add(async () => {
+		executionTimes.push(Date.now());
+	});
+
+	const abortedPromise = queue.add(async () => {
+		executionTimes.push(Date.now());
+	}, {signal: controller.signal});
+
+	queue.add(async () => {
+		executionTimes.push(Date.now());
+	});
+
+	// Abort the third task before it can run
+	controller.abort();
+
+	await assert.rejects(abortedPromise, {name: 'AbortError'});
+	await queue.onIdle();
+
+	// Should have executed 3 tasks (one was aborted)
+	assert.equal(executionTimes.length, 3);
+});
+
+test('strict mode after queue becomes idle', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 2,
+		strict: true,
+	});
+
+	const executionTimes: number[] = [];
+
+	// First batch
+	await queue.add(async () => {
+		executionTimes.push(Date.now());
+	});
+	await queue.add(async () => {
+		executionTimes.push(Date.now());
+	});
+
+	// Wait for queue to become idle and ticks to expire
+	await delay(150);
+
+	// Second batch - should be able to execute immediately
+	const startTime = Date.now();
+	await queue.add(async () => {
+		executionTimes.push(Date.now());
+	});
+	await queue.add(async () => {
+		executionTimes.push(Date.now());
+	});
+
+	const elapsed = executionTimes[3] - startTime;
+	assert.ok(elapsed < 50, `Second batch should execute immediately after idle, took ${elapsed}ms`);
+});
+
+test('strict mode frees a slot as soon as the oldest tick ages out, even with spread ticks', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 2,
+		strict: true,
+	});
+
+	// Consume both slots spread across the window: tick at ≈0 and tick at ≈60.
+	await queue.add(async () => undefined);
+	await delay(60);
+	await queue.add(async () => undefined);
+
+	// At ≈120ms the first tick (≈0) has aged out but the second (≈60) has not, so exactly one slot is free and the next task should run immediately.
+	await delay(60);
+	const start = Date.now();
+	await queue.add(async () => undefined);
+	const elapsed = Date.now() - start;
+
+	assert.ok(elapsed < 40, `Task should run as soon as the oldest tick ages out, but waited ${elapsed}ms`);
+});
+
+test('strict mode prevents boundary bursts', async () => {
+	// This test verifies that strict mode prevents the boundary burst problem
+	// that occurs with fixed window mode
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 2,
+		strict: true,
+	});
+
+	const executionTimes: number[] = [];
+
+	// Add 4 tasks
+	for (let i = 0; i < 4; i++) {
+		queue.add(async () => {
+			executionTimes.push(Date.now());
+		});
+	}
+
+	await queue.onIdle();
+
+	assert.equal(executionTimes.length, 4);
+
+	// Verify that there's never more than 2 tasks in any 100ms window
+	// by checking every possible window start point
+	assertSlidingWindow(executionTimes, 100, 2);
+});
+
+test('strict mode with long-running tasks', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 2,
+		strict: true,
+		concurrency: 2,
+	});
+
+	const startTimes: number[] = [];
+	const endTimes: number[] = [];
+
+	// Add tasks that take longer than the interval
+	for (let i = 0; i < 4; i++) {
+		queue.add(async () => {
+			startTimes.push(Date.now());
+			await delay(150); // Task takes longer than interval
+			endTimes.push(Date.now());
+		});
+	}
+
+	await queue.onIdle();
+
+	// All tasks should have started
+	assert.equal(startTimes.length, 4);
+
+	// Verify sliding window constraint on start times
+	assertSlidingWindow(startTimes, 100, 2);
+});
+
+test('strict mode isSaturated property', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 2,
+		strict: true,
+	});
+
+	assert.equal(queue.isSaturated, false, 'Should not be saturated initially');
+
+	// Add 3 tasks to saturate the queue
+	queue.add(async () => delay(10));
+	queue.add(async () => delay(10));
+	queue.add(async () => delay(10));
+
+	await delay(5);
+
+	assert.equal(queue.isSaturated, true, 'Should be saturated when rate limited with pending tasks');
+
+	await queue.onIdle();
+
+	assert.equal(queue.isSaturated, false, 'Should not be saturated after idle');
+});
+
+test('strict mode multiple complete intervals', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 3,
+		strict: true,
+	});
+
+	const executionTimes: number[] = [];
+
+	// Add 12 tasks - should span 4 intervals
+	for (let i = 0; i < 12; i++) {
+		queue.add(async () => {
+			executionTimes.push(Date.now());
+		});
+	}
+
+	await queue.onIdle();
+
+	assert.equal(executionTimes.length, 12);
+
+	// Verify each interval respects the cap
+	const startTime = executionTimes[0];
+	const relativeExecutionTimes = executionTimes.map(t => t - startTime);
+
+	// Group by approximate interval
+	const tasksPerInterval = [0, 100, 200, 300].map(intervalStart => relativeExecutionTimes.filter(time => time >= intervalStart && time < intervalStart + 100).length);
+	assert.ok(tasksPerInterval.every(count => count <= 3), `Each 100ms interval should hold at most 3 tasks, got ${JSON.stringify(tasksPerInterval)}`);
+});
+
+test('strict mode precision timing', async () => {
+	const queue = new PQueue({
+		interval: 200,
+		intervalCap: 2,
+		strict: true,
+	});
+
+	const startTime = Date.now();
+	const executionTimes: number[] = [];
+
+	// Add 6 tasks
+	for (let i = 0; i < 6; i++) {
+		queue.add(async () => {
+			executionTimes.push(Date.now() - startTime);
+		});
+	}
+
+	await queue.onIdle();
+
+	// Tasks 0-1: execute at ~0ms
+	// Tasks 2-3: execute at ~200ms (after first two age out)
+	// Tasks 4-5: execute at ~400ms (after next two age out)
+	assert.ok(executionTimes[0] < 50);
+	assert.ok(executionTimes[1] < 50);
+	assert.ok(executionTimes[2] >= 180);
+	assert.ok(executionTimes[2] < 300);
+	assert.ok(executionTimes[3] >= 180);
+	assert.ok(executionTimes[3] < 300);
+	assert.ok(executionTimes[4] >= 380);
+	assert.ok(executionTimes[4] < 500);
+	assert.ok(executionTimes[5] >= 380);
+	assert.ok(executionTimes[5] < 500);
+});
+
+test('strict mode with concurrency: Infinity', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 3,
+		strict: true,
+		concurrency: Infinity,
+	});
+
+	const executionTimes: number[] = [];
+
+	// Add 9 tasks - all should respect rate limit despite infinite concurrency
+	for (let i = 0; i < 9; i++) {
+		queue.add(async () => {
+			executionTimes.push(Date.now());
+			await delay(50); // Tasks overlap but rate limit should still apply
+		});
+	}
+
+	await queue.onIdle();
+
+	assert.equal(executionTimes.length, 9);
+
+	// Verify sliding window constraint
+	assertSlidingWindow(executionTimes, 100, 3);
+});
+
+test('strict mode with timeout option', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 2,
+		strict: true,
+		timeout: 50,
+	});
+
+	const results: Array<'success' | 'timeout'> = [];
+
+	// Add a task that will timeout
+	const timeoutTask = async () => {
+		try {
+			await queue.add(async () => {
+				await delay(200);
+				return 'done';
+			});
+			results.push('success');
+		} catch {
+			results.push('timeout');
+		}
+	};
+
+	// Add a task that will succeed
+	const successTask = async () => {
+		try {
+			await queue.add(async () => {
+				await delay(10);
+				return 'done';
+			});
+			results.push('success');
+		} catch {
+			results.push('timeout');
+		}
+	};
+
+	await Promise.all([timeoutTask(), successTask()]);
+
+	assert.ok(results.includes('timeout'), 'Should have a timed out task');
+	assert.ok(results.includes('success'), 'Should have a successful task');
+});
+
+test('strict mode rapid sequential adds', async () => {
+	const queue = new PQueue({
+		interval: 50,
+		intervalCap: 5,
+		strict: true,
+	});
+
+	const executionTimes: number[] = [];
+
+	// Rapidly add many tasks
+	const promises = [];
+	for (let i = 0; i < 50; i++) {
+		promises.push(queue.add(async () => {
+			executionTimes.push(Date.now());
+		}));
+	}
+
+	await Promise.all(promises);
+
+	assert.equal(executionTimes.length, 50);
+
+	// Verify sliding window constraint for all tasks
+	assertSlidingWindow(executionTimes, 50, 5);
+});
+
+test('strict mode clear with pending timeout', async () => {
+	const queue = new PQueue({
+		interval: 200,
+		intervalCap: 1,
+		strict: true,
+	});
+
+	// Execute one task to consume the slot
+	await queue.add(async () => undefined);
+
+	// Add another task that will be rate limited
+	const taskPromise = queue.add(async () => 'completed');
+
+	// Clear immediately - this should cancel the pending timeout
+	queue.clear();
+
+	// The second task should have been cleared
+	assert.equal(queue.size, 0);
+
+	// Add a new task - should still respect the previous tick
+	const startTime = Date.now();
+	await queue.add(async () => undefined);
+	const elapsed = Date.now() - startTime;
+
+	assert.ok(elapsed >= 150, `Task should be rate limited after clear, took ${elapsed}ms`);
+
+	// Original task promise rejects since it was cleared
+	await assert.rejects(taskPromise, {name: 'AbortError'});
+});
+
+test('strict mode handles edge case of exactly intervalCap tasks', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 3,
+		strict: true,
+	});
+
+	const executionTimes: number[] = [];
+	const startTime = Date.now();
+
+	// Add exactly intervalCap tasks
+	for (let i = 0; i < 3; i++) {
+		queue.add(async () => {
+			executionTimes.push(Date.now() - startTime);
+		});
+	}
+
+	await queue.onIdle();
+
+	// All should execute immediately
+	assert.equal(executionTimes.length, 3);
+	assert.ok(executionTimes.every(t => t < 50), 'All tasks should execute immediately when at exactly intervalCap');
+});
+
+test('strict mode interleaved add and await', async () => {
+	const queue = new PQueue({
+		interval: 100,
+		intervalCap: 2,
+		strict: true,
+	});
+
+	const results: number[] = [];
+	const startTime = Date.now();
+
+	// Add and await interleaved
+	await queue.add(async () => {
+		results.push(Date.now() - startTime);
+	});
+
+	await queue.add(async () => {
+		results.push(Date.now() - startTime);
+	});
+
+	// These should wait for the window
+	await queue.add(async () => {
+		results.push(Date.now() - startTime);
+	});
+
+	await queue.add(async () => {
+		results.push(Date.now() - startTime);
+	});
+
+	assert.equal(results.length, 4);
+	// First two should be immediate
+	assert.ok(results[0] < 50);
+	assert.ok(results[1] < 50);
+	// Third and fourth should wait for window
+	assert.ok(results[2] >= 80);
+	assert.ok(results[3] >= 80);
+});
+
+test('strict mode circular buffer compaction', async () => {
+	const queue = new PQueue({
+		interval: 10,
+		intervalCap: 5,
+		strict: true,
+	});
+
+	// Add many tasks to trigger circular buffer compaction
+	// Compaction happens when startIndex > 100 and > length/2
+	const promises = [];
+	for (let i = 0; i < 300; i++) {
+		promises.push(queue.add(async () => undefined));
+	}
+
+	await Promise.all(promises);
+
+	// Verify all tasks completed successfully
+	assert.equal(promises.length, 300);
+
+	// Queue should be idle and functional
+	assert.equal(queue.pending, 0);
+	assert.equal(queue.size, 0);
+
+	// Should still work correctly after compaction
+	const startTime = Date.now();
+	await queue.add(async () => undefined);
+	const elapsed = Date.now() - startTime;
+
+	// Should execute quickly (within tolerance for 10ms interval)
+	assert.ok(elapsed < 50, `Task after compaction should execute promptly, took ${elapsed}ms`);
+});

@@ -1,38 +1,66 @@
 import {type Queue, type RunFunction} from './queue.js';
+import type PriorityQueue from './priority-queue.js';
 
 type TimeoutOptions = {
 	/**
-	Per-operation timeout in milliseconds. Operations will throw a `TimeoutError` if they don't complete within the specified time.
+	The time in milliseconds a task can run. When the time is up, the `signal` of the task aborts and `.add()` rejects with a `TimeoutError`, which is a `DOMException`. Like with the `signal` option of `.add()`, the concurrency slot is freed, but the task keeps running unless it handles its `signal`.
 
-	The timeout begins when the operation is dequeued and starts execution, not while it's waiting in the queue.
+	The time starts when the task starts running, not when it is added. Override it for one task with the `timeout` option of `.add()`.
+
+	Maximum: `2147483647` (about 24.8 days).
+
+	@default undefined
+
+	@example
+	```
+	import PQueue, {TimeoutError} from 'p-queue';
+
+	const queue = new PQueue({timeout: 5000});
+
+	try {
+		// The signal aborts on timeout, which stops the request
+		await queue.add(({signal}) => fetch('https://sindresorhus.com', {signal}));
+	} catch (error) {
+		if (error instanceof TimeoutError) {
+			console.log('The task timed out after 5 seconds');
+		}
+	}
+
+	// A longer timeout for this task
+	await queue.add(() => slowTask(), {timeout: 10000});
+
+	// No timeout for this task
+	await queue.add(() => verySlowTask(), {timeout: undefined});
+	```
 	*/
-	timeout?: number;
+	timeout?: number | undefined;
 };
 
-export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOptions extends QueueAddOptions> = {
+// The defaults match `PQueue`, so that `Options` without type arguments is for the default queue. `QueueOptions` is not inferred from `queueClass`, because TypeScript does not infer from a constraint, and a default that infers it with a conditional type would break generic code, which then cannot pass any options to `.add()`.
+export type Options<QueueType extends Queue<RunFunction, QueueOptions> = PriorityQueue, QueueOptions extends QueueAddOptions = QueueAddOptions> = {
 	/**
-	Concurrency limit.
+	The maximum number of tasks that run at the same time. Must be an integer or `Infinity`.
 
 	Minimum: `1`.
 
 	@default Infinity
 	*/
-	readonly concurrency?: number;
+	readonly concurrency?: number | undefined;
 
 	/**
-	Whether queue tasks within concurrency limit, are auto-executed as soon as they're added.
+	Whether tasks start as soon as they are added. If `false`, call `.start()` to start them.
 
 	@default true
 	*/
-	readonly autoStart?: boolean;
+	readonly autoStart?: boolean | undefined;
 
 	/**
-	Class with a `enqueue` and `dequeue` method, and a `size` getter. See the [Custom QueueClass](https://github.com/sindresorhus/p-queue#custom-queueclass) section.
+	A class with `enqueue()`, `dequeue()`, `filter()`, `setPriority()`, and `remove()` methods and a `size` getter. See [Custom QueueClass](https://github.com/sindresorhus/p-queue#custom-queueclass).
 	*/
-	readonly queueClass?: new () => QueueType;
+	readonly queueClass?: (new () => QueueType) | undefined;
 
 	/**
-	The max number of runs in the given interval of time.
+	The maximum number of tasks that start in each `interval`. Must be an integer or `Infinity`.
 
 	Can be changed later by setting `queue.intervalCap`. Changes apply immediately without stopping running tasks. If the new cap is lower than the number already started in the current interval, no more tasks start until the next interval begins.
 
@@ -42,57 +70,86 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOpt
 
 	@default Infinity
 	*/
-	readonly intervalCap?: number;
+	readonly intervalCap?: number | undefined;
 
 	/**
-	The length of time in milliseconds before the interval count resets. Must be finite.
+	The length of the rate-limit interval in milliseconds. `0` disables rate limiting. The rate limit uses the system clock (`Date.now()`), so if the clock goes back, tasks can wait for as long as it went back.
 
 	Minimum: `0`.
+	Maximum: `2147483647` (about 24.8 days) with a finite `intervalCap`, else any finite number.
 
 	@default 0
 	*/
-	readonly interval?: number;
+	readonly interval?: number | undefined;
 
 	/**
-	Whether the task must finish in the given interval or will be carried over into the next interval count.
+	Whether tasks that are still running when an interval ends count against `intervalCap` in the next interval.
 
 	@default false
 	*/
-	readonly carryoverConcurrencyCount?: boolean;
+	readonly carryoverIntervalCount?: boolean | undefined;
+
+	/**
+	Whether to rate limit with a sliding window instead of fixed windows. Requires a non-zero `interval` and a finite `intervalCap`.
+
+	With a sliding window, no more than `intervalCap` tasks start in any period of length `interval`. With fixed windows, the count resets at each window boundary, so tasks can burst there.
+
+	For example, with `intervalCap: 2` and `interval: 1000`:
+	- __Fixed windows (default):__ 2 tasks can start at 999 ms and 2 more at 1000 ms, so 4 tasks start within 1 ms.
+	- __Sliding window (strict):__ No more than 2 tasks start in any 1000 ms period.
+
+	Strict mode uses more resources, because it keeps the start time of each task. Use it when an API enforces strict rate limits.
+
+	`carryoverIntervalCount` has no effect in strict mode, because strict mode counts start times, not running tasks.
+
+	@default false
+	*/
+	readonly strict?: boolean | undefined;
 } & TimeoutOptions;
 
 export type QueueAddOptions = {
 	/**
-	Priority of operation. Operations with greater priority will be scheduled first.
+	Tasks with a higher priority start first. `Infinity` and `-Infinity` work. `.add()` rejects with a `TypeError` when it is `NaN` or not a number. The waiting tasks are kept sorted, so a task with a higher priority than the last waiting task takes time in proportion to the number of waiting tasks to add. For tens of thousands of waiting tasks with many different priorities, use a custom `queueClass`.
 
 	@default 0
 	*/
-	readonly priority?: number;
+	readonly priority?: number | undefined;
 
 	/**
-	Unique identifier for the promise function, used to update its priority before execution. If not specified, it is auto-assigned an incrementing BigInt starting from `1n`.
+	A unique identifier for the task, used to change its priority with `.setPriority()`. Defaults to an incrementing number as a string (`'1'`, `'2'`, and so on), so do not use such strings as your own ids.
 	*/
-	id?: string;
-} & TaskOptions & TimeoutOptions;
+	id?: string | undefined;
+
+	/**
+	Override the timeout of the queue for this task. `undefined` means no timeout.
+
+	@default The `timeout` of the queue
+	*/
+	timeout?: number | undefined;
+} & TaskOptions;
 
 export type TaskOptions = {
 	/**
-	[`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) for cancellation of the operation. When aborted, it will be removed from the queue and the `queue.add()` call will reject with an `AbortError`. If the operation is already running, the signal will need to be handled by the operation itself.
+	An [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) to cancel the task. If it aborts while the task waits, the task is removed and `.add()` rejects with the [abort reason](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/reason). If it aborts while the task runs, `.add()` rejects and the concurrency slot is freed, but the task keeps running unless it handles the signal itself.
 
 	@example
 	```
-	import PQueue, {AbortError} from 'p-queue';
+	import PQueue from 'p-queue';
 	import got, {CancelError} from 'got';
 
 	const queue = new PQueue();
 
 	const controller = new AbortController();
 
+	setTimeout(() => {
+		controller.abort();
+	}, 100);
+
 	try {
-		await queue.add(({signal}) => {
+		await queue.add(async ({signal}) => {
 			const request = got('https://sindresorhus.com');
 
-			signal.addEventListener('abort', () => {
+			signal?.addEventListener('abort', () => {
 				request.cancel();
 			});
 
@@ -105,11 +162,11 @@ export type TaskOptions = {
 			}
 		}, {signal: controller.signal});
 	} catch (error) {
-		if (!(error instanceof AbortError)) {
+		if (!(error instanceof DOMException)) {
 			throw error;
 		}
 	}
 	```
 	*/
-	readonly signal?: AbortSignal;
+	readonly signal?: AbortSignal | undefined;
 };

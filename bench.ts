@@ -1,68 +1,89 @@
-import Benchmark, {type Deferred, type Event} from 'benchmark';
+// Run some of the benchmarks: node --import=tsx/esm --experimental-bench --bench-name-pattern=priority --bench bench.ts
+import {bench} from 'node:bench';
 import PQueue from './source/index.js';
+import PriorityQueue from './source/priority-queue.js';
 
-const suite = new Benchmark.Suite() as Benchmark.Suite;
+const smallTaskCount = 100;
+const largeBacklogTaskCount = 10_000;
+const options = {warmup: 10, samples: 100};
 
-// Benchmark typings aren't up to date, let's help out manually
-type Resolvable = Deferred & {resolve: () => void};
+const noop = () => undefined;
 
-(suite as any)
-	.add('baseline', {
-		defer: true,
+// `@types/node` does not have types for `node:bench` yet.
+type BenchContext = {
+	start: () => void;
+	end: (operations: number) => void;
+};
 
-		async fn(deferred: Resolvable) {
-			const queue = new PQueue();
+bench('baseline', options, async (context: BenchContext) => {
+	const queue = new PQueue();
 
-			for (let i = 0; i < 100; i++) {
-				// eslint-disable-next-line @typescript-eslint/no-empty-function
-				queue.add(async () => {});
-			}
+	context.start();
+	for (let i = 0; i < smallTaskCount; i++) {
+		queue.add(noop);
+	}
 
-			await queue.onEmpty();
-			deferred.resolve();
-		},
-	})
-	.add('operation with random priority', {
-		defer: true,
+	await queue.onEmpty();
+	context.end(smallTaskCount);
+});
 
-		async fn(deferred: Resolvable) {
-			const queue = new PQueue();
+bench('operation with random priority', options, async (context: BenchContext) => {
+	const queue = new PQueue();
 
-			for (let i = 0; i < 100; i++) {
-				// eslint-disable-next-line @typescript-eslint/no-empty-function
-				queue.add(async () => {}, {
-					priority: Math.trunc(Math.random() * 100),
-				});
-			}
+	context.start();
+	for (let i = 0; i < smallTaskCount; i++) {
+		queue.add(noop, {
+			priority: Math.trunc(Math.random() * smallTaskCount),
+		});
+	}
 
-			await queue.onEmpty();
-			deferred.resolve();
-		},
-	})
-	.add('operation with increasing priority', {
-		defer: true,
+	await queue.onEmpty();
+	context.end(smallTaskCount);
+});
 
-		async fn(deferred: Resolvable) {
-			const queue = new PQueue();
+bench('operation with increasing priority', options, async (context: BenchContext) => {
+	const queue = new PQueue();
 
-			for (let i = 0; i < 100; i++) {
-				// eslint-disable-next-line @typescript-eslint/no-empty-function
-				queue.add(async () => {}, {
-					priority: i,
-				});
-			}
+	context.start();
+	for (let i = 0; i < smallTaskCount; i++) {
+		queue.add(noop, {
+			priority: i,
+		});
+	}
 
-			await queue.onEmpty();
-			deferred.resolve();
-		},
-	})
-	.on('cycle', (event: Event) => {
-		console.log(String(event.target as any));
-	})
-	.on('complete', function (this: any) {
-		// @ts-expect-error benchmark typings incorrect
-		console.log(`Fastest is ${this.filter('fastest').map('name') as string}`);
-	})
-	.run({
-		async: true,
-	});
+	await queue.onEmpty();
+	context.end(smallTaskCount);
+});
+
+bench('large-fifo-backlog', options, async (context: BenchContext) => {
+	const queue = new PQueue({autoStart: false});
+
+	context.start();
+	for (let i = 0; i < largeBacklogTaskCount; i++) {
+		queue.add(noop);
+	}
+
+	queue.start();
+	await queue.onIdle();
+	context.end(largeBacklogTaskCount);
+});
+
+bench('priority-queue-dequeue', options, (context: BenchContext) => {
+	const queue = new PriorityQueue();
+
+	context.start();
+	for (let i = 0; i < largeBacklogTaskCount; i++) {
+		queue.enqueue(noop);
+	}
+
+	let dequeued = 0;
+	while (queue.dequeue() !== undefined) {
+		dequeued++;
+	}
+
+	context.end(largeBacklogTaskCount);
+
+	if (dequeued !== largeBacklogTaskCount) {
+		throw new Error('Dequeued task count mismatch');
+	}
+});
