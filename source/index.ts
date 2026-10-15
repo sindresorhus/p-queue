@@ -103,19 +103,46 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		return this.#intervalCap === Number.POSITIVE_INFINITY || this.#interval === 0;
 	}
 
+	/**
+	Get or set the maximum number of task starts per interval.
+
+	Changes apply immediately without stopping running tasks. If the new cap is lower than the number already started in the current interval, no more tasks start until the next interval begins.
+
+	Setting `queue.intervalCap = Infinity` disables rate limiting and clears the current window. Setting a finite cap again starts a new window; tasks started while the cap was infinite are not counted, except for tasks still running with `carryoverConcurrencyCount: true`.
+
+	@example
+	```
+	const queue = new PQueue({intervalCap: 5, interval: 1000});
+
+	queue.intervalCap = 10;
+	```
+	*/
 	get intervalCap(): number {
 		return this.#intervalCap;
 	}
 
 	set intervalCap(value: number) {
+		PQueue.#assertValidIntervalCap(value);
+
 		if (value === this.#intervalCap) {
 			return;
 		}
 
-		PQueue.#assertValidIntervalCap(value);
-
 		this.#intervalCap = value;
-		this.#processQueue();
+
+		if (this.#isIntervalIgnored) {
+			this.#clearIntervalTimer();
+			this.#clearTimeoutTimer();
+			this.#intervalCount = 0;
+			this.#intervalEnd = 0;
+			this.#lastExecutionTime = 0;
+		}
+
+		if (this.#queue.size > 0) {
+			this.#processQueue();
+		}
+
+		this.#updateRateLimitState();
 	}
 
 	get #doesIntervalAllowAnother(): boolean {
@@ -144,6 +171,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	get #isIntervalPaused(): boolean {
+		if (this.#isIntervalIgnored) {
+			return false;
+		}
+
 		const now = Date.now();
 
 		if (this.#intervalId === undefined) {
@@ -227,7 +258,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 				}
 
 				this.emit('active');
-				this.#lastExecutionTime = Date.now();
+				if (!this.#isIntervalIgnored) {
+					this.#lastExecutionTime = Date.now();
+				}
+
 				job();
 
 				if (canInitializeInterval) {
@@ -574,8 +608,8 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	#setupRateLimitTracking(): void {
-		// Only schedule updates when rate limiting is enabled
-		if (this.#isIntervalIgnored) {
+		// The interval cannot change, but an infinite cap can become finite later.
+		if (this.#interval === 0) {
 			return;
 		}
 

@@ -34,7 +34,9 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions>, QueueOpt
 	/**
 	The max number of runs in the given interval of time.
 
-	Can be changed later by setting `queue.intervalCap`. If changed in the middle of a running interval, the new cap applies immediately. If the new cap is lower than the used cap, the "debt" is not carried over into the next interval.
+	Can be changed later by setting `queue.intervalCap`. Changes apply immediately without stopping running tasks. If the new cap is lower than the number already started in the current interval, no more tasks start until the next interval begins.
+
+	Setting `queue.intervalCap = Infinity` disables rate limiting and clears the current window. Setting a finite cap again starts a new window; tasks started while the cap was infinite are not counted, except for tasks still running with `carryoverConcurrencyCount: true`.
 
 	Minimum: `1`.
 
