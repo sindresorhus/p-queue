@@ -308,7 +308,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	#setupRateLimitTracking(): void {
 		// Only schedule updates when rate limiting is enabled
-		if (this.#isIntervalIgnored) {
+		if (this.#interval === 0) {
 			return;
 		}
 
@@ -414,6 +414,10 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	}
 
 	#isIntervalPausedAt(now: number): boolean {
+		if (this.#isIntervalIgnored) {
+			return false;
+		}
+
 		// Strict mode: check if we need to wait for oldest tick to age out
 		if (this.#strict) {
 			this.#cleanupStrictTicks(now);
@@ -530,9 +534,16 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		if (this.#doesIntervalAllowAnother && this.#doesConcurrentAllowAnother) {
 			const job = this.#queue.dequeue()!;
 
-			if (!this.#isIntervalIgnored) {
+			if (this.#interval !== 0) {
+				if (this.#intervalEnd <= now) {
+					this.#intervalCount = this.#intervalCountAtWindowStart;
+					this.#intervalEnd = now + this.#interval;
+				}
+
 				this.#consumeIntervalSlot(now);
-				this.#scheduleRateLimitUpdate();
+				if (!this.#isIntervalIgnored) {
+					this.#scheduleRateLimitUpdate();
+				}
 			}
 
 			if (canInitializeInterval) {
@@ -559,12 +570,17 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	#initializeIntervalIfNeeded(): void {
 		// Strict mode uses timeouts instead of interval timers.
-		if (this.#isIntervalIgnored || this.#intervalId !== undefined || this.#strict) {
+		if (this.#interval === 0 || this.#intervalId !== undefined || this.#strict) {
 			return;
 		}
 
 		// A new window starts now, so a timeout that waits for the end of an earlier window is stale. If it fired, it would reset the count in the middle of this window.
 		this.#clearTimeoutTimer();
+
+		if (this.#intervalCap === Infinity) {
+			this.#intervalEnd = Date.now() + this.#interval;
+			return;
+		}
 
 		this.#intervalId = setInterval(
 			() => {
@@ -805,7 +821,7 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 
 	Changes apply immediately without stopping running tasks. If the new cap is lower than the number already started in the current interval, no more tasks start until the next interval begins. With `strict: true`, tasks wait until enough previous task starts fall outside the sliding window.
 
-	Setting `queue.intervalCap = Infinity` disables rate limiting and clears the current window. Setting a finite cap again starts a new window; tasks started while the cap was infinite are not counted, except for tasks still running with `carryoverIntervalCount: true`. With `strict: true`, the cap must remain finite.
+	Setting `queue.intervalCap = Infinity` disables rate limiting while preserving the current interval and its task-start count. Setting a finite cap again resumes rate limiting; tasks started while the cap was infinite count toward the current interval. With `strict: true`, the cap must remain finite.
 
 	@example
 	```
@@ -830,8 +846,6 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 		if (this.#isIntervalIgnored) {
 			this.#clearIntervalTimer();
 			this.#clearTimeoutTimer();
-			this.#intervalCount = 0;
-			this.#intervalEnd = 0;
 		}
 
 		this.#processWaitingTasks();

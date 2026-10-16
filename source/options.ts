@@ -64,7 +64,7 @@ export type Options<QueueType extends Queue<RunFunction, QueueOptions> = Priorit
 
 	Can be changed later by setting `queue.intervalCap`. Changes apply immediately without stopping running tasks. If the new cap is lower than the number already started in the current interval, no more tasks start until the next interval begins.
 
-	Setting `queue.intervalCap = Infinity` disables rate limiting and clears the current window. Setting a finite cap again starts a new window; tasks started while the cap was infinite are not counted, except for tasks still running with `carryoverConcurrencyCount: true`.
+	Setting `queue.intervalCap = Infinity` disables rate limiting while preserving the current interval and its task-start count. Setting a finite cap again resumes rate limiting; tasks started while the cap was infinite count toward the current interval.
 
 	Minimum: `1`.
 

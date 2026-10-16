@@ -44,20 +44,26 @@ test('setting intervalCap to Infinity clears rate-limit state and timers', async
 	t.assert.strictEqual(started, 4);
 });
 
-test('restoring a finite intervalCap throttles queued tasks', async t => {
+test('restoring a finite intervalCap includes starts made while disabled', async t => {
 	// eslint-disable-next-line node-test/require-mock-timers-advance -- `tick()` advances the timers.
 	t.mock.timers.enable({apis: ['setTimeout', 'setInterval', 'Date'], now: 1_000_000});
-	const queue = new PQueue({interval: 1000});
+	const queue = new PQueue({interval: 1000, intervalCap: 2});
+	await queue.add(() => undefined);
+	await tick(t, 200);
+	queue.intervalCap = Infinity;
 	await queue.add(() => undefined);
 	await tick(t, 200);
 	queue.intervalCap = 2;
 
 	let started = 0;
 	const tasks = Array.from({length: 4}, async () => queue.add(() => ++started));
-	t.assert.strictEqual(started, 2);
+	await flush();
+	t.assert.strictEqual(started, 0);
 	await tick(t, 799);
-	t.assert.strictEqual(started, 2);
+	t.assert.strictEqual(started, 0);
 	await tick(t, 201);
+	t.assert.strictEqual(started, 2);
+	await tick(t, 1000);
 	t.assert.strictEqual(started, 4);
 	await Promise.all(tasks);
 });
