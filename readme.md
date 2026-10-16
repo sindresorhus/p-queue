@@ -130,7 +130,6 @@ Can be changed later by setting `queue.intervalCap`. Changes apply immediately w
 
 Setting `queue.intervalCap = Infinity` disables rate limiting while preserving the current interval and its task-start count. Setting a finite cap again resumes rate limiting; tasks started while the cap was infinite count toward the current interval.
 
-
 ##### interval
 
 Type: `number`\
