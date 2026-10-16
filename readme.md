@@ -126,6 +126,10 @@ Minimum: `1`
 
 The maximum number of tasks that start in each `interval`. Must be an integer or `Infinity`.
 
+Can be changed later by setting `queue.intervalCap`. Changes apply immediately without stopping running tasks. If the new cap is lower than the number already started in the current interval, no more tasks start until the next interval begins.
+
+Setting `queue.intervalCap = Infinity` disables rate limiting while preserving the current interval and its task-start count. Setting a finite cap again resumes rate limiting; tasks started while the cap was infinite count toward the current interval.
+
 ##### interval
 
 Type: `number`\
